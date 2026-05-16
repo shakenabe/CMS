@@ -1,0 +1,79 @@
+:root {
+    --bg-color: #121212;
+    --card-bg: #1e1e1e;
+    --text-color: #e0e0e0;
+    --primary-color: #00e676; /* サイバーグリーン */
+    --secondary-color: #03a9f4;
+    --danger-color: #ff5252;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+body { background-color: var(--bg-color); color: var(--text-color); }
+
+header { background-color: #000; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--primary-color); }
+h1 { font-size: 1.5rem; color: var(--primary-color); }
+
+nav .nav-btn { background: none; border: none; color: gray; margin-left: 15px; font-size: 1rem; cursor: pointer; transition: 0.3s; }
+nav .nav-btn.active, nav .nav-btn:hover { color: var(--primary-color); font-weight: bold; }
+
+main { padding: 20px; max-width: 1000px; margin: 0 auto; }
+.tab-content { display: none; }
+.tab-content.active { display: block; animation: fadeIn 0.5s; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+.card { background-color: var(--card-bg); border-radius: 10px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
+
+/* ダッシュボード・時計周り */
+.clock-container { display: flex; justify-content: space-around; align-items: center; margin-bottom: 20px; flex-wrap: wrap; }
+.clock-box { text-align: center; margin: 10px; }
+.digital-clock { font-size: 3rem; font-family: monospace; color: var(--secondary-color); font-weight: bold; margin-top: 10px; }
+
+.analog-clock { width: 150px; height: 150px; border: 4px solid var(--primary-color); border-radius: 50%; position: relative; background-color: #222; }
+.hand { position: absolute; bottom: 50%; left: 50%; transform-origin: bottom; background-color: white; transform: translateX(-50%); border-radius: 10px; }
+.hour { width: 6px; height: 40px; background-color: var(--secondary-color); }
+.minute { width: 4px; height: 60px; }
+.second { width: 2px; height: 65px; background-color: var(--danger-color); }
+.center-dot { position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; background-color: white; border-radius: 50%; transform: translate(-50%, -50%); }
+
+.summary-cards { display: flex; gap: 20px; }
+.summary-box { flex: 1; text-align: center; }
+.highlight-text { font-size: 2.5rem; font-weight: bold; color: var(--primary-color); margin-top: 10px; }
+
+/* タイマー機能 */
+.timer-card { position: relative; overflow: hidden; min-height: 400px; display: flex; flex-direction: column; justify-content: space-between; transition: background 0.3s; }
+.timer-card.has-bg { background-color: rgba(0, 0, 0, 0.6); background-blend-mode: overlay; }
+.timer-header { display: flex; justify-content: space-between; align-items: center; z-index: 2; }
+
+.timer-display-area { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; z-index: 2; }
+.timer-time { font-size: 6rem; font-family: monospace; font-weight: bold; color: white; text-shadow: 2px 2px 10px rgba(0,0,0,0.8); }
+
+/* 砂時計アニメーション */
+.hourglass { width: 30px; height: 50px; border: 2px solid var(--primary-color); border-radius: 4px; position: relative; margin-bottom: 10px; display: none; }
+.hourglass.running { display: block; animation: rotateHourglass 2s infinite ease-in-out; }
+.hourglass::before, .hourglass::after { content: ''; position: absolute; left: 0; right: 0; background-color: var(--primary-color); }
+.hourglass::before { top: 0; bottom: 50%; clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.hourglass::after { top: 50%; bottom: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+
+@keyframes rotateHourglass { 0% { transform: rotate(0deg); } 100% { transform: rotate(180deg); } }
+
+.timer-controls { display: flex; justify-content: center; gap: 15px; z-index: 2; }
+
+/* フォーム・ボタン */
+.form-group { margin-bottom: 15px; }
+label { display: block; margin-bottom: 5px; color: #aaa; }
+input, select { width: 100%; padding: 10px; border: 1px solid #444; border-radius: 5px; background: #333; color: white; }
+.btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 1rem; transition: 0.2s; }
+.btn:hover { filter: brightness(1.2); }
+.primary { background-color: var(--primary-color); color: #000; }
+.secondary { background-color: var(--secondary-color); color: #fff; }
+.warning { background-color: var(--danger-color); color: #fff; }
+
+.file-upload-btn { background-color: #333; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 0.9rem; }
+.file-upload-btn input { display: none; }
+
+/* テーブル */
+.record-table { width: 100%; border-collapse: collapse; text-align: left; }
+.record-table th, .record-table td { padding: 12px; border-bottom: 1px solid #333; }
+.record-table th { color: var(--primary-color); }

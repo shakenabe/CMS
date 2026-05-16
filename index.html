@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LifeStudy Manager Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header>
+        <h1>LifeStudy Manager Pro</h1>
+        <nav>
+            <button class="nav-btn active" data-target="dashboard">ダッシュボード</button>
+            <button class="nav-btn" data-target="timer">タイマー</button>
+            <button class="nav-btn" data-target="record">学習記録</button>
+            <button class="nav-btn" data-target="analysis">分析</button>
+        </nav>
+    </header>
+
+    <main>
+        <!-- ダッシュボードセクション -->
+        <section id="dashboard" class="tab-content active">
+            <div class="clock-container card">
+                <div class="clock-box">
+                    <h3>現在時刻</h3>
+                    <div id="digital-clock" class="digital-clock">00:00:00</div>
+                </div>
+                <div class="clock-box">
+                    <div class="analog-clock">
+                        <div class="hand hour" id="hour-hand"></div>
+                        <div class="hand minute" id="minute-hand"></div>
+                        <div class="hand second" id="second-hand"></div>
+                        <div class="center-dot"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="summary-cards">
+                <div class="card summary-box">
+                    <h3>今日の学習時間</h3>
+                    <p id="today-time" class="highlight-text">0 分</p>
+                </div>
+                <div class="card summary-box">
+                    <h3>今週の累計</h3>
+                    <p id="week-time" class="highlight-text">0 分</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- タイマーセクション -->
+        <section id="timer" class="tab-content">
+            <div id="timer-container" class="card timer-card">
+                <div class="timer-header">
+                    <h2>ポモドーロ・タイマー</h2>
+                    <label class="file-upload-btn">
+                        背景画像を変更
+                        <input type="file" id="bg-input" accept="image/*">
+                    </label>
+                </div>
+                
+                <div class="timer-display-area">
+                    <div class="hourglass" id="hourglass"></div>
+                    <div id="timer-display" class="timer-time">25:00</div>
+                </div>
+                
+                <div class="timer-controls">
+                    <button id="btn-start" class="btn primary">スタート</button>
+                    <button id="btn-stop" class="btn warning">ストップ</button>
+                    <button id="btn-reset" class="btn secondary">リセット</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 記録セクション -->
+        <section id="record" class="tab-content">
+            <div class="card">
+                <h2>学習を記録する</h2>
+                <form id="record-form">
+                    <div class="form-group">
+                        <label>日付</label>
+                        <input type="date" id="record-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>科目</label>
+                        <select id="record-subject" required>
+                            <option value="ITパスポート">ITパスポート</option>
+                            <option value="電験">電験</option>
+                            <option value="プログラミング">プログラミング</option>
+                            <option value="業界用語">業界用語</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>学習時間 (分)</label>
+                        <input type="number" id="record-duration" min="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label>理解度 (1〜5)</label>
+                        <input type="number" id="record-understanding" min="1" max="5" value="3">
+                    </div>
+                    <div class="form-group">
+                        <label>疲労度 (1〜5)</label>
+                        <input type="number" id="record-fatigue" min="1" max="5" value="3">
+                    </div>
+                    <button type="submit" class="btn primary">記録を保存</button>
+                </form>
+            </div>
+            
+            <div class="card" style="margin-top: 20px;">
+                <h2>最近の記録</h2>
+                <table class="record-table">
+                    <thead>
+                        <tr>
+                            <th>日付</th>
+                            <th>科目</th>
+                            <th>時間</th>
+                            <th>理解度</th>
+                        </tr>
+                    </thead>
+                    <tbody id="record-list"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 分析セクション -->
+        <section id="analysis" class="tab-content">
+            <div class="card">
+                <h2>学習時間の推移（直近7日間）</h2>
+                <canvas id="learningChart"></canvas>
+            </div>
+        </section>
+    </main>
+    <script src="script.js"></script>
+</body>
+</html>
