@@ -54,7 +54,7 @@
 
     <div id="main-app" class="hidden">
         <div class="widget-container" id="widget-container">
-            <!-- 左ペイン: 固定レイアウト -->
+            <!-- 左ペイン: PC固定レイアウト用 -->
             <div id="left-pane" class="pc-column">
                 <div id="widget-clock" class="panel-glass">
                     <div class="clock-inner">
@@ -104,20 +104,23 @@
 
             <!-- 右ペイン: ライブラリ -->
             <div id="right-pane" class="pc-column">
-                <div id="widget-library" class="panel-glass-mobile-fix">
-                    <div id="mobile-library-handle"><div class="handle-bar"></div></div>
-                    <div id="mobile-list-close-btn" class="hidden"><i class="fas fa-chevron-down" style="font-size: 1.8rem; opacity: 0.8;"></i></div>
-                    
+                <div id="widget-library" class="panel-glass">
+                    <div id="mobile-list-fullscreen-header" class="hidden">
+                        <div style="flex:1;"></div>
+                        <span class="fs-title">完了</span>
+                        <div style="flex:1; text-align:right;">
+                            <button id="mobile-list-close-btn"><i class="fas fa-chevron-down"></i></button>
+                        </div>
+                    </div>
+
                     <div id="mobile-tools-wrapper">
-                        <div class="current-folder-info panel-glass" id="btn-open-mobile-folder">
-                            <div style="display:flex; align-items: center; padding: 15px;">
-                                <i class="fas fa-play-circle" style="font-size: 1.8rem; margin-right: 15px; color: var(--text-color);"></i>
-                                <div style="display:flex; flex-direction:column; flex:1;">
-                                    <span id="current-folder-name" style="font-weight:bold; font-size:1.1rem;">All</span>
-                                    <span style="font-size:0.8rem; opacity:0.8;" id="current-folder-count">--件のアイテム</span>
-                                </div>
-                                <span style="font-size:0.9rem; margin-right: 15px; font-weight:bold;">フォルダ</span>
+                        <div class="m-folder-header">
+                            <div class="m-play-btn-circle" onclick="togglePlay()"><i class="fas fa-pause" id="m-header-play-icon"></i></div>
+                            <div class="m-folder-info" id="btn-open-mobile-folder">
+                                <span id="current-folder-name">All <i class="fas fa-chevron-down" style="font-size: 0.8rem; opacity: 0.7; margin-left: 5px;"></i></span>
+                                <span id="current-folder-count">--件のアイテム</span>
                             </div>
+                            <button id="btn-edit-list" class="theme-text">編集する</button>
                         </div>
                         <button id="btn-toggle-mobile-nav" class="panel-glass"><i class="fas fa-filter"></i></button>
                     </div>
@@ -183,8 +186,8 @@
                     <div class="setting-row"><label><input type="checkbox" id="set-pocket-swipe-unlock"> 📱 ポケットモード上スワイプ解除を有効</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-force-pc-layout"> 💻 モバイル版レイアウトを無効化 (常にPC表示)</label></div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="set-window-mode"> 🪟 ウィンドウモード (パネル自由配置＆リサイズ)</label>
-                        <button id="btn-reset-window" class="theme-btn" style="padding: 5px; font-size:0.8rem; margin-top:5px; width:150px;">配置とサイズをリセット</button>
+                        <label><input type="checkbox" id="set-window-mode"> 🪟 ウィンドウモード (パネル自由配置・サイズ変更)</label>
+                        <button id="btn-reset-window" class="theme-btn" style="padding: 5px; font-size:0.8rem; margin-top:5px; width:150px;">配置をリセット</button>
                     </div>
 
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
