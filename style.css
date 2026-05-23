@@ -84,26 +84,16 @@ body.performance-mode .w-t-playing-icon { animation: none !important; }
 @keyframes pulse-icon { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 /* ============================================================
-   PCレイアウト (body.is-pc が付与されている場合)
+   PCレイアウト (body.is-pc)
 ============================================================ */
 body.is-pc .widget-container { 
-    display: grid; 
-    grid-template-columns: var(--pc-left-width) 1fr; 
+    display: grid; grid-template-columns: var(--pc-left-width) 1fr; 
     gap: 15px; width: 100%; height: 100dvh; padding: 15px; margin: 0; 
 }
-
-body.is-pc #left-pane { 
-    display: flex; flex-direction: column; gap: 15px; height: 100%; 
-    overflow-y: auto; justify-content: flex-start;
-}
-body.is-pc #right-pane { 
-    display: flex; flex-direction: column; gap: 15px; height: 100%; overflow: hidden; 
-}
-
+body.is-pc #left-pane { display: flex; flex-direction: column; gap: 15px; height: 100%; overflow-y: auto; justify-content: flex-start; }
+body.is-pc #right-pane { display: flex; flex-direction: column; gap: 15px; height: 100%; overflow: hidden; }
 body.is-pc #widget-clock, body.is-pc #widget-player, body.is-pc #widget-controls { flex-shrink: 0; }
-
 body.is-pc.music-mode #widget-player { display: none !important; }
-
 body.is-pc #widget-player { width: 100%; height: auto; max-height: calc(100vh - 300px); aspect-ratio: 16 / 9; }
 body.is-pc #widget-controls { display: flex; flex-direction: column; align-items: center; padding: 25px 20px; justify-content: center; }
 body.is-pc #widget-clock { padding: 15px; justify-content: flex-start; }
@@ -117,7 +107,6 @@ body.is-pc .w-track-list, body.is-pc .w-folder-list { flex: 1; overflow-y: auto;
 body.is-pc.simple-layout-mode:not(.list-visible) #widget-library { display: none !important; }
 body.is-pc.simple-layout-mode.list-visible .library-lists-container { display: flex; flex-direction: column; gap: 15px;}
 body.is-pc.simple-layout-mode.list-visible #widget-folder-list-wrapper { max-height: 150px; flex-shrink: 0;}
-
 body.is-pc.simple-layout-mode #list-toggle-wrapper { display: flex; align-items: center; width: 100%; margin-top: 15px; justify-content: center;}
 body.is-pc #btn-toggle-list { background: transparent; border: none; color: var(--text-color); cursor: pointer; font-size: 0.95rem; padding: 5px 15px; display: flex; align-items: center; gap: 8px; transition: 0.3s; }
 
@@ -130,9 +119,8 @@ body.is-pc .controls-main { display: flex; gap: 20px; align-items: center; }
 body.is-pc .settings-btn { position: absolute; right: 0; }
 
 body.is-pc.music-mode .widget-art { width: 220px; height: 220px; }
-body.is-pc #mobile-folder-selector, body.is-pc #mobile-tools-wrapper, body.is-pc #list-toggle-wrapper { display: none; }
+body.is-pc #mobile-library-handle, body.is-pc #mobile-list-close-btn, body.is-pc #mobile-tools-wrapper, body.is-pc #list-toggle-wrapper { display: none; }
 body.is-pc.simple-layout-mode #list-toggle-wrapper { display: flex; }
-
 
 /* 時計ウィジェット周り */
 #widget-clock { display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative;}
@@ -140,8 +128,6 @@ body.is-pc.simple-layout-mode #list-toggle-wrapper { display: flex; }
 #clock-date { font-size: 1.2rem; font-weight: bold; text-align: left; margin-bottom: 5px; opacity: 0.9; }
 #clock-time { font-size: 2.8rem; font-weight: bold; letter-spacing: 2px; line-height: 1; text-align: right; }
 body:not(.show-clock) .clock-inner { display: none !important; }
-
-/* 時計スタイルの追加 */
 .digital2 { font-family: 'Share Tech Mono', monospace; color: var(--accent-color); font-size: 3.2rem !important; }
 .analog-clock { position: relative; width: 120px; height: 120px; border-radius: 50%; border: 4px solid var(--text-color); background: rgba(0,0,0,0.2); margin: 10px auto; }
 .hand { position: absolute; bottom: 50%; left: 50%; transform-origin: bottom; background: var(--text-color); border-radius: 4px; }
@@ -149,8 +135,6 @@ body:not(.show-clock) .clock-inner { display: none !important; }
 .minute-hand { width: 4px; height: 45px; margin-left: -2px; }
 .second-hand { width: 2px; height: 50px; margin-left: -1px; background: var(--accent-color); }
 .center-dot { position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; background: var(--text-color); border-radius: 50%; transform: translate(-50%, -50%); border: 2px solid var(--bg-color); }
-
-/* ポケット用特大アナログ時計 */
 #pocket-analog-clock.analog-clock { width: 200px; height: 200px; border-width: 6px; }
 #pocket-analog-clock .hour-hand { width: 8px; height: 50px; margin-left: -4px; }
 #pocket-analog-clock .minute-hand { width: 6px; height: 75px; margin-left: -3px; }
@@ -158,22 +142,28 @@ body:not(.show-clock) .clock-inner { display: none !important; }
 
 
 /* ============================================================
-   モバイルレイアウト (body.is-mobile が付与されている場合)
+   モバイルレイアウト (body.is-mobile) & Apple Music風UI
 ============================================================ */
 body.is-mobile #list-toggle-wrapper, body.is-mobile #widget-clock { display: none !important; }
 body.is-mobile #widget-btn-fullscreen { display: none !important; }
-
-body.is-mobile .widget-container { display: flex; flex-direction: column; width: 100%; height: 100dvh; overflow: hidden; gap: 0; padding: 0; background: var(--bg-color); }
 body.is-mobile .pc-column { display: contents; } 
 body.is-mobile .panel-glass { border-radius: 0; border: none; box-shadow: none; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none;}
 
-/* 1. 通常（動画）モード */
-body.is-mobile #widget-player { order: 1; width: 100%; aspect-ratio: 16 / 9; flex-shrink: 0; z-index: 50; background: #000; }
+/* 1. 通常（動画）モード - Apple Music風 */
+body.is-mobile .widget-container { 
+    display: block; width: 100%; height: 100dvh; overflow: hidden; background: var(--bg-color); position: relative;
+}
+body.is-mobile #widget-player { 
+    width: 100%; aspect-ratio: 16 / 9; z-index: 10; background: #000; position: absolute; top: 0; left: 0;
+}
 body.is-mobile:not(.music-mode) .widget-art { display: none; }
 
-body.is-mobile #widget-controls { order: 2; padding: 10px 15px; flex-shrink: 0; z-index: 50; border-bottom: 1px solid var(--border-color); background: var(--bg-color); }
+body.is-mobile #widget-controls { 
+    width: 100%; padding: 15px; z-index: 10; background: var(--bg-color); 
+    position: absolute; top: calc(100vw * 9 / 16); left: 0; height: 140px;
+}
 body.is-mobile .player-controls-inner { display: flex; flex-direction: column; align-items: center; width: 100%; }
-body.is-mobile .widget-info-container { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 5px; }
+body.is-mobile .widget-info-container { width: 100%; display: flex; flex-direction: column; gap: 5px; }
 body.is-mobile .widget-info h2 { font-size: 1.1rem; margin: 0; }
 body.is-mobile .widget-info p { font-size: 0.9rem; margin: 0; opacity: 0.8;}
 body.is-mobile .progress-area { margin: 5px 0; }
@@ -183,25 +173,45 @@ body.is-mobile .widget-controls button { padding: 8px; font-size: 1.3rem; flex-s
 body.is-mobile .widget-controls .play-btn { width: 50px; height: 50px; font-size: 1.5rem; }
 body.is-mobile .settings-btn { position: absolute; right: 0; }
 
-/* リスト領域 */
-body.is-mobile #widget-library { order: 3; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
-body.is-mobile #mobile-tools-wrapper { display: flex; gap: 10px; margin: 10px 15px 5px 15px; flex-shrink: 0; order: 1; }
-body.is-mobile #btn-open-mobile-folder { flex: 1; border-radius: 12px; cursor: pointer; border: 1px solid var(--border-color); background: rgba(255,255,255,0.05); }
-body.is-mobile #btn-toggle-mobile-nav { width: 55px; border-radius: 12px; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; cursor: pointer; border: 1px solid var(--border-color); background: rgba(255,255,255,0.05); color: var(--text-color); }
+/* リスト領域 (BottomSheet風) */
+body.is-mobile #widget-library { 
+    position: absolute; bottom: 0; left: 0; width: 100%;
+    height: calc(100dvh - (100vw * 9 / 16) - 140px); /* 動画とコントロールを除いた残り高さ */
+    z-index: 20; display: flex; flex-direction: column; overflow: hidden;
+    background: rgba(var(--panel-rgb), 0.95);
+    backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+    border-top-left-radius: 20px; border-top-right-radius: 20px;
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.5);
+    transition: height 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* 全画面リスト状態 */
+body.is-mobile.mobile-list-fullscreen #widget-library {
+    height: 100dvh; border-radius: 0; padding-top: env(safe-area-inset-top, 20px);
+}
 
-/* モバイル フィルター＆検索エリア Grid化 */
-body.is-mobile #library-nav-wrapper { order: 2; margin: 0 15px 5px 15px; border-radius: 12px; flex-direction: column; display: none; }
-body.is-mobile.show-mobile-nav #library-nav-wrapper { display: flex !important; background: rgba(255,255,255,0.05); padding: 15px;}
+#mobile-library-handle {
+    width: 100%; height: 25px; display: flex; justify-content: center; align-items: center; cursor: grab; flex-shrink: 0;
+}
+.handle-bar { width: 40px; height: 5px; background: rgba(255,255,255,0.4); border-radius: 3px; }
+body.is-mobile.mobile-list-fullscreen #mobile-library-handle { display: none; }
 
+#mobile-list-close-btn { display: none; justify-content: flex-end; align-items: center; padding: 10px 20px; cursor: pointer; flex-shrink: 0; }
+body.is-mobile.mobile-list-fullscreen #mobile-list-close-btn { display: flex; }
+
+body.is-mobile #mobile-tools-wrapper { display: flex; gap: 10px; margin: 0 15px 5px 15px; flex-shrink: 0; }
+body.is-mobile #btn-open-mobile-folder { flex: 1; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.2); }
+body.is-mobile #btn-toggle-mobile-nav { width: 55px; border-radius: 12px; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; cursor: pointer; background: rgba(0,0,0,0.2); color: var(--text-color); }
+
+body.is-mobile #library-nav-wrapper { margin: 0 15px 5px 15px; border-radius: 12px; flex-direction: column; display: none; }
+body.is-mobile.show-mobile-nav #library-nav-wrapper { display: flex !important; background: rgba(0,0,0,0.2); padding: 15px;}
 body.is-mobile .controls-wrapper { display: grid !important; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center; width: 100%; }
 body.is-mobile .filter-option { grid-column: 1 / 2; justify-content: center; background: rgba(0,0,0,0.2); border-radius: var(--border-radius); border: 1px solid var(--border-color); margin: 0; height: 100%; padding: 8px;}
 body.is-mobile #widget-sort-select { grid-column: 2 / 3; width: 100%; height: 100%; }
 body.is-mobile #widget-search-box { grid-column: 1 / 3; width: 100%; }
 
-body.is-mobile .library-title { display: none; }
-body.is-mobile #widget-folder-list-wrapper { display: none; }
-
-body.is-mobile .library-lists-container { order: 3; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; margin-top: 5px;}
+body.is-mobile .library-title, body.is-mobile #widget-folder-list-wrapper { display: none; }
+body.is-mobile .library-lists-container { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; margin-top: 5px;}
 body.is-mobile #widget-track-list-wrapper { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 body.is-mobile .w-track-list { flex: 1; overflow-y: auto; padding: 0 15px; padding-bottom: calc(50px + env(safe-area-inset-bottom, 20px)); }
 body.is-mobile .w-t-item { padding: 12px 15px; border-radius: 6px; border-bottom: 1px solid rgba(255,255,255,0.05); }
@@ -209,16 +219,16 @@ body.is-mobile .w-t-item { padding: 12px 15px; border-radius: 6px; border-bottom
 
 /* 2. 音楽モード (Spotify風) */
 body.is-mobile.music-mode #widget-player { display: none !important; }
-
 body.is-mobile.music-mode #widget-controls {
-    position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000; order: auto;
-    background: rgba(var(--panel-rgb), 0.95); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
-    border-top: 1px solid var(--border-color); border-bottom: none;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
+    background: rgba(var(--panel-rgb), 0.95); border-top: 1px solid var(--border-color); border-bottom: none;
     padding: 5px 15px calc(5px + env(safe-area-inset-bottom, 10px)) 15px;
-    display: flex; align-items: center; min-height: 70px;
-    cursor: pointer; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    height: auto; min-height: 70px; cursor: pointer; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-body.is-mobile.music-mode #widget-library { margin-bottom: calc(70px + env(safe-area-inset-bottom, 10px)); }
+body.is-mobile.music-mode #widget-library { 
+    height: 100dvh; padding-bottom: calc(70px + env(safe-area-inset-bottom, 10px)); border-radius: 0; position: relative;
+}
+body.is-mobile.music-mode #mobile-library-handle { display: none; }
 
 body.is-mobile.music-mode .player-controls-inner { flex-direction: row; width: 100%; justify-content: space-between; gap: 12px; }
 body.is-mobile.music-mode .widget-art { display: block; width: 48px; height: 48px; margin: 0; border-radius: 6px; flex-shrink: 0; object-fit: cover;}
@@ -226,10 +236,8 @@ body.is-mobile.music-mode .widget-info-container { flex: 1; display: flex; flex-
 body.is-mobile.music-mode .widget-info { max-width: calc(100vw - 200px); text-align: left; }
 body.is-mobile.music-mode .progress-area { display: none; }
 body.is-mobile.music-mode .widget-controls { width: auto; position: static; display: flex; gap: 10px; align-items: center; }
-
 body.is-mobile.music-mode .controls-main { gap: 10px; }
 body.is-mobile.music-mode .controls-main button:not(.play-btn):not(#widget-btn-next):not(#widget-btn-prev):not(#btn-pocket-mode) { display: none; }
-
 body.is-mobile.music-mode .play-btn { width: 40px; height: 40px; font-size: 1.2rem; }
 body.is-mobile.music-mode .settings-btn { display: none; }
 
@@ -253,28 +261,14 @@ body.is-mobile.music-mode.player-expanded .play-btn { width: 70px; height: 70px;
 body.is-mobile.music-mode.player-expanded .settings-btn { display: block; position: absolute; right: 0; font-size: 1.4rem; cursor: pointer;}
 
 
-/* --- モバイル リスト全画面 --- */
-body.is-mobile.mobile-list-fullscreen #widget-library {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    z-index: 9999; margin: 0; border-radius: 0; border: none;
-    background: var(--bg-color); height: 100dvh; display: flex; flex-direction: column;
-}
-body.is-mobile.mobile-list-fullscreen #mobile-list-close-btn { display: flex; }
-#mobile-list-close-btn {
-    display: none; justify-content: center; align-items: center; flex-shrink: 0;
-    padding: 15px; font-size: 1.5rem; color: var(--text-color);
-    background: rgba(128,128,128,0.1); cursor: pointer; border-bottom: 1px solid var(--border-color);
-}
-
-
-/* --- ウィンドウモード（自由配置） --- */
+/* --- ウィンドウモード（自由配置＆リサイズ） --- */
 body.window-mode .widget-container { display: block !important; position: relative; width: 100%; height: 100%; }
 body.window-mode .pc-column { display: block !important; }
-body.window-mode .panel-glass { position: absolute; z-index: 100; cursor: move; }
+body.window-mode .panel-glass { position: absolute; z-index: 100; cursor: move; resize: both; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
 body.window-mode #widget-clock { min-width: 250px; }
-body.window-mode #widget-player { min-width: 400px; min-height: 225px; resize: both; overflow: hidden; }
+body.window-mode #widget-player { min-width: 400px; min-height: 225px; }
 body.window-mode #widget-controls { min-width: 350px; }
-body.window-mode #widget-library { min-width: 350px; max-height: 80vh; resize: both; overflow: hidden; }
+body.window-mode #widget-library { min-width: 350px; min-height: 300px; max-height: 90vh; }
 body.window-mode input, body.window-mode button, body.window-mode select, body.window-mode .w-track-list, body.window-mode .w-folder-list { cursor: default; }
 
 
@@ -363,5 +357,5 @@ input[type="color"]::-webkit-color-swatch { border: none; border-radius: 4px; }
 .pocket-hint { position: absolute; top: env(safe-area-inset-top, 40px); color: rgba(255,255,255,0.3); font-size: 0.9rem; pointer-events: none; animation: pulse-icon 2s infinite; }
 .pocket-content { opacity: 0; transition: opacity 0.3s ease; display: flex; flex-direction: column; align-items: center; width: 100%; pointer-events: none; }
 #pocket-overlay.touch-holding .pocket-content { opacity: 1; }
-#pocket-overlay.always-on .pocket-content { opacity: 1 !important; } /* 常時ON */
+#pocket-overlay.always-on .pocket-content { opacity: 1 !important; }
 #pocket-art { width: 200px; height: 200px; object-fit: cover; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 0 30px rgba(0,0,0,0.5); }
