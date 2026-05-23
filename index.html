@@ -6,18 +6,13 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    
-    <!-- Firebase SDK (Compat) -->
-    <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore-compat.js"></script>
-
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="theme-modern">
+<body class="theme-modern is-pc">
 
     <!-- ポケットモード（疑似バックグラウンド）オーバーレイ -->
     <div id="pocket-overlay" class="hidden">
-        <div class="pocket-hint"><i class="fas fa-lock"></i> アイコン長押し または 大きく上スワイプで解除</div>
+        <div class="pocket-hint"><i class="fas fa-lock"></i> 2秒長押し または 上スワイプで解除</div>
         <div class="pocket-content">
             <div id="pocket-clock-container" style="margin-bottom: 20px;">
                 <div id="pocket-clock-text" class="theme-text digital1" style="font-size: 4rem;">00:00</div>
@@ -37,21 +32,15 @@
                 <div class="progress-container"><div class="progress-bar" id="pocket-progress-bar"></div></div>
                 <span id="pocket-time-duration" class="time-text">0:00</span>
             </div>
-
-            <div id="pocket-unlock-btn" style="margin-top: 30px; font-size: 2rem; color: rgba(255,255,255,0.5); padding: 20px;"><i class="fas fa-lock"></i></div>
         </div>
     </div>
 
     <div id="import-screen" class="overlay-screen">
-        <button id="btn-open-settings-start" class="theme-btn" style="position:absolute; top:20px; right:20px; padding: 10px 15px; border-radius: 50%;"><i class="fas fa-cog"></i></button>
         <div class="start-content panel-glass">
             <h1 class="theme-text" style="margin-top:0;">CMS Web Player</h1>
-            <p>JSONファイルまたはFirebaseからデータを読み込んでください。</p>
-            <div style="display:flex; flex-direction:column; gap:15px; align-items:center;">
-                <label for="import-json" class="custom-file-upload theme-btn" style="width: 250px;"><i class="fas fa-file-import"></i> JSONファイルを選択</label>
-                <input type="file" id="import-json" accept=".json">
-                <button id="btn-import-firebase" class="theme-btn" style="width: 250px; padding: 10px 20px;"><i class="fas fa-cloud"></i> Firebaseからロード</button>
-            </div>
+            <p>JSONファイルを読み込んでください。<br><span style="font-size:0.8rem; opacity:0.8;">※Firebase連携が有効な場合は自動で読込を試行します</span></p>
+            <label for="import-json" class="custom-file-upload theme-btn"><i class="fas fa-file-import"></i> ファイルを選択</label>
+            <input type="file" id="import-json" accept=".json">
         </div>
     </div>
 
@@ -67,11 +56,10 @@
         <div class="widget-container" id="widget-container">
             <!-- 左ペイン: 固定レイアウト -->
             <div id="left-pane" class="pc-column">
-                <div id="widget-clock" class="panel-glass draggable-panel" data-id="clock">
-                    <div class="drag-handle"><i class="fas fa-grip-horizontal"></i></div>
+                <div id="widget-clock" class="panel-glass">
                     <div class="clock-inner">
-                        <div id="clock-date" class="clock-date-row theme-text">----/--/--</div>
-                        <div id="clock-time" class="clock-time-row theme-text">00:00:00</div>
+                        <div id="clock-date">----/--/--</div>
+                        <div id="clock-time" class="theme-text">00:00:00</div>
                         <div id="analog-clock" class="analog-clock hidden">
                             <div class="hand hour-hand"></div>
                             <div class="hand minute-hand"></div>
@@ -79,16 +67,14 @@
                             <div class="center-dot"></div>
                         </div>
                     </div>
-                    <div id="list-toggle-wrapper"><button id="btn-toggle-list"><i class="fas fa-list"></i> <span id="toggle-list-text" class="theme-text">リストを表示</span></button></div>
+                    <div id="list-toggle-wrapper"><button id="btn-toggle-list"><i class="fas fa-list"></i> <span id="toggle-list-text">リストを表示</span></button></div>
                 </div>
 
-                <div id="widget-player" class="panel-glass draggable-panel" data-id="player">
-                    <div class="drag-handle"><i class="fas fa-grip-horizontal"></i></div>
+                <div id="widget-player" class="panel-glass">
                     <div id="player-container"></div>
                 </div>
 
-                <div id="widget-controls" class="panel-glass draggable-panel" data-id="controls">
-                    <div class="drag-handle"><i class="fas fa-grip-horizontal"></i></div>
+                <div id="widget-controls" class="panel-glass">
                     <div class="player-controls-inner">
                         <img id="widget-art" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'/>" class="widget-art">
                         <div class="widget-info-container">
@@ -118,8 +104,8 @@
 
             <!-- 右ペイン: ライブラリ -->
             <div id="right-pane" class="pc-column">
-                <div id="widget-library" class="draggable-panel panel-glass" data-id="library" style="background:transparent; border:none; box-shadow:none;">
-                    <div class="drag-handle"><i class="fas fa-grip-horizontal"></i></div>
+                <div id="widget-library" class="panel-glass-mobile-fix">
+                    <div id="mobile-list-close-btn" class="hidden"><i class="fas fa-chevron-down"></i></div>
                     <div id="mobile-tools-wrapper">
                         <div class="current-folder-info panel-glass" id="btn-open-mobile-folder">
                             <div style="display:flex; align-items: center; padding: 15px;">
@@ -146,10 +132,7 @@
 
                     <div class="library-lists-container">
                         <div id="widget-folder-list-wrapper" class="panel-glass"><div class="w-folder-list" id="widget-folder-list"></div></div>
-                        <div id="widget-track-list-wrapper" class="panel-glass">
-                            <div id="mobile-list-close-btn" class="hidden"><i class="fas fa-times"></i></div>
-                            <div class="w-track-list" id="widget-track-list"></div>
-                        </div>
+                        <div id="widget-track-list-wrapper" class="panel-glass"><div class="w-track-list" id="widget-track-list"></div></div>
                     </div>
                 </div>
             </div>
@@ -170,9 +153,8 @@
         <div class="panel-glass settings-window">
             <h2 class="theme-text" style="margin-top:0; padding-bottom:5px;"><i class="fas fa-cog"></i> System Settings</h2>
             <div class="settings-tabs">
-                <button class="tab-btn active" data-tab="basic">基本</button>
-                <button class="tab-btn" data-tab="advanced">詳細</button>
-                <button class="tab-btn" data-tab="firebase">連携</button>
+                <button class="tab-btn active" data-tab="basic">基本設定</button>
+                <button class="tab-btn" data-tab="advanced">詳細設定</button>
             </div>
 
             <div class="setting-scroll-area">
@@ -195,13 +177,20 @@
 
                 <!-- 詳細設定タブ -->
                <div id="tab-advanced" class="tab-content">
-                    <div class="setting-row"><label><input type="checkbox" id="set-force-pc"> 🖥️ モバイルレイアウトを無効化 (常にPC表示)</label></div>
-                    <div class="setting-row" style="margin-top:5px;">
-                        <label><input type="checkbox" id="set-window-mode"> 🪟 ウィンドウモード (ドラッグ移動可能)</label>
-                        <button id="btn-reset-window" class="theme-btn" style="padding: 5px; font-size:0.8rem; margin-top:5px;">配置をリセット</button>
+                    <div class="setting-row"><label><input type="checkbox" id="set-pocket-always-on"> 📱 ポケットモードの情報を常時表示</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-pocket-swipe-unlock"> 📱 ポケットモード上スワイプ解除を有効</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-force-pc-layout"> 💻 モバイル版レイアウトを無効化 (常にPC表示)</label></div>
+                    <div class="setting-row">
+                        <label><input type="checkbox" id="set-window-mode"> 🪟 ウィンドウモード (パネル自由配置)</label>
+                        <button id="btn-reset-window" class="theme-btn" style="padding: 5px; font-size:0.8rem; margin-top:5px; width:150px;">配置をリセット</button>
                     </div>
+
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
-                        <label><input type="checkbox" id="set-pocket-always"> 📱 ポケットモードで常に情報を表示</label>
+                        <label><input type="checkbox" id="set-use-firebase"> ☁️ Firebase 連携を使用する</label>
+                        <div style="display:flex; gap:10px; margin-top:5px;">
+                            <button id="btn-save-firebase" class="theme-btn" style="flex:1; padding:5px; font-size:0.8rem;">現在のリストを保存</button>
+                            <button id="btn-load-firebase" class="theme-btn" style="flex:1; padding:5px; font-size:0.8rem;">再読み込み</button>
+                        </div>
                     </div>
 
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
@@ -224,7 +213,7 @@
                     </div>
                     <div class="setting-row" style="display: flex; flex-direction: row; gap: 10px; margin-top: 5px;">
                         <div style="flex:1;"><label>表示位置</label><select id="set-bg-position" class="widget-search" style="width:100%; font-size:0.8rem;"><option value="center">中央</option><option value="top">上</option><option value="bottom">下</option></select></div>
-                        <div style="flex:1;"><label>サイズ</label><select id="set-bg-size" class="widget-search" style="width:100%; font-size:0.8rem;"><option value="cover">全画面</option><option value="contain">全体を収める</option></select></div>
+                        <div style="flex:1;"><label>サイズ</label><select id="set-bg-size" class="widget-search" style="width:100%; font-size:0.8rem;"><option value="cover">全画面カバー</option><option value="contain">全体を収める</option></select></div>
                     </div>
                     <div class="setting-row" style="margin-top: 10px;">
                         <label>透明度 (100:透明 / 0:ぼかし最大): <span id="op-val">50</span></label>
@@ -239,7 +228,7 @@
                         </select>
                     </div>
                     <div class="setting-row" style="margin-top: 10px;">
-                        <label>ロック画面 時計スタイル</label>
+                        <label>ロック画面(ポケット) 時計スタイル</label>
                         <select id="set-pocket-clock-type" class="widget-search">
                             <option value="digital1">デジタル 1 (標準)</option>
                             <option value="digital2">デジタル 2 (7セグ風)</option>
@@ -250,20 +239,8 @@
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
                         <label>ニコニコ音量ブースト: <span id="boost-val">1.0</span>x</label>
                         <input type="range" id="set-nico-boost" min="1" max="5" step="0.5" value="1">
+                        <span style="font-size:0.75rem; opacity:0.8;">※ブラウザの制約上、YouTubeの基本音量を相対的に下げることでブーストをシミュレートします。</span>
                     </div>
-                </div>
-
-                <!-- Firebase連携タブ -->
-                <div id="tab-firebase" class="tab-content">
-                    <div class="setting-row">
-                        <label>Firebase Config (JSON形式)</label>
-                        <textarea id="set-firebase-config" rows="6" placeholder='{"apiKey": "...", "authDomain": "...", "projectId": "...", ...}' style="width:100%; background:rgba(0,0,0,0.3); color:#fff; border:1px solid var(--border-color); padding: 5px; font-family: monospace;"></textarea>
-                    </div>
-                    <div class="settings-actions" style="border:none; padding-top:5px; margin-top:5px;">
-                        <button id="btn-fb-upload" class="theme-btn" style="flex:1; background:#00aaff; color:#fff;"><i class="fas fa-cloud-upload-alt"></i> 現在のデータを送る</button>
-                        <button id="btn-fb-download" class="theme-btn" style="flex:1; background:#44aa44; color:#fff;"><i class="fas fa-cloud-download-alt"></i> Firebaseから読む</button>
-                    </div>
-                    <div id="fb-status" style="font-size:0.85rem; margin-top:10px; color:var(--accent-color); font-weight:bold; text-align:center;"></div>
                 </div>
             </div>
 
