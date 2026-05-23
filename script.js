@@ -1,9 +1,20 @@
+// --- Firebase 準備構成 --- 
+const firebaseConfig = {
+    // apiKey: "API_KEY",
+    // authDomain: "PROJECT_ID.firebaseapp.com",
+    // databaseURL: "https://PROJECT_ID.firebaseio.com",
+    // projectId: "PROJECT_ID",
+    // storageBucket: "PROJECT_ID.appspot.com",
+    // messagingSenderId: "SENDER_ID",
+    // appId: "APP_ID"
+};
+
 const defaultSettings = {
     theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, clockType: 'digital1', pocketClockType: 'digital1', nicoBoost: 1.0,
     baseFontSize: 100, pcLeftWidth: 350, musicMode: false, showClock: true, showThumbnails: true,
     simpleLayoutMode: false, performanceMode: false, dataSaverMode: false,
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff',
-    forcePcLayout: false, windowMode: false, pocketAlwaysShowInfo: false, firebaseConfig: "", windowPositions: {}
+    pocketAlwaysOn: false, pocketSwipeUnlock: true, forcePcLayout: false, windowMode: false, useFirebase: false, windowPositions: {}
 };
 let appSettings = { ...defaultSettings };
 
@@ -35,9 +46,9 @@ let currentRenderedCount = 0;
 const RENDER_CHUNK_SIZE = 50;
 let currentRenderSongs =[];
 
-let isAutoScrolling = false; // モバイル全画面化制御用フラグ
-let fbDb = null; // Firebase DB
-let wakeLock = null; // Wake Lock
+// バーチャルスクロール＆全画面リスト管理
+let isUserScrolling = false;
+let scrollTimeout = null;
 
 const importScreen = document.getElementById('import-screen');
 const readyScreen = document.getElementById('ready-screen');
@@ -45,7 +56,7 @@ const mainApp = document.getElementById('main-app');
 const folderListEl = document.getElementById('widget-folder-list');
 const trackListEl = document.getElementById('widget-track-list');
 
-// 🌟 バックグラウンド維持のための無音オーディオハック
+// 🌟 無音オーディオ
 let silentAudio = null;
 function setupBackgroundPlayback() {
     if (!silentAudio) {
@@ -61,26 +72,23 @@ function setupBackgroundPlayback() {
 function startSilentAudio() { if (silentAudio && silentAudio.paused) silentAudio.play().catch(e => {}); }
 function stopSilentAudio() { if (silentAudio && !silentAudio.paused) silentAudio.pause(); }
 
-// 🌟 IndexedDB (背景画像保存 Canvasでリサイズ)
+// 🌟 IndexedDB (背景画像保存 - Canvasでリサイズして安定化)
 const DB_NAME = 'cms_player_db'; const STORE_NAME = 'bg_images';
 function saveBgImageToDB(file) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = e => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                let w = img.width, h = img.height;
-                const max = 1920;
-                if (w > max || h > max) {
-                    if (w > h) { h = Math.round(h * max / w); w = max; }
-                    else { w = Math.round(w * max / h); h = max; }
-                }
-                canvas.width = w; canvas.height = h;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, w, h);
+                let width = img.width; let height = img.height;
+                const MAX = 1920;
+                if (width > height) { if (width > MAX) { height *= MAX / width; width = MAX; } } 
+                else { if (height > MAX) { width *= MAX / height; height = MAX; } }
+                canvas.width = width; canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
                 const base64 = canvas.toDataURL('image/jpeg', 0.8);
-
+                
                 const req = indexedDB.open(DB_NAME, 1);
                 req.onupgradeneeded = ev => ev.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
                 req.onsuccess = ev => {
@@ -100,8 +108,7 @@ function loadBgImageFromDB() {
         req.onupgradeneeded = ev => ev.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
         req.onsuccess = ev => {
             try {
-                const tx = ev.target.result.transaction(STORE_NAME, 'readonly');
-                const getReq = tx.objectStore(STORE_NAME).get('bg1');
+                const getReq = ev.target.result.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get('bg1');
                 getReq.onsuccess = () => { if (getReq.result) document.documentElement.style.setProperty('--bg-image', `url(${getReq.result.data})`); resolve(); };
             } catch(err) { resolve(); }
         };
@@ -113,11 +120,44 @@ function clearBgImageDB() {
     req.onsuccess = ev => { try { ev.target.result.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete('bg1'); document.documentElement.style.setProperty('--bg-image', 'none'); } catch(e){} };
 }
 
+// 🌟 Firebase 処理
+async function initFirebase() {
+    if (!appSettings.useFirebase) return false;
+    try {
+        if (!window.firebase) {
+            await new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = "https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"; s.onload = resolve; s.onerror = reject; document.head.appendChild(s); });
+            await new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = "https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"; s.onload = resolve; s.onerror = reject; document.head.appendChild(s); });
+        }
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        return true;
+    } catch (e) { console.error("Firebase init failed:", e); return false; }
+}
+
+async function loadDataFromFirebase() {
+    try {
+        const db = firebase.database();
+        const snapshot = await db.ref('cms_data').once('value');
+        const data = snapshot.val();
+        if (data && data.mediaItems) return data;
+    } catch (e) { console.error("Firebase fetch error:", e); }
+    return null;
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
-    loadSettings(); applyThemeSettings();
-    await loadBgImageFromDB();
+    loadSettings(); 
     updateLayoutMode();
+    applyThemeSettings();
+    applyWindowMode();
+    await loadBgImageFromDB();
+    
+    if (appSettings.useFirebase) {
+        const fbReady = await initFirebase();
+        if (fbReady) {
+            const fbData = await loadDataFromFirebase();
+            if (fbData) { processImportData(fbData); importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden'); }
+        }
+    }
+
     updateClock(); setInterval(updateClock, 1000); loadYouTubeAPI();
 
     window.addEventListener('resize', () => { 
@@ -125,23 +165,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         resizeTimer = setTimeout(() => {
             updateLayoutMode();
             scheduleMarqueeUpdate();
-            if (window.innerWidth > 900) {
-                document.body.classList.remove('player-expanded', 'show-mobile-nav');
-            }
+            if (window.innerWidth > 900 && !appSettings.forcePcLayout) document.body.classList.remove('player-expanded', 'show-mobile-nav');
         }, 200); 
     });
 
     trackListEl.addEventListener('scroll', () => { 
-        if (trackListEl.scrollTop + trackListEl.clientHeight >= trackListEl.scrollHeight - 100) loadMoreTracks(); 
-        
-        // モバイル版でユーザースクロール時、全画面リストにする
-        if (document.body.classList.contains('is-mobile') && !isAutoScrolling) {
+        isUserScrolling = true;
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => { isUserScrolling = false; }, 1500);
+
+        if (document.body.classList.contains('is-mobile') && !document.body.classList.contains('mobile-list-fullscreen')) {
             document.body.classList.add('mobile-list-fullscreen');
         }
-    });
 
-    document.getElementById('mobile-list-close-btn').addEventListener('click', () => {
-        document.body.classList.remove('mobile-list-fullscreen');
+        if (trackListEl.scrollTop + trackListEl.clientHeight >= trackListEl.scrollHeight - 100) loadMoreTracks(); 
     });
 
     const widgetControls = document.getElementById('widget-controls');
@@ -170,55 +207,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('toggle-list-text').textContent = isListVisible ? 'リストを隠す' : 'リストを表示'; scheduleMarqueeUpdate();
     });
 
+    document.getElementById('mobile-list-close-btn').addEventListener('click', () => {
+        document.body.classList.remove('mobile-list-fullscreen'); isUserScrolling = false;
+    });
+
     setupPlayerControls(); setupSettingsModal(); window.addEventListener('message', handleNicoMessage);
     setupPocketMode();
-    setupWindowMode();
 });
-
-// PC強制化とモバイル判定
-function updateLayoutMode() {
-    const isMobileWidth = window.innerWidth <= 900;
-    if (isMobileWidth && !appSettings.forcePcLayout) {
-        document.body.classList.add('is-mobile');
-    } else {
-        document.body.classList.remove('is-mobile');
-    }
-}
-
-// WindowモードのドラッグUI
-function setupWindowMode() {
-    document.querySelectorAll('.draggable-panel').forEach(el => {
-        const handle = el.querySelector('.drag-handle');
-        if (!handle) return;
-        
-        // 初期位置復元
-        if (appSettings.windowPositions && appSettings.windowPositions[el.dataset.id]) {
-            const pos = appSettings.windowPositions[el.dataset.id];
-            el.style.left = pos.left; el.style.top = pos.top;
-        }
-
-        let startX, startY, initX, initY;
-        handle.onmousedown = (e) => {
-            if (!document.body.classList.contains('window-mode')) return;
-            document.querySelectorAll('.draggable-panel').forEach(p => p.style.zIndex = 10);
-            el.style.zIndex = 100;
-
-            startX = e.clientX; startY = e.clientY;
-            initX = el.offsetLeft; initY = el.offsetTop;
-            document.onmousemove = (me) => {
-                const dx = me.clientX - startX; const dy = me.clientY - startY;
-                el.style.left = (initX + dx) + 'px';
-                el.style.top = (initY + dy) + 'px';
-            };
-            document.onmouseup = () => {
-                document.onmousemove = null; document.onmouseup = null;
-                if (!appSettings.windowPositions) appSettings.windowPositions = {};
-                appSettings.windowPositions[el.dataset.id] = { left: el.style.left, top: el.style.top };
-                saveSettings();
-            };
-        };
-    });
-}
 
 function loadYouTubeAPI() {
     if (!window.YT) { const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api"; document.getElementsByTagName('script')[0].parentNode.insertBefore(tag, document.getElementsByTagName('script')[0]); }
@@ -227,23 +222,62 @@ function loadYouTubeAPI() {
 function loadSettings() {
     try {
         const saved = localStorage.getItem('cms_player_settings_v17');
-        if (saved) { 
-            appSettings = { ...defaultSettings, ...JSON.parse(saved) }; 
-        } else { 
-            const isMobile = window.innerWidth <= 900; 
-            if (isMobile) { appSettings.performanceMode = true; appSettings.showClock = false; } 
-        }
+        if (saved) { appSettings = { ...defaultSettings, ...JSON.parse(saved) }; } 
+        else { const isMobile = window.innerWidth <= 900; if (isMobile) { appSettings.performanceMode = true; appSettings.showClock = false; } }
     } catch (e) { console.error(e); }
 }
 
 function saveSettings() { localStorage.setItem('cms_player_settings_v17', JSON.stringify(appSettings)); }
 
+function updateLayoutMode() {
+    if (window.innerWidth <= 900 && !appSettings.forcePcLayout) {
+        document.body.classList.add('is-mobile'); document.body.classList.remove('is-pc');
+    } else {
+        document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile');
+    }
+}
+
+// 🌟 ウィンドウモード（ドラッグ機能）
+function applyWindowMode() {
+    const panels = ['widget-clock', 'widget-player', 'widget-controls', 'widget-library'];
+    if (appSettings.windowMode) {
+        document.body.classList.add('window-mode');
+        panels.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                if (appSettings.windowPositions && appSettings.windowPositions[id]) {
+                    el.style.top = appSettings.windowPositions[id].top; el.style.left = appSettings.windowPositions[id].left;
+                }
+                makeDraggable(el);
+            }
+        });
+    } else {
+        document.body.classList.remove('window-mode');
+        panels.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.style.top = ''; el.style.left = ''; el.onmousedown = null; }
+        });
+    }
+}
+
+function makeDraggable(el) {
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    el.onmousedown = (e) => {
+        if (!appSettings.windowMode) return;
+        if (['INPUT', 'BUTTON', 'SELECT', 'OPTION', 'TEXTAREA', 'I'].includes(e.target.tagName)) return;
+        if (e.target.closest('.w-t-item') || e.target.closest('.w-f-item') || e.target.closest('.progress-container')) return;
+        e.preventDefault();
+        pos3 = e.clientX; pos4 = e.clientY;
+        document.onmouseup = () => { document.onmouseup = null; document.onmousemove = null; appSettings.windowPositions[el.id] = { top: el.style.top, left: el.style.left }; saveSettings(); };
+        document.onmousemove = (ev) => { ev.preventDefault(); pos1 = pos3 - ev.clientX; pos2 = pos4 - ev.clientY; pos3 = ev.clientX; pos4 = ev.clientY; el.style.top = (el.offsetTop - pos2) + "px"; el.style.left = (el.offsetLeft - pos1) + "px"; };
+    };
+}
+
+
 function applyThemeSettings() {
-    document.body.className = `theme-${appSettings.theme}`;
-    if(appSettings.forcePcLayout) document.body.classList.remove('is-mobile');
-    updateLayoutMode();
+    document.body.className = `theme-${appSettings.theme} ${document.body.className.match(/is-(pc|mobile)/)[0]}`;
+    if (appSettings.forcePcLayout) document.body.classList.add('is-pc');
     
-    document.body.classList.toggle('window-mode', appSettings.windowMode);
     document.body.classList.toggle('music-mode', appSettings.musicMode); document.body.classList.toggle('show-list-thumbnails', appSettings.showThumbnails);
     document.body.classList.toggle('show-clock', appSettings.showClock); document.body.classList.toggle('simple-layout-mode', appSettings.simpleLayoutMode);
     document.body.classList.toggle('performance-mode', appSettings.performanceMode);
@@ -260,23 +294,11 @@ function applyThemeSettings() {
     else { document.body.style.removeProperty('--text-color'); document.body.style.removeProperty('--accent-color'); document.body.style.removeProperty('--border-color'); }
     
     const op = parseFloat(appSettings.bgOpacity); 
-    const alpha = (100 - op) / 100;
-    const blur = appSettings.performanceMode ? 0 : ((100 - op) / 100 * 20);
-    document.documentElement.style.setProperty('--panel-alpha', alpha * 0.8); 
-    document.documentElement.style.setProperty('--panel-blur', `${blur}px`);
-
+    document.documentElement.style.setProperty('--panel-alpha', (100 - op) / 100 * 0.8); 
+    document.documentElement.style.setProperty('--panel-blur', appSettings.performanceMode ? '0px' : `${((100 - op) / 100 * 20)}px`);
+    
     const pOverlay = document.getElementById('pocket-overlay');
-    if (appSettings.pocketAlwaysShowInfo) pOverlay.classList.add('always-show'); else pOverlay.classList.remove('always-show');
-}
-
-// 🌟 Firebase設定
-function initFirebase() {
-    if (!appSettings.firebaseConfig) return;
-    try {
-        const config = JSON.parse(appSettings.firebaseConfig);
-        if (firebase.apps.length === 0) firebase.initializeApp(config);
-        fbDb = firebase.firestore();
-    } catch(e) { console.error("Firebase init failed:", e); }
+    if (appSettings.pocketAlwaysOn) pOverlay.classList.add('always-on'); else pOverlay.classList.remove('always-on');
 }
 
 function setupSettingsModal() {
@@ -286,35 +308,29 @@ function setupSettingsModal() {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-            btn.classList.add('active');
-            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            btn.classList.add('active'); document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
         });
     });
 
-    const openSettings = () => {
+    document.getElementById('btn-open-settings').onclick = () => {
         document.getElementById('set-theme').value = appSettings.theme;
         document.getElementById('set-font-size').value = appSettings.baseFontSize; document.getElementById('font-val').textContent = appSettings.baseFontSize;
         document.getElementById('set-pc-left-width').value = appSettings.pcLeftWidth; document.getElementById('pc-width-val').textContent = appSettings.pcLeftWidth;
         document.getElementById('set-bg-position').value = appSettings.bgPosition; document.getElementById('set-bg-size').value = appSettings.bgSize;
         document.getElementById('set-opacity').value = appSettings.bgOpacity; document.getElementById('op-val').textContent = appSettings.bgOpacity;
-        document.getElementById('set-clock-type').value = appSettings.clockType;
-        document.getElementById('set-pocket-clock-type').value = appSettings.pocketClockType || 'digital1';
+        document.getElementById('set-clock-type').value = appSettings.clockType; document.getElementById('set-pocket-clock-type').value = appSettings.pocketClockType || 'digital1';
         document.getElementById('set-nico-boost').value = appSettings.nicoBoost || 1.0; document.getElementById('boost-val').textContent = parseFloat(appSettings.nicoBoost || 1.0).toFixed(1);
+        
         document.getElementById('set-simple-layout').checked = appSettings.simpleLayoutMode; document.getElementById('set-performance-mode').checked = appSettings.performanceMode;
         document.getElementById('set-data-saver').checked = appSettings.dataSaverMode; document.getElementById('set-music-mode').checked = appSettings.musicMode;
         document.getElementById('set-show-clock').checked = appSettings.showClock; document.getElementById('set-show-thumbnails').checked = appSettings.showThumbnails;
-        document.getElementById('set-use-custom-color').checked = appSettings.customColorEnabled; document.getElementById('set-accent-color').value = appSettings.customAccentColor;
-        document.getElementById('set-border-color').value = appSettings.customBorderColor;
-        document.getElementById('set-force-pc').checked = appSettings.forcePcLayout;
-        document.getElementById('set-window-mode').checked = appSettings.windowMode;
-        document.getElementById('set-pocket-always').checked = appSettings.pocketAlwaysShowInfo;
-        document.getElementById('set-firebase-config').value = appSettings.firebaseConfig;
+        document.getElementById('set-pocket-always-on').checked = appSettings.pocketAlwaysOn; document.getElementById('set-pocket-swipe-unlock').checked = appSettings.pocketSwipeUnlock;
+        document.getElementById('set-force-pc-layout').checked = appSettings.forcePcLayout; document.getElementById('set-window-mode').checked = appSettings.windowMode;
+        document.getElementById('set-use-firebase').checked = appSettings.useFirebase;
         
+        document.getElementById('set-use-custom-color').checked = appSettings.customColorEnabled; document.getElementById('set-accent-color').value = appSettings.customAccentColor; document.getElementById('set-border-color').value = appSettings.customBorderColor;
         modal.classList.remove('hidden');
     };
-
-    document.getElementById('btn-open-settings').onclick = openSettings;
-    document.getElementById('btn-open-settings-start').onclick = openSettings;
 
     document.getElementById('set-font-size').oninput = (e) => document.getElementById('font-val').textContent = e.target.value;
     document.getElementById('set-pc-left-width').oninput = (e) => document.getElementById('pc-width-val').textContent = e.target.value;
@@ -322,39 +338,19 @@ function setupSettingsModal() {
     document.getElementById('set-nico-boost').oninput = (e) => document.getElementById('boost-val').textContent = parseFloat(e.target.value).toFixed(1);
 
     document.getElementById('btn-close-settings').onclick = () => modal.classList.add('hidden');
-    document.getElementById('btn-reset-settings').onclick = () => { if (confirm('設定を初期化してリロードしますか？')) { localStorage.removeItem('cms_player_settings_v17'); clearBgImageDB(); location.reload(); } };
-    document.getElementById('btn-clear-bg').onclick = () => { clearBgImageDB(); alert('背景画像をクリアしました。Saveボタンを押してください。'); };
+    document.getElementById('btn-reset-settings').onclick = () => { if (confirm('初期化しますか？')) { localStorage.removeItem('cms_player_settings_v17'); clearBgImageDB(); location.reload(); } };
+    document.getElementById('btn-clear-bg').onclick = () => { clearBgImageDB(); alert('背景をクリアしました。Saveを押してください。'); };
+    document.getElementById('btn-reset-window').onclick = () => { appSettings.windowPositions = {}; alert('配置をリセットしました。Saveを押してください。'); };
 
-    document.getElementById('btn-reset-window').onclick = () => {
-        appSettings.windowPositions = {}; saveSettings();
-        document.querySelectorAll('.draggable-panel').forEach(el => { el.style.left = ''; el.style.top = ''; });
-        alert('ウィンドウ配置をリセットしました。');
+    document.getElementById('btn-save-firebase').onclick = async () => {
+        if (!appSettings.useFirebase || !window.firebase || !firebase.database) return alert('Firebaseが無効か初期化されていません。');
+        try { await firebase.database().ref('cms_data').set({ mediaItems: allItems, folderSettings: folderSettings }); alert('Firebaseに保存しました。'); } 
+        catch(e) { alert('保存失敗: ' + e.message); }
     };
-
-    // Firebase Upload
-    document.getElementById('btn-fb-upload').onclick = async () => {
-        initFirebase(); if (!fbDb) { alert('Configが不正か未設定です'); return; }
-        try {
-            document.getElementById('fb-status').textContent = "アップロード中...";
-            await fbDb.collection('cms_player').doc('data').set({ allItems, folderSettings });
-            document.getElementById('fb-status').textContent = "アップロード成功";
-        } catch(e) { document.getElementById('fb-status').textContent = "エラー: " + e.message; }
-    };
-    
-    // Firebase Download
-    document.getElementById('btn-fb-download').onclick = async () => {
-        initFirebase(); if (!fbDb) { alert('Configが不正か未設定です'); return; }
-        try {
-            document.getElementById('fb-status').textContent = "ダウンロード中...";
-            const doc = await fbDb.collection('cms_player').doc('data').get();
-            if (doc.exists) {
-                const data = doc.data(); allItems = data.allItems || []; folderSettings = data.folderSettings || [];
-                document.getElementById('fb-status').textContent = "ダウンロード成功。再構築します...";
-                if (allItems.length > 0) { buildLibrary(); renderFolders(); selectFolder(musicLibrary[0]?.id || '__all'); }
-                modal.classList.add('hidden');
-                if(!mainApp.classList.contains('hidden')) alert('データを更新しました');
-            } else { document.getElementById('fb-status').textContent = "データが存在しません。"; }
-        } catch(e) { document.getElementById('fb-status').textContent = "エラー: (" + e.message + ")"; }
+    document.getElementById('btn-load-firebase').onclick = async () => {
+        if (!appSettings.useFirebase || !window.firebase) return alert('Firebaseが無効です。');
+        const data = await loadDataFromFirebase();
+        if (data) { processImportData(data); alert('ロードしました。'); modal.classList.add('hidden'); } else alert('データがありません。');
     };
 
     document.getElementById('btn-save-settings').onclick = async () => {
@@ -363,248 +359,138 @@ function setupSettingsModal() {
         appSettings.bgSize = document.getElementById('set-bg-size').value; appSettings.bgOpacity = document.getElementById('set-opacity').value;
         appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value;
         appSettings.nicoBoost = document.getElementById('set-nico-boost').value;
+        
         appSettings.simpleLayoutMode = document.getElementById('set-simple-layout').checked; appSettings.performanceMode = document.getElementById('set-performance-mode').checked;
         appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked;
         appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked;
-        appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value;
-        appSettings.customBorderColor = document.getElementById('set-border-color').value;
-        appSettings.forcePcLayout = document.getElementById('set-force-pc').checked;
-        appSettings.windowMode = document.getElementById('set-window-mode').checked;
-        appSettings.pocketAlwaysShowInfo = document.getElementById('set-pocket-always').checked;
-        appSettings.firebaseConfig = document.getElementById('set-firebase-config').value;
+        appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked;
+        appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked;
+        appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
+        
+        appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value;
         
         const fileInput = document.getElementById('set-bg-img');
         if (fileInput.files.length > 0) { await saveBgImageToDB(fileInput.files[0]); }
         
-        saveSettings(); applyVolume(); modal.classList.add('hidden'); applyThemeSettings(); updateClock(); scheduleMarqueeUpdate(); 
+        saveSettings(); applyVolume(); modal.classList.add('hidden'); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); updateClock(); scheduleMarqueeUpdate(); 
     };
 }
 
 function updateClock() {
-    const now = new Date();
-    const dStr = now.toLocaleDateString('ja-JP');
-    const h = String(now.getHours()).padStart(2, '0');
-    const m = String(now.getMinutes()).padStart(2, '0');
-    const s = String(now.getSeconds()).padStart(2, '0');
-    const timeStr = `${h}:${m}:${s}`;
-    const pTimeStr = `${h}:${m}`;
-    
-    // 通常画面の時計
+    const now = new Date(); const dStr = now.toLocaleDateString('ja-JP'); const h = String(now.getHours()).padStart(2, '0'); const m = String(now.getMinutes()).padStart(2, '0'); const s = String(now.getSeconds()).padStart(2, '0');
     if (appSettings.showClock) {
-        document.getElementById('clock-date').textContent = dStr;
-        document.getElementById('clock-time').textContent = timeStr;
-        const timeEl = document.getElementById('clock-time');
-        const analogEl = document.getElementById('analog-clock');
-        
-        if (appSettings.clockType === 'analog') {
-            timeEl.classList.add('hidden'); analogEl.classList.remove('hidden');
-            const secDeg = now.getSeconds() * 6; const minDeg = now.getMinutes() * 6 + now.getSeconds() / 10; const hourDeg = (now.getHours() % 12) * 30 + now.getMinutes() / 2;
-            analogEl.querySelector('.second-hand').style.transform = `rotate(${secDeg}deg)`; analogEl.querySelector('.minute-hand').style.transform = `rotate(${minDeg}deg)`; analogEl.querySelector('.hour-hand').style.transform = `rotate(${hourDeg}deg)`;
-        } else {
-            timeEl.classList.remove('hidden'); analogEl.classList.add('hidden');
-            if (appSettings.clockType === 'digital2') timeEl.classList.add('digital2'); else timeEl.classList.remove('digital2');
-        }
+        document.getElementById('clock-date').textContent = dStr; document.getElementById('clock-time').textContent = `${h}:${m}:${s}`;
+        const timeEl = document.getElementById('clock-time'); const analogEl = document.getElementById('analog-clock');
+        if (appSettings.clockType === 'analog') { timeEl.classList.add('hidden'); analogEl.classList.remove('hidden'); const sd = now.getSeconds()*6; const md = now.getMinutes()*6 + now.getSeconds()/10; const hd = (now.getHours()%12)*30 + now.getMinutes()/2; analogEl.querySelector('.second-hand').style.transform = `rotate(${sd}deg)`; analogEl.querySelector('.minute-hand').style.transform = `rotate(${md}deg)`; analogEl.querySelector('.hour-hand').style.transform = `rotate(${hd}deg)`; } 
+        else { timeEl.classList.remove('hidden'); analogEl.classList.add('hidden'); if (appSettings.clockType === 'digital2') timeEl.classList.add('digital2'); else timeEl.classList.remove('digital2'); }
     }
-
-    // ポケットモード用の時計
-    const pContainer = document.getElementById('pocket-clock-container');
-    const pText = document.getElementById('pocket-clock-text');
-    const pAnalog = document.getElementById('pocket-analog-clock');
-    
-    if (appSettings.pocketClockType === 'none') {
-        pContainer.classList.add('hidden');
-    } else {
+    const pContainer = document.getElementById('pocket-clock-container'); const pText = document.getElementById('pocket-clock-text'); const pAnalog = document.getElementById('pocket-analog-clock');
+    if (appSettings.pocketClockType === 'none') { pContainer.classList.add('hidden'); } 
+    else {
         pContainer.classList.remove('hidden');
-        if (appSettings.pocketClockType === 'analog') {
-            pText.classList.add('hidden'); pAnalog.classList.remove('hidden');
-            const secDeg = now.getSeconds() * 6; const minDeg = now.getMinutes() * 6 + now.getSeconds() / 10; const hourDeg = (now.getHours() % 12) * 30 + now.getMinutes() / 2;
-            pAnalog.querySelector('.second-hand').style.transform = `rotate(${secDeg}deg)`; pAnalog.querySelector('.minute-hand').style.transform = `rotate(${minDeg}deg)`; pAnalog.querySelector('.hour-hand').style.transform = `rotate(${hourDeg}deg)`;
-        } else {
-            pText.classList.remove('hidden'); pAnalog.classList.add('hidden'); pText.textContent = pTimeStr;
-            if (appSettings.pocketClockType === 'digital2') pText.classList.add('digital2'); else pText.classList.remove('digital2');
-        }
+        if (appSettings.pocketClockType === 'analog') { pText.classList.add('hidden'); pAnalog.classList.remove('hidden'); const sd = now.getSeconds()*6; const md = now.getMinutes()*6 + now.getSeconds()/10; const hd = (now.getHours()%12)*30 + now.getMinutes()/2; pAnalog.querySelector('.second-hand').style.transform = `rotate(${sd}deg)`; pAnalog.querySelector('.minute-hand').style.transform = `rotate(${md}deg)`; pAnalog.querySelector('.hour-hand').style.transform = `rotate(${hd}deg)`; } 
+        else { pText.classList.remove('hidden'); pAnalog.classList.add('hidden'); pText.textContent = `${h}:${m}`; if (appSettings.pocketClockType === 'digital2') pText.classList.add('digital2'); else pText.classList.remove('digital2'); }
     }
 }
 
 function updateMarquee() {
     if (appSettings.performanceMode) { document.querySelectorAll('.marquee-content').forEach(c => c.classList.remove('is-marquee')); return; }
     requestAnimationFrame(() => {
-        document.querySelectorAll('.marquee-wrapper').forEach(wrapper => {
-            const content = wrapper.querySelector('.marquee-content'); if (!content) return;
-            if (content.scrollWidth > wrapper.clientWidth + 2) { wrapper.style.setProperty('--parent-width', `${wrapper.clientWidth}px`); content.classList.add('is-marquee'); } 
-            else content.classList.remove('is-marquee');
+        document.querySelectorAll('.marquee-wrapper').forEach(w => {
+            const c = w.querySelector('.marquee-content'); if (!c) return;
+            if (c.scrollWidth > w.clientWidth + 2) { w.style.setProperty('--parent-width', `${w.clientWidth}px`); c.classList.add('is-marquee'); } else c.classList.remove('is-marquee');
         });
     });
 }
 function scheduleMarqueeUpdate() { setTimeout(updateMarquee, 100); }
 
-function handleFileImport(event) {
-    const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
-    reader.onload = (e) => {
-        try {
-            const data = JSON.parse(e.target.result); const mediaItems = Array.isArray(data) ? data : (data.mediaItems ||[]);
-            allItems = mediaItems.filter(i => i.site !== 'system').map((item, idx) => ({ ...item, originalIndex: idx, safeDate: item.savedAt ? new Date(item.savedAt).getTime() : 0, safePlayCount: item.playCount || 0 }));
-            folderSettings = data.folderSettings ||[];
-            if (allItems.length > 0) { importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden'); buildLibrary(); renderFolders(); selectFolder(musicLibrary[0]?.id || '__all'); } 
-            else alert('動画データがありません。');
-        } catch (error) { alert('JSONの解析に失敗しました。'); }
-    };
+function handleFileImport(e) {
+    const file = e.target.files[0]; if (!file) return; const reader = new FileReader();
+    reader.onload = (ev) => { try { processImportData(JSON.parse(ev.target.result)); importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden'); } catch (err) { alert('JSONの解析に失敗しました。'); } };
     reader.readAsText(file);
 }
 
-// 起動時にFirebaseからロードする
-document.getElementById('btn-import-firebase').addEventListener('click', async () => {
-    initFirebase();
-    if (!fbDb) { alert("Firebase Configが設定されていません。右上の設定アイコンから登録してください。"); return; }
-    try {
-        const doc = await fbDb.collection('cms_player').doc('data').get();
-        if (doc.exists) {
-            const data = doc.data(); allItems = data.allItems || []; folderSettings = data.folderSettings || [];
-            if (allItems.length > 0) { 
-                importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden'); 
-                buildLibrary(); renderFolders(); selectFolder(musicLibrary[0]?.id || '__all'); 
-            } else { alert('動画データがありません。'); }
-        } else { alert('Firebaseにデータがありません。JSONを読み込んでください。'); }
-    } catch(e) { alert('Firebase通信失敗。ローカルのJSONを読み込んでください。\n' + e.message); }
-});
-
-function startGame() {
-    readyScreen.classList.add('hidden');
-    setupBackgroundPlayback(); startSilentAudio();
-    mainApp.classList.remove('hidden'); scheduleMarqueeUpdate(); 
-    if (currentFolderId) { const folder = musicLibrary.find(f => f.id === currentFolderId); startPlaylist(folder ? folder.songs : (musicLibrary.find(f => f.id === '__all')?.songs ||[]), 0); }
+function processImportData(data) {
+    const items = Array.isArray(data) ? data : (data.mediaItems ||[]);
+    allItems = items.filter(i => i.site !== 'system').map((item, idx) => ({ ...item, originalIndex: idx, safeDate: item.savedAt ? new Date(item.savedAt).getTime() : 0, safePlayCount: item.playCount || 0 }));
+    folderSettings = data.folderSettings ||[];
+    if (allItems.length > 0) { buildLibrary(); renderFolders(); selectFolder(musicLibrary[0]?.id || '__all'); } else alert('動画データがありません。');
 }
 
+function startGame() { readyScreen.classList.add('hidden'); setupBackgroundPlayback(); startSilentAudio(); mainApp.classList.remove('hidden'); scheduleMarqueeUpdate(); if (currentFolderId) { const f = musicLibrary.find(f => f.id === currentFolderId); startPlaylist(f ? f.songs : (musicLibrary.find(f => f.id === '__all')?.songs ||[]), 0); } }
+
 function buildLibrary() {
-    let folderMap = {}; let folderOrder =[]; 
-
-    const itemsToProcess = allItems.filter(item => {
-        if (excludeNico && item.site === 'niconico') return false;
-        if (currentSearchQuery) { const query = currentSearchQuery.toLowerCase(); return (item.title || "").toLowerCase().includes(query) || (item.tags ||[]).join(' ').toLowerCase().includes(query); }
-        return true;
+    let fMap = {}; let fOrder =[]; 
+    const items = allItems.filter(i => {
+        if (excludeNico && i.site === 'niconico') return false;
+        if (currentSearchQuery) { const q = currentSearchQuery.toLowerCase(); return (i.title || "").toLowerCase().includes(q) || (i.tags ||[]).join(' ').toLowerCase().includes(q); } return true;
     });
-
-    itemsToProcess.forEach(item => {
-        const folders = item.folders && item.folders.length > 0 ? item.folders :[item.folder || 'Manual'];
-        folders.forEach(fName => { 
-            if (!folderMap[fName]) { folderMap[fName] =[]; folderOrder.push(fName); }
-            folderMap[fName].push(item); 
-        });
-    });
-
-    const folderNames = Object.keys(folderMap).sort((a, b) => {
-        const setA = folderSettings.find(s => s.folderName === a); const setB = folderSettings.find(s => s.folderName === b);
-        const orderA = setA && typeof setA.order === 'number' ? setA.order : folderOrder.indexOf(a) + 10000;
-        const orderB = setB && typeof setB.order === 'number' ? setB.order : folderOrder.indexOf(b) + 10000;
-        return orderA - orderB;
-    });
-
-    musicLibrary =[ { id: '__all', name: '📚 All', songs: sortSongs(itemsToProcess) }, ...folderNames.map(name => ({ id: name, name: `📁 ${name}`, songs: sortSongs(folderMap[name]) })) ];
+    items.forEach(i => { const fs = i.folders && i.folders.length > 0 ? i.folders :[i.folder || 'Manual']; fs.forEach(f => { if (!fMap[f]) { fMap[f] =[]; fOrder.push(f); } fMap[f].push(i); }); });
+    const fNames = Object.keys(fMap).sort((a, b) => { const sA = folderSettings.find(s => s.folderName === a); const sB = folderSettings.find(s => s.folderName === b); return (sA && typeof sA.order === 'number' ? sA.order : fOrder.indexOf(a) + 10000) - (sB && typeof sB.order === 'number' ? sB.order : fOrder.indexOf(b) + 10000); });
+    musicLibrary =[ { id: '__all', name: '📚 All', songs: sortSongs(items) }, ...fNames.map(n => ({ id: n, name: `📁 ${n}`, songs: sortSongs(fMap[n]) })) ];
 }
 
 function sortSongs(songs) {
     return[...songs].sort((a, b) => {
-        const safeStr = (s) => s || "";
+        const sf = (s) => s || "";
         switch (currentSortOrder) {
-            case 'title_asc': return safeStr(a.title).localeCompare(safeStr(b.title));
-            case 'title_desc': return safeStr(b.title).localeCompare(safeStr(a.title));
-            case 'newest': return b.safeDate - a.safeDate;
-            case 'oldest': return a.safeDate - b.safeDate;
-            case 'playCount_desc': return b.safePlayCount - a.safePlayCount;
-            case 'custom': default: return a.originalIndex - b.originalIndex;
+            case 'title_asc': return sf(a.title).localeCompare(sf(b.title)); case 'title_desc': return sf(b.title).localeCompare(sf(a.title));
+            case 'newest': return b.safeDate - a.safeDate; case 'oldest': return a.safeDate - b.safeDate;
+            case 'playCount_desc': return b.safePlayCount - a.safePlayCount; case 'custom': default: return a.originalIndex - b.originalIndex;
         }
     });
 }
 
 function renderFolders() {
-    folderListEl.innerHTML = '';
-    const mobileModalListEl = document.getElementById('mobile-folder-list-modal'); if (mobileModalListEl) mobileModalListEl.innerHTML = '';
-    musicLibrary.forEach(folder => {
-        const div = document.createElement('div'); div.className = 'w-f-item'; div.textContent = folder.name; div.dataset.folderId = folder.id;
-        div.title = folder.name; 
-        div.onclick = () => selectFolder(folder.id); folderListEl.appendChild(div);
-        if (mobileModalListEl) {
-            const mDiv = document.createElement('div'); mDiv.className = 'm-f-item'; mDiv.dataset.folderId = folder.id;
-            mDiv.innerHTML = `<span>${folder.name.replace('📁 ', '').replace('📚 ', '')}</span> <i class="fas fa-music" style="opacity:0.6; font-size:0.9rem;"></i>`;
-            mDiv.onclick = () => { selectFolder(folder.id); document.getElementById('mobile-folder-modal').classList.add('hidden'); };
-            mobileModalListEl.appendChild(mDiv);
-        }
+    folderListEl.innerHTML = ''; const mList = document.getElementById('mobile-folder-list-modal'); if (mList) mList.innerHTML = '';
+    musicLibrary.forEach(f => {
+        const div = document.createElement('div'); div.className = 'w-f-item'; div.textContent = f.name; div.dataset.folderId = f.id; div.title = f.name; div.onclick = () => selectFolder(f.id); folderListEl.appendChild(div);
+        if (mList) { const mDiv = document.createElement('div'); mDiv.className = 'm-f-item'; mDiv.dataset.folderId = f.id; mDiv.innerHTML = `<span>${f.name.replace('📁 ', '').replace('📚 ', '')}</span> <i class="fas fa-music" style="opacity:0.6; font-size:0.9rem;"></i>`; mDiv.onclick = () => { selectFolder(f.id); document.getElementById('mobile-folder-modal').classList.add('hidden'); }; mList.appendChild(mDiv); }
     });
 }
 
-function selectFolder(folderId) {
-    currentFolderId = folderId;
-    document.querySelectorAll('.w-f-item').forEach(el => el.classList.toggle('active', el.dataset.folderId === folderId));
-    document.querySelectorAll('.m-f-item').forEach(el => {
-        const isActive = el.dataset.folderId === folderId; el.classList.toggle('active', isActive);
-        el.innerHTML = isActive ? `<span><i class="fas fa-check" style="margin-right:8px;"></i>${el.textContent.trim()}</span> <i class="fas fa-music"></i>` : `<span>${el.textContent.trim()}</span> <i class="fas fa-music" style="opacity:0.6; font-size:0.9rem;"></i>`;
-    });
-    const folder = musicLibrary.find(f => f.id === folderId);
-    if (folder) {
-        document.getElementById('current-folder-name').textContent = folder.name.replace('📁 ', '').replace('📚 ', '');
-        document.getElementById('current-folder-count').textContent = `${folder.songs.length}件のアイテム`;
-    }
-    renderTracks(folder ? folder.songs :[]);
+function selectFolder(id) {
+    currentFolderId = id;
+    document.querySelectorAll('.w-f-item').forEach(e => e.classList.toggle('active', e.dataset.folderId === id));
+    document.querySelectorAll('.m-f-item').forEach(e => { const act = e.dataset.folderId === id; e.classList.toggle('active', act); e.innerHTML = act ? `<span><i class="fas fa-check" style="margin-right:8px;"></i>${e.textContent.trim()}</span> <i class="fas fa-music"></i>` : `<span>${e.textContent.trim()}</span> <i class="fas fa-music" style="opacity:0.6; font-size:0.9rem;"></i>`; });
+    const f = musicLibrary.find(f => f.id === id); if (f) { document.getElementById('current-folder-name').textContent = f.name.replace('📁 ', '').replace('📚 ', ''); document.getElementById('current-folder-count').textContent = `${f.songs.length}件のアイテム`; }
+    renderTracks(f ? f.songs :[]);
 }
 
 function escapeHTML(str) { return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
 
-function renderTracks(songs) {
-    trackListEl.innerHTML = ''; trackListEl.scrollTop = 0; currentRenderSongs = songs; currentRenderedCount = 0;
-    if (songs.length === 0) { trackListEl.innerHTML = '<div style="padding:20px; text-align:center;">動画がありません</div>'; return; }
-    loadMoreTracks();
-}
+function renderTracks(songs) { trackListEl.innerHTML = ''; trackListEl.scrollTop = 0; currentRenderSongs = songs; currentRenderedCount = 0; if (songs.length === 0) { trackListEl.innerHTML = '<div style="padding:20px; text-align:center;">動画がありません</div>'; return; } loadMoreTracks(); }
 
 function loadMoreTracks() {
     if (currentRenderedCount >= currentRenderSongs.length) return;
-    const fragment = document.createDocumentFragment(); const endIndex = Math.min(currentRenderedCount + RENDER_CHUNK_SIZE, currentRenderSongs.length);
-    for (let i = currentRenderedCount; i < endIndex; i++) {
-        const song = currentRenderSongs[i]; const div = document.createElement('div'); div.className = 'w-t-item';
-        div.title = song.title; 
-        div.innerHTML = `
-            <span class="w-t-idx">${i + 1}</span><span class="w-t-playing-icon hidden"><i class="fa-solid fa-volume-high"></i></span>
-            <img class="w-t-thumb" src="${song.thumbnail || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>"}" loading="lazy">
-            <div class="w-t-info overflow-hidden">
-                <div class="marquee-wrapper"><span class="track-title-text marquee-content">${escapeHTML(song.title)}</span></div>
-                <div class="marquee-wrapper"><span class="track-artist-text marquee-content">${escapeHTML(song.channelName || song.site)}</span></div>
-            </div>`;
-        div.onclick = () => startPlaylist(currentRenderSongs, i); fragment.appendChild(div);
+    const frag = document.createDocumentFragment(); const end = Math.min(currentRenderedCount + RENDER_CHUNK_SIZE, currentRenderSongs.length);
+    for (let i = currentRenderedCount; i < end; i++) {
+        const s = currentRenderSongs[i]; const div = document.createElement('div'); div.className = 'w-t-item'; div.title = s.title;
+        div.innerHTML = `<span class="w-t-idx">${i + 1}</span><span class="w-t-playing-icon hidden"><i class="fa-solid fa-volume-high"></i></span><img class="w-t-thumb" src="${s.thumbnail || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>"}" loading="lazy"><div class="w-t-info overflow-hidden"><div class="marquee-wrapper"><span class="track-title-text marquee-content">${escapeHTML(s.title)}</span></div><div class="marquee-wrapper"><span class="track-artist-text marquee-content">${escapeHTML(s.channelName || s.site)}</span></div></div>`;
+        div.onclick = () => { document.body.classList.remove('mobile-list-fullscreen'); isUserScrolling = false; startPlaylist(currentRenderSongs, i); }; frag.appendChild(div);
     }
-    trackListEl.appendChild(fragment); currentRenderedCount = endIndex; updateActiveTrackUI(); scheduleMarqueeUpdate();
+    trackListEl.appendChild(frag); currentRenderedCount = end; updateActiveTrackUI(); scheduleMarqueeUpdate();
 }
 
+// 🌟 バーチャルスクロール追従の改善
 function updateActiveTrackUI() {
-    // 全曲のUIをリセット
-    document.querySelectorAll('.w-t-item').forEach(el => { 
-        el.classList.remove('active'); 
-        el.querySelector('.w-t-idx').classList.remove('hidden'); 
-        el.querySelector('.w-t-playing-icon').classList.add('hidden'); 
-    });
+    if (!currentRenderSongs || currentRenderSongs.length === 0) return;
+    const tIdx = currentRenderSongs.findIndex(s => s === currentPlayingItem); if (tIdx < 0) return;
 
-    if (currentPlayingItem && currentRenderSongs) {
-        const activeIndex = currentRenderSongs.indexOf(currentPlayingItem);
-        // レンダー済みの範囲内であればDOMにハイライト＆スクロール
-        if (activeIndex > -1 && activeIndex < currentRenderedCount) {
-            const songsInView = Array.from(trackListEl.children); 
-            const activeEl = songsInView[activeIndex];
-            if (activeEl) {
-                activeEl.classList.add('active'); 
-                activeEl.querySelector('.w-t-idx').classList.add('hidden'); 
-                activeEl.querySelector('.w-t-playing-icon').classList.remove('hidden');
-                
-                // 自動再生による遷移の場合のみ、全画面化フラグを立てて追従スクロール
-                if (isTransitioning) {
-                    isAutoScrolling = true;
-                    setTimeout(() => {
-                        const cTop = trackListEl.scrollTop; const cHeight = trackListEl.clientHeight; 
-                        const eTop = activeEl.offsetTop; const eHeight = activeEl.clientHeight;
-                        if (eTop < cTop || eTop + eHeight > cTop + cHeight) {
-                            trackListEl.scrollTo({ top: eTop - (cHeight / 2) + (eHeight / 2), behavior: 'smooth' });
-                        }
-                        setTimeout(() => { isAutoScrolling = false; }, 500);
-                    }, 150);
-                }
-            }
+    if (tIdx >= currentRenderedCount) {
+        while(tIdx >= currentRenderedCount && currentRenderedCount < currentRenderSongs.length) loadMoreTracks();
+    }
+
+    document.querySelectorAll('.w-t-item').forEach(el => { el.classList.remove('active'); el.querySelector('.w-t-idx').classList.remove('hidden'); el.querySelector('.w-t-playing-icon').classList.add('hidden'); });
+
+    const activeEl = trackListEl.children[tIdx];
+    if (activeEl) {
+        activeEl.classList.add('active'); activeEl.querySelector('.w-t-idx').classList.add('hidden'); activeEl.querySelector('.w-t-playing-icon').classList.remove('hidden');
+        if (!isUserScrolling) {
+            setTimeout(() => {
+                const cTop = trackListEl.scrollTop; const cHeight = trackListEl.clientHeight; const eTop = activeEl.offsetTop; const eHeight = activeEl.clientHeight;
+                if (eTop < cTop || eTop + eHeight > cTop + cHeight) trackListEl.scrollTo({ top: eTop - (cHeight / 2) + (eHeight / 2), behavior: 'smooth' });
+            }, 100);
         }
     }
 }
@@ -613,243 +499,129 @@ function handleSearch(e) { currentSearchQuery = e.target.value; buildLibrary(); 
 function handleSortChange(e) { currentSortOrder = e.target.value; buildLibrary(); selectFolder(currentFolderId || musicLibrary[0]?.id); }
 function handleNicoFilterChange(e) { excludeNico = e.target.checked; buildLibrary(); renderFolders(); selectFolder(currentFolderId || musicLibrary[0]?.id); }
 
-function setupPlayerControls() {
-    document.getElementById('widget-btn-play').onclick = () => togglePlay();
-    document.getElementById('widget-btn-next').onclick = playNextVideo;
-    document.getElementById('widget-btn-prev').onclick = playPrevVideo;
-}
+function setupPlayerControls() { document.getElementById('widget-btn-play').onclick = () => togglePlay(); document.getElementById('widget-btn-next').onclick = playNextVideo; document.getElementById('widget-btn-prev').onclick = playPrevVideo; }
 
 function toggleFullscreen() {
-    const playerWidget = document.getElementById('widget-player'); 
-    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-        if (playerWidget.requestFullscreen) playerWidget.requestFullscreen();
-        else if (playerWidget.webkitRequestFullscreen) playerWidget.webkitRequestFullscreen();
-        else document.body.classList.toggle('pseudo-fullscreen');
-    } else {
-        if (document.exitFullscreen) document.exitFullscreen();
-        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-        else document.body.classList.remove('pseudo-fullscreen');
-    }
+    const pw = document.getElementById('widget-player'); 
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) { if (pw.requestFullscreen) pw.requestFullscreen(); else if (pw.webkitRequestFullscreen) pw.webkitRequestFullscreen(); else document.body.classList.toggle('pseudo-fullscreen'); } 
+    else { if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); else document.body.classList.remove('pseudo-fullscreen'); }
 }
 
 function applyVolume() {
-    let boost = parseFloat(appSettings.nicoBoost) || 1.0;
-    let ytVol = Math.max(10, Math.floor(100 / boost)); 
-
-    if (currentPlayingItem && currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.setVolume === 'function') {
-        ytPlayer.setVolume(ytVol);
-    }
-    if (currentPlayingItem && currentPlayingItem.site === 'niconico') {
-        const nicoIframe = document.getElementById('nico-player');
-        if (nicoIframe && nicoIframe.contentWindow) {
-            nicoIframe.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: "volumeChange", data: { volume: 1 } }, 'https://embed.nicovideo.jp');
-        }
-    }
+    let boost = parseFloat(appSettings.nicoBoost) || 1.0; let ytVol = Math.max(10, Math.floor(100 / boost)); 
+    if (currentPlayingItem && currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.setVolume === 'function') ytPlayer.setVolume(ytVol);
+    if (currentPlayingItem && currentPlayingItem.site === 'niconico') { const nIframe = document.getElementById('nico-player'); if (nIframe && nIframe.contentWindow) nIframe.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: "volumeChange", data: { volume: 1 } }, 'https://embed.nicovideo.jp'); }
 }
 
 function startProgressTimer() { clearInterval(progressInterval); progressInterval = setInterval(updateProgress, 1000); }
 function stopProgressTimer() { clearInterval(progressInterval); }
 
 function updateProgress() {
-    if (!isPlaying) return; let current = 0; let duration = 0;
-    
-    if (currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') {
-        current = ytPlayer.getCurrentTime(); duration = ytPlayer.getDuration();
-    } else if (currentPlayingItem.site === 'niconico') {
-        nicoCurrentTime += 1; current = nicoCurrentTime; duration = nicoDuration;
-        if (duration > 0 && current >= duration + 2 && !nicoEndedFlag) { nicoEndedFlag = true; stopProgressTimer(); playNextVideo(); return; }
-    } else return;
-
-    if (duration > 0) {
-        const pct = (current / duration) * 100;
-        document.getElementById('progress-bar').style.width = `${pct}%`;
-        document.getElementById('pocket-progress-bar').style.width = `${pct}%`;
-        document.getElementById('time-current').textContent = formatTime(current); document.getElementById('time-duration').textContent = formatTime(duration);
-        document.getElementById('pocket-time-current').textContent = formatTime(current); document.getElementById('pocket-time-duration').textContent = formatTime(duration);
+    if (!isPlaying) return; let cur = 0; let dur = 0;
+    if (currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') { cur = ytPlayer.getCurrentTime(); dur = ytPlayer.getDuration(); } 
+    else if (currentPlayingItem.site === 'niconico') { nicoCurrentTime += 1; cur = nicoCurrentTime; dur = nicoDuration; if (dur > 0 && cur >= dur + 2 && !nicoEndedFlag) { nicoEndedFlag = true; stopProgressTimer(); playNextVideo(); return; } } 
+    else return;
+    if (dur > 0) {
+        const pct = (cur / dur) * 100; document.getElementById('progress-bar').style.width = `${pct}%`; document.getElementById('pocket-progress-bar').style.width = `${pct}%`;
+        document.getElementById('time-current').textContent = formatTime(cur); document.getElementById('time-duration').textContent = formatTime(dur);
+        document.getElementById('pocket-time-current').textContent = formatTime(cur); document.getElementById('pocket-time-duration').textContent = formatTime(dur);
     }
 }
 
-function formatTime(seconds) {
-    if (!seconds || isNaN(seconds)) return "0:00";
-    const m = Math.floor(seconds / 60); const s = Math.floor(seconds % 60); return `${m}:${s.toString().padStart(2, '0')}`;
-}
+function formatTime(s) { if (!s || isNaN(s)) return "0:00"; const m = Math.floor(s / 60); const sc = Math.floor(s % 60); return `${m}:${sc.toString().padStart(2, '0')}`; }
 
-function handleProgressClick(e) {
-    if (!currentPlayingItem || !ytPlayer || currentPlayingItem.site !== 'youtube' || typeof ytPlayer.getDuration !== 'function') return;
-    const rect = e.target.getBoundingClientRect(); const pos = (e.clientX - rect.left) / rect.width;
-    const duration = ytPlayer.getDuration(); if (duration > 0) { ytPlayer.seekTo(duration * pos, true); updateProgress(); }
-}
+function handleProgressClick(e) { if (!currentPlayingItem || !ytPlayer || currentPlayingItem.site !== 'youtube' || typeof ytPlayer.getDuration !== 'function') return; const r = e.target.getBoundingClientRect(); const pos = (e.clientX - r.left) / r.width; const dur = ytPlayer.getDuration(); if (dur > 0) { ytPlayer.seekTo(dur * pos, true); updateProgress(); } }
 
-function startPlaylist(items, startIndex = 0) { if (items.length === 0) return; currentPlaylist = items; currentIndex = startIndex; loadVideo(currentIndex); }
-function playNextVideo() { if (currentPlaylist.length === 0) return; isTransitioning = true; currentIndex = (currentIndex + 1) % currentPlaylist.length; loadVideo(currentIndex); }
-function playPrevVideo() { if (currentPlaylist.length === 0) return; isTransitioning = true; currentIndex = (currentIndex - 1 + currentPlaylist.length) % currentPlaylist.length; loadVideo(currentIndex); }
+function startPlaylist(items, idx = 0) { if (items.length === 0) return; currentPlaylist = items; currentIndex = idx; loadVideo(currentIndex); }
+function playNextVideo() { if (currentPlaylist.length === 0 || isTransitioning) return; isTransitioning = true; setTimeout(() => { isTransitioning = false; }, 1000); currentIndex = (currentIndex + 1) % currentPlaylist.length; loadVideo(currentIndex); }
+function playPrevVideo() { if (currentPlaylist.length === 0 || isTransitioning) return; isTransitioning = true; setTimeout(() => { isTransitioning = false; }, 1000); currentIndex = (currentIndex - 1 + currentPlaylist.length) % currentPlaylist.length; loadVideo(currentIndex); }
 
-function getYouTubeId(url) { try { const urlObj = new URL(url); return urlObj.searchParams.get('v') || url.split('/').pop(); } catch(e) { const match = url.match(/[?&]v=([^&]+)/); return match ? match[1] : url.split('/').pop(); } }
+function getYouTubeId(url) { try { return new URL(url).searchParams.get('v') || url.split('/').pop(); } catch(e) { const m = url.match(/[?&]v=([^&]+)/); return m ? m[1] : url.split('/').pop(); } }
 function getNicoId(url) { return url.split('?')[0].split('/').pop(); }
 
-function createYouTubePlayer(videoId) {
+function createYouTubePlayer(vId) {
     if (window.YT && window.YT.Player) {
-        ytPlayer = new YT.Player('yt-player-mount', {
-            height: '100%', width: '100%', videoId: videoId, playerVars: { 'playsinline': 1, 'autoplay': 1, 'rel': 0 },
-            events: { 
-                'onReady': (e) => { 
-                    if(appSettings.dataSaverMode && typeof e.target.setPlaybackQuality === 'function') e.target.setPlaybackQuality('tiny'); 
-                    isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); 
-                },
-                'onStateChange': onPlayerStateChange, 'onError': () => { setTimeout(playNextVideo, 5000); }
-            }
-        });
-    } else setTimeout(() => createYouTubePlayer(videoId), 1000);
+        ytPlayer = new YT.Player('yt-player-mount', { height: '100%', width: '100%', videoId: vId, playerVars: { 'playsinline': 1, 'autoplay': 1, 'rel': 0 },
+            events: { 'onReady': (e) => { if(appSettings.dataSaverMode && typeof e.target.setPlaybackQuality === 'function') e.target.setPlaybackQuality('tiny'); isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); },
+                'onStateChange': onPlayerStateChange, 'onError': () => { setTimeout(playNextVideo, 5000); } } });
+    } else setTimeout(() => createYouTubePlayer(vId), 1000);
 }
 
-function onPlayerStateChange(event) {
-    if (event.data === YT.PlayerState.PLAYING) { 
-        isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); 
-    } 
-    else if (event.data === YT.PlayerState.PAUSED) { 
-        isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); 
-    } 
-    else if (event.data === YT.PlayerState.ENDED) { 
-        stopProgressTimer(); document.getElementById('progress-bar').style.width = '0%'; playNextVideo(); 
-    }
+function onPlayerStateChange(e) {
+    if (e.data === YT.PlayerState.PLAYING) { isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); } 
+    else if (e.data === YT.PlayerState.PAUSED) { isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); } 
+    else if (e.data === YT.PlayerState.ENDED) { stopProgressTimer(); document.getElementById('progress-bar').style.width = '0%'; playNextVideo(); }
 }
 
-function loadVideo(index) {
-    if (index < 0 || index >= currentPlaylist.length) return;
-    currentIndex = index; currentPlayingItem = currentPlaylist[index]; isPlaying = true;
-    nicoDuration = 0; nicoCurrentTime = 0; nicoEndedFlag = false;
-
+function loadVideo(idx) {
+    if (idx < 0 || idx >= currentPlaylist.length) return;
+    currentIndex = idx; isTransitioning = false; currentPlayingItem = currentPlaylist[idx]; isPlaying = true; nicoDuration = 0; nicoCurrentTime = 0; nicoEndedFlag = false;
     updatePlayerUI(currentPlayingItem); updateActiveTrackUI();
-    document.body.classList.remove('mobile-list-fullscreen'); // 曲選択時にリスト全画面解除
     document.getElementById('progress-bar').style.width = '0%'; document.getElementById('pocket-progress-bar').style.width = '0%'; document.getElementById('time-current').textContent = '0:00'; document.getElementById('time-duration').textContent = '0:00'; stopProgressTimer();
 
-    const container = document.getElementById('player-container');
+    const c = document.getElementById('player-container');
     if (currentPlayingItem.site === 'youtube') {
-        const videoId = getYouTubeId(currentPlayingItem.url);
-        if (container.querySelector('#nico-player') || container.querySelector('iframe')) { container.innerHTML = '<div id="yt-player-mount"></div>'; ytPlayer = null; }
-        if (!ytPlayer) { container.innerHTML = '<div id="yt-player-mount"></div>'; createYouTubePlayer(videoId); } 
-        else { if (typeof ytPlayer.loadVideoById === 'function') ytPlayer.loadVideoById(videoId); else { container.innerHTML = '<div id="yt-player-mount"></div>'; createYouTubePlayer(videoId); } }
+        const vId = getYouTubeId(currentPlayingItem.url);
+        if (c.querySelector('#nico-player') || c.querySelector('iframe')) { c.innerHTML = '<div id="yt-player-mount"></div>'; ytPlayer = null; }
+        if (!ytPlayer) { c.innerHTML = '<div id="yt-player-mount"></div>'; createYouTubePlayer(vId); } 
+        else { if (typeof ytPlayer.loadVideoById === 'function') ytPlayer.loadVideoById(vId); else { c.innerHTML = '<div id="yt-player-mount"></div>'; createYouTubePlayer(vId); } }
     } else {
         if (ytPlayer) { try { ytPlayer.destroy(); } catch(e){} ytPlayer = null; }
-        container.innerHTML = ''; 
+        c.innerHTML = ''; 
         if (currentPlayingItem.site === 'niconico') {
-            const nicoId = getNicoId(currentPlayingItem.url);
-            setTimeout(() => {
-                const iframe = document.createElement('iframe'); iframe.id = 'nico-player';
-                iframe.src = `https://embed.nicovideo.jp/watch/${nicoId}?jsapi=1&playerId=1&loop=0`; iframe.setAttribute('allow', 'autoplay; fullscreen; encrypted-media');
-                iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none'; container.appendChild(iframe);
-            }, 50);
-        } else { container.innerHTML = `<iframe src="${currentPlayingItem.url}" allowfullscreen allow="autoplay" style="width:100%; height:100%; border:none;"></iframe>`; }
+            const nId = getNicoId(currentPlayingItem.url);
+            setTimeout(() => { const i = document.createElement('iframe'); i.id = 'nico-player'; i.src = `https://embed.nicovideo.jp/watch/${nId}?jsapi=1&playerId=1&loop=0`; i.setAttribute('allow', 'autoplay; fullscreen; encrypted-media'); i.style.width = '100%'; i.style.height = '100%'; i.style.border = 'none'; c.appendChild(i); }, 50);
+        } else { c.innerHTML = `<iframe src="${currentPlayingItem.url}" allowfullscreen allow="autoplay" style="width:100%; height:100%; border:none;"></iframe>`; }
     }
-    
-    setTimeout(() => { isTransitioning = false; }, 1000);
 }
 
 function handleNicoMessage(e) {
     if (e.origin !== 'https://embed.nicovideo.jp' || !currentPlayingItem || currentPlayingItem.site !== 'niconico' || !e.data || !e.data.eventName) return;
-    const eventName = e.data.eventName; const data = e.data.data;
-    if (eventName === 'loadComplete') {
-        const nicoIframe = document.getElementById('nico-player');
-        if (nicoIframe && nicoIframe.contentWindow) { 
-            setTimeout(() => { 
-                nicoIframe.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: "play" }, 'https://embed.nicovideo.jp');
-                applyVolume(); startProgressTimer(); startSilentAudio(); 
-            }, 150); 
-        }
-    } else if (eventName === 'playerMetadataChange') { if (data && data.duration) nicoDuration = data.duration / 1000;
-    } else if (eventName === 'playerPlayTimeChange') { if (data && data.playTime) nicoCurrentTime = data.playTime / 1000;
-    } else if (eventName === 'playerStatusChange') {
-        const status = data.playerStatus;
-        if (status === 4 && !nicoEndedFlag) { 
-            nicoEndedFlag = true; playNextVideo(); 
-        } else if (status === 2) { 
-            isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); 
-        } else if (status === 3) { 
-            isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); 
-        }
-    } else if (eventName === 'error') setTimeout(() => playNextVideo(), 5000);
+    const ev = e.data.eventName; const d = e.data.data;
+    if (ev === 'loadComplete') { const i = document.getElementById('nico-player'); if (i && i.contentWindow) { setTimeout(() => { i.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: "play" }, 'https://embed.nicovideo.jp'); applyVolume(); startProgressTimer(); startSilentAudio(); }, 150); } } 
+    else if (ev === 'playerMetadataChange') { if (d && d.duration) nicoDuration = d.duration / 1000; } 
+    else if (ev === 'playerPlayTimeChange') { if (d && d.playTime) nicoCurrentTime = d.playTime / 1000; } 
+    else if (ev === 'playerStatusChange') {
+        const s = d.playerStatus;
+        if (s === 4 && !nicoEndedFlag) { nicoEndedFlag = true; playNextVideo(); } 
+        else if (s === 2) { isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); } 
+        else if (s === 3) { isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); }
+    } else if (ev === 'error') setTimeout(() => playNextVideo(), 5000);
 }
 
-function togglePlay(forcePlay) {
+function togglePlay(fPlay) {
     if (!currentPlayingItem) return;
-    if (typeof forcePlay === 'boolean') isPlaying = forcePlay; else isPlaying = !isPlaying;
-
-    updatePlayPauseIcon();
-    if (isPlaying) { startProgressTimer(); startSilentAudio(); applyVolume(); } 
-    else { stopProgressTimer(); stopSilentAudio(); }
-    
-    if (currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.playVideo === 'function') {
-        if (isPlaying) ytPlayer.playVideo(); else ytPlayer.pauseVideo();
-    } else if (currentPlayingItem.site === 'niconico') {
-        const nicoIframe = document.getElementById('nico-player');
-        if (nicoIframe && nicoIframe.contentWindow) nicoIframe.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: isPlaying ? "play" : "pause" }, 'https://embed.nicovideo.jp');
-    }
+    isPlaying = typeof fPlay === 'boolean' ? fPlay : !isPlaying; updatePlayPauseIcon();
+    if (isPlaying) { startProgressTimer(); startSilentAudio(); applyVolume(); } else { stopProgressTimer(); stopSilentAudio(); }
+    if (currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.playVideo === 'function') { if (isPlaying) ytPlayer.playVideo(); else ytPlayer.pauseVideo(); } 
+    else if (currentPlayingItem.site === 'niconico') { const i = document.getElementById('nico-player'); if (i && i.contentWindow) i.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: isPlaying ? "play" : "pause" }, 'https://embed.nicovideo.jp'); }
 }
 
-function updatePlayerUI(item) {
-    document.getElementById('widget-title').textContent = item.title; document.getElementById('widget-artist').textContent = item.channelName || item.site;
-    document.getElementById('pocket-title').textContent = item.title;
-    
-    const thumb = item.thumbnail || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'/>";
-    document.getElementById('widget-art').src = thumb; document.getElementById('pocket-art').src = thumb;
+function updatePlayerUI(i) {
+    document.getElementById('widget-title').textContent = i.title; document.getElementById('widget-artist').textContent = i.channelName || i.site; document.getElementById('pocket-title').textContent = i.title;
+    const t = i.thumbnail || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'/>";
+    document.getElementById('widget-art').src = t; document.getElementById('pocket-art').src = t;
     updatePlayPauseIcon(); scheduleMarqueeUpdate(); 
-
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({ title: item.title, artist: item.channelName || item.site, artwork:[{ src: thumb, sizes: '512x512', type: 'image/jpeg' }] });
-        navigator.mediaSession.setActionHandler('play', () => togglePlay(true)); navigator.mediaSession.setActionHandler('pause', () => togglePlay(false));
-        navigator.mediaSession.setActionHandler('previoustrack', playPrevVideo); navigator.mediaSession.setActionHandler('nexttrack', playNextVideo);
-    }
+    if ('mediaSession' in navigator) { navigator.mediaSession.metadata = new MediaMetadata({ title: i.title, artist: i.channelName || i.site, artwork:[{ src: t, sizes: '512x512', type: 'image/jpeg' }] }); navigator.mediaSession.setActionHandler('play', () => togglePlay(true)); navigator.mediaSession.setActionHandler('pause', () => togglePlay(false)); navigator.mediaSession.setActionHandler('previoustrack', playPrevVideo); navigator.mediaSession.setActionHandler('nexttrack', playNextVideo); }
 }
 
 function updatePlayPauseIcon() {
-    const icon = document.getElementById('widget-play-icon'); icon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
+    document.getElementById('widget-play-icon').className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
 }
 
-// 🌟 ポケットモード (画面ロック・うっすら表示・Wake Lock)
-async function requestWakeLock() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {} }
-function releaseWakeLock() { if (wakeLock !== null) { wakeLock.release().then(() => wakeLock = null); } }
-
+// 🌟 ポケットモード解除調整
 function setupPocketMode() {
     const pOverlay = document.getElementById('pocket-overlay');
-    const pUnlockBtn = document.getElementById('pocket-unlock-btn');
-    
-    document.getElementById('btn-pocket-mode').addEventListener('click', () => {
-        if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
-        else if (document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen();
-        pOverlay.classList.remove('hidden'); requestWakeLock();
-    });
+    document.getElementById('btn-pocket-mode').addEventListener('click', () => { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen(); else if (document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen(); pOverlay.classList.remove('hidden'); });
 
-    let holdTimer = null;
-    let touchStartY = 0;
+    let hTimer = null; let tStartY = 0;
+    function sHold(e) { pOverlay.classList.add('touch-holding'); if (e && e.touches) tStartY = e.touches[0].clientY; hTimer = setTimeout(unlock, 2000); }
+    function eHold() { pOverlay.classList.remove('touch-holding'); clearTimeout(hTimer); }
+    function unlock() { if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen(); else if (document.webkitExitFullscreen && document.webkitFullscreenElement) document.webkitExitFullscreen(); pOverlay.classList.add('hidden'); pOverlay.classList.remove('touch-holding'); clearTimeout(hTimer); }
 
-    function startHold(e) {
-        pOverlay.classList.add('touch-holding'); 
-        if (e && e.touches) touchStartY = e.touches[0].clientY;
-        // 鍵アイコンのみ長押しで解除
-        if (e.target === pUnlockBtn || pUnlockBtn.contains(e.target)) {
-            holdTimer = setTimeout(() => { unlock(); }, 2000);
-        }
-    }
-    
-    function endHold() {
-        pOverlay.classList.remove('touch-holding'); clearTimeout(holdTimer);
-    }
-
-    function unlock() {
-        if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
-        else if (document.webkitExitFullscreen && document.webkitFullscreenElement) document.webkitExitFullscreen();
-        pOverlay.classList.add('hidden'); pOverlay.classList.remove('touch-holding');
-        clearTimeout(holdTimer); releaseWakeLock();
-    }
-
-    pOverlay.addEventListener('mousedown', startHold); pOverlay.addEventListener('mouseup', endHold); pOverlay.addEventListener('mouseleave', endHold);
-    pOverlay.addEventListener('touchstart', startHold, {passive: true}); pOverlay.addEventListener('touchend', endHold, {passive: true}); pOverlay.addEventListener('touchcancel', endHold, {passive: true});
-    
-    pOverlay.addEventListener('touchmove', (e) => {
-        // 大きな上スワイプ(200px)で解除
-        if (touchStartY && (touchStartY - e.touches[0].clientY > 200)) unlock(); 
-    }, {passive: true});
-
+    pOverlay.addEventListener('mousedown', sHold); pOverlay.addEventListener('mouseup', eHold); pOverlay.addEventListener('mouseleave', eHold);
+    pOverlay.addEventListener('touchstart', sHold, {passive: true}); pOverlay.addEventListener('touchend', eHold, {passive: true}); pOverlay.addEventListener('touchcancel', eHold, {passive: true});
+    pOverlay.addEventListener('touchmove', (e) => { if (appSettings.pocketSwipeUnlock && tStartY && (tStartY - e.touches[0].clientY > 80)) unlock(); }, {passive: true});
     pOverlay.addEventListener('contextmenu', e => e.preventDefault());
 }
