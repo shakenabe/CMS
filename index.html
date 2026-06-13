@@ -120,9 +120,8 @@
                                 <span id="current-folder-name">All <i class="fas fa-chevron-down" style="font-size: 0.8rem; opacity: 0.7; margin-left: 5px;"></i></span>
                                 <span id="current-folder-count">--件のアイテム</span>
                             </div>
-                            <button id="btn-edit-list" class="theme-text">編集する</button>
+                            <button id="btn-toggle-mobile-nav"><i class="fas fa-filter"></i></button>
                         </div>
-                        <button id="btn-toggle-mobile-nav" class="panel-glass"><i class="fas fa-filter"></i></button>
                     </div>
 
                     <div id="library-nav-wrapper" class="panel-glass">
@@ -169,6 +168,17 @@
                         <label>テーマ</label>
                         <select id="set-theme" class="widget-search"><option value="modern">現代UI風 (Modern)</option><option value="nerv">エヴァ風 (NERV)</option><option value="toyota">トヨタナビ風 (Car Navi)</option></select>
                     </div>
+                    
+                    <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+                        <label>デフォルトのソート順</label>
+                        <select id="set-default-sort" class="widget-search">
+                            <option value="custom">🔢 カスタム順</option>
+                            <option value="newest">📅 新しい順</option>
+                            <option value="oldest">📅 古い順</option>
+                            <option value="playCount_desc">▶ 再生数順</option>
+                        </select>
+                    </div>
+
                     <div class="setting-row" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
                         <label style="color: #ffaa00;"><input type="checkbox" id="set-data-saver"> 📉 データセーバー (低画質再生)</label>
                         <span style="font-size:0.75rem; opacity:0.8;">※ニコニコ動画等、仕様上画質が自動調整される場合があります</span>
