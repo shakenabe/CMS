@@ -14,7 +14,8 @@ const defaultSettings = {
     baseFontSize: 100, pcLeftWidth: 350, musicMode: false, showClock: true, showThumbnails: true,
     simpleLayoutMode: false, performanceMode: false, dataSaverMode: false,
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff',
-    pocketAlwaysOn: false, pocketSwipeUnlock: true, forcePcLayout: false, windowMode: false, useFirebase: false, windowPositions: {}
+    pocketAlwaysOn: false, pocketSwipeUnlock: true, forcePcLayout: false, windowMode: false, useFirebase: false, windowPositions: {},
+    defaultSortOrder: 'custom'
 };
 let appSettings = { ...defaultSettings };
 
@@ -45,9 +46,6 @@ let progressInterval;
 let currentRenderedCount = 0;
 const RENDER_CHUNK_SIZE = 50;
 let currentRenderSongs =[];
-
-// 編集モード
-let isEditMode = false;
 
 const importScreen = document.getElementById('import-screen');
 const readyScreen = document.getElementById('ready-screen');
@@ -111,7 +109,11 @@ async function initFirebase() {
 async function loadDataFromFirebase() { try { const data = (await firebase.database().ref('cms_data').once('value')).val(); if (data && data.mediaItems) return data; } catch (e) {} return null; }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    loadSettings(); updateLayoutMode(); applyThemeSettings(); await loadBgImageFromDB();
+    loadSettings();
+    currentSortOrder = appSettings.defaultSortOrder || 'custom';
+    document.getElementById('widget-sort-select').value = currentSortOrder;
+    
+    updateLayoutMode(); applyThemeSettings(); await loadBgImageFromDB();
     
     if (appSettings.useFirebase) { const fbReady = await initFirebase(); if (fbReady) { const fbData = await loadDataFromFirebase(); if (fbData) { processImportData(fbData); importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden'); } } }
 
@@ -142,7 +144,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('widget-btn-fullscreen').addEventListener('click', toggleFullscreen);
     document.getElementById('progress-container').addEventListener('click', handleProgressClick);
 
-    document.getElementById('btn-open-mobile-folder').addEventListener('click', () => { if(!isEditMode) document.getElementById('mobile-folder-modal').classList.remove('hidden'); });
+    document.getElementById('btn-open-mobile-folder').addEventListener('click', () => { document.getElementById('mobile-folder-modal').classList.remove('hidden'); });
     document.getElementById('btn-close-folder-modal').addEventListener('click', () => document.getElementById('mobile-folder-modal').classList.add('hidden'));
     document.getElementById('btn-toggle-mobile-nav').addEventListener('click', () => document.body.classList.toggle('show-mobile-nav'));
     document.getElementById('btn-toggle-list').addEventListener('click', () => { isListVisible = !isListVisible; document.body.classList.toggle('list-visible', isListVisible); document.getElementById('toggle-list-text').textContent = isListVisible ? 'リストを隠す' : 'リストを表示'; scheduleMarqueeUpdate(); });
@@ -150,18 +152,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // モバイル用スクロール・フルスクリーン制御
     setupMobileListScroll();
     
-    // 編集モード切替
-    document.getElementById('btn-edit-list').addEventListener('click', () => {
-        isEditMode = !isEditMode;
-        const btn = document.getElementById('btn-edit-list');
-        if (isEditMode) {
-            btn.textContent = '完了'; trackListEl.classList.add('edit-mode');
-        } else {
-            btn.textContent = '編集する'; trackListEl.classList.remove('edit-mode'); saveNewOrder();
-        }
-    });
-    setupDragAndDrop();
-
     setupPlayerControls(); setupSettingsModal(); window.addEventListener('message', handleNicoMessage); setupPocketMode();
     applyWindowMode(); // ロード後最後に適用
 });
@@ -268,6 +258,7 @@ function setupSettingsModal() {
         document.getElementById('set-opacity').value = appSettings.bgOpacity; document.getElementById('op-val').textContent = appSettings.bgOpacity;
         document.getElementById('set-clock-type').value = appSettings.clockType; document.getElementById('set-pocket-clock-type').value = appSettings.pocketClockType || 'digital1';
         document.getElementById('set-nico-boost').value = appSettings.nicoBoost || 1.0; document.getElementById('boost-val').textContent = parseFloat(appSettings.nicoBoost || 1.0).toFixed(1);
+        document.getElementById('set-default-sort').value = appSettings.defaultSortOrder || 'custom';
         
         document.getElementById('set-simple-layout').checked = appSettings.simpleLayoutMode; document.getElementById('set-performance-mode').checked = appSettings.performanceMode;
         document.getElementById('set-data-saver').checked = appSettings.dataSaverMode; document.getElementById('set-music-mode').checked = appSettings.musicMode;
@@ -289,7 +280,7 @@ function setupSettingsModal() {
     document.getElementById('btn-load-firebase').onclick = async () => { if (!appSettings.useFirebase || !window.firebase) return alert('Firebaseが無効です。'); const data = await loadDataFromFirebase(); if (data) { processImportData(data); alert('ロードしました。'); modal.classList.add('hidden'); } else alert('データがありません。'); };
 
     document.getElementById('btn-save-settings').onclick = async () => {
-        appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value; appSettings.bgSize = document.getElementById('set-bg-size').value; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value;
+        appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value; appSettings.bgSize = document.getElementById('set-bg-size').value; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
         appSettings.simpleLayoutMode = document.getElementById('set-simple-layout').checked; appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.useFirebase = document.getElementById('set-use-firebase').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value;
         const fInput = document.getElementById('set-bg-img'); if (fInput.files.length > 0) { await saveBgImageToDB(fInput.files[0]); }
         saveSettings(); applyVolume(); modal.classList.add('hidden'); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); updateClock(); scheduleMarqueeUpdate(); 
@@ -357,8 +348,8 @@ function loadMoreTracks() {
     const frag = document.createDocumentFragment(); const end = Math.min(currentRenderedCount + RENDER_CHUNK_SIZE, currentRenderSongs.length);
     for (let i = currentRenderedCount; i < end; i++) {
         const s = currentRenderSongs[i]; const div = document.createElement('div'); div.className = 'w-t-item'; div.title = s.title; div.dataset.index = i;
-        div.innerHTML = `<span class="w-t-idx">${i + 1}</span><span class="w-t-playing-icon hidden"><i class="fa-solid fa-volume-high"></i></span><img class="w-t-thumb" src="${s.thumbnail || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>"}" loading="lazy"><div class="w-t-info overflow-hidden"><div class="marquee-wrapper"><span class="track-title-text marquee-content">${escapeHTML(s.title)}</span></div><div class="marquee-wrapper"><span class="track-artist-text marquee-content">${escapeHTML(s.channelName || s.site)}</span></div></div><i class="fas fa-bars drag-handle"></i>`;
-        div.onclick = (e) => { if(isEditMode || e.target.classList.contains('drag-handle')) return; document.body.classList.remove('mobile-list-fullscreen'); startPlaylist(currentRenderSongs, i); }; frag.appendChild(div);
+        div.innerHTML = `<span class="w-t-idx">${i + 1}</span><span class="w-t-playing-icon hidden"><i class="fa-solid fa-volume-high"></i></span><img class="w-t-thumb" src="${s.thumbnail || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>"}" loading="lazy"><div class="w-t-info overflow-hidden"><div class="marquee-wrapper"><span class="track-title-text marquee-content">${escapeHTML(s.title)}</span></div><div class="marquee-wrapper"><span class="track-artist-text marquee-content">${escapeHTML(s.channelName || s.site)}</span></div></div>`;
+        div.onclick = () => { document.body.classList.remove('mobile-list-fullscreen'); startPlaylist(currentRenderSongs, i); }; frag.appendChild(div);
     }
     trackListEl.appendChild(frag); currentRenderedCount = end; updateActiveTrackUI(); scheduleMarqueeUpdate();
 }
@@ -368,7 +359,7 @@ function setupMobileListScroll() {
     let tStartY = 0; let isTop = true;
     trackListEl.addEventListener('touchstart', (e) => { tStartY = e.touches[0].clientY; isTop = trackListEl.scrollTop <= 0; }, {passive: true});
     trackListEl.addEventListener('touchmove', (e) => {
-        if (!document.body.classList.contains('is-mobile') || isEditMode) return;
+        if (!document.body.classList.contains('is-mobile')) return;
         const dy = e.touches[0].clientY - tStartY;
         if (dy < -10) { document.body.classList.add('mobile-list-fullscreen'); document.getElementById('mobile-list-fullscreen-header').classList.remove('hidden'); }
         else if (dy > 30 && isTop && trackListEl.scrollTop <= 0) { document.body.classList.remove('mobile-list-fullscreen'); document.getElementById('mobile-list-fullscreen-header').classList.add('hidden'); }
@@ -379,29 +370,6 @@ function setupMobileListScroll() {
     if (closeBtn) closeBtn.addEventListener('click', () => { document.body.classList.remove('mobile-list-fullscreen'); document.getElementById('mobile-list-fullscreen-header').classList.add('hidden'); });
 }
 
-// 🌟 ドラッグ＆ドロップ並べ替え
-function setupDragAndDrop() {
-    let dragItem = null;
-    trackListEl.addEventListener('touchstart', e => {
-        if (!isEditMode) return; const handle = e.target.closest('.drag-handle'); if (!handle) return;
-        e.preventDefault(); dragItem = handle.closest('.w-t-item'); dragItem.classList.add('dragging');
-    }, {passive: false});
-    trackListEl.addEventListener('touchmove', e => {
-        if (!dragItem) return; e.preventDefault(); const touch = e.touches[0];
-        const target = document.elementFromPoint(touch.clientX, touch.clientY);
-        const tItem = target ? target.closest('.w-t-item') : null;
-        if (tItem && tItem !== dragItem) { const r = tItem.getBoundingClientRect(); trackListEl.insertBefore(dragItem, (touch.clientY - r.top)/(r.bottom - r.top) > 0.5 ? tItem.nextSibling : tItem); }
-    }, {passive: false});
-    trackListEl.addEventListener('touchend', () => { if (dragItem) { dragItem.classList.remove('dragging'); dragItem = null; } });
-}
-function saveNewOrder() {
-    const newArr = []; trackListEl.querySelectorAll('.w-t-item').forEach(el => newArr.push(currentRenderSongs[parseInt(el.dataset.index)]));
-    if (newArr.length === currentRenderSongs.length) {
-        currentRenderSongs = newArr; const f = musicLibrary.find(x => x.id === currentFolderId); if(f) f.songs = currentRenderSongs;
-        renderTracks(currentRenderSongs); updateActiveTrackUI(); // インデックス振り直し
-    }
-}
-
 function updateActiveTrackUI() {
     if (!currentRenderSongs) return; const tIdx = currentRenderSongs.findIndex(s => s === currentPlayingItem); if (tIdx < 0) return;
     if (tIdx >= currentRenderedCount) { while(tIdx >= currentRenderedCount && currentRenderedCount < currentRenderSongs.length) loadMoreTracks(); }
@@ -409,7 +377,7 @@ function updateActiveTrackUI() {
     const activeEl = trackListEl.children[tIdx];
     if (activeEl) {
         activeEl.classList.add('active'); activeEl.querySelector('.w-t-idx').classList.add('hidden'); activeEl.querySelector('.w-t-playing-icon').classList.remove('hidden');
-        if (!isEditMode) setTimeout(() => { const cTop = trackListEl.scrollTop; const cHeight = trackListEl.clientHeight; const eTop = activeEl.offsetTop; const eHeight = activeEl.clientHeight; if (eTop < cTop || eTop + eHeight > cTop + cHeight) trackListEl.scrollTo({ top: eTop - (cHeight / 2) + (eHeight / 2), behavior: 'smooth' }); }, 100);
+        setTimeout(() => { const cTop = trackListEl.scrollTop; const cHeight = trackListEl.clientHeight; const eTop = activeEl.offsetTop; const eHeight = activeEl.clientHeight; if (eTop < cTop || eTop + eHeight > cTop + cHeight) trackListEl.scrollTo({ top: eTop - (cHeight / 2) + (eHeight / 2), behavior: 'smooth' }); }, 100);
     }
 }
 
