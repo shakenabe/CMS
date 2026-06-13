@@ -146,8 +146,7 @@ body.is-mobile #mobile-tools-wrapper { display: flex; flex-direction: column; ma
 body.is-mobile .m-folder-header { display: flex; align-items: center; gap: 15px; }
 body.is-mobile .m-play-btn-circle { width: 45px; height: 45px; border-radius: 50%; background: var(--text-color); color: #000; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; cursor: pointer; flex-shrink: 0; }
 body.is-mobile .m-folder-info { display: flex; flex-direction: column; flex: 1; cursor: pointer; }
-body.is-mobile #btn-edit-list { background: transparent; border: none; font-size: 0.95rem; font-weight: bold; cursor: pointer; padding: 10px; }
-body.is-mobile #btn-toggle-mobile-nav { width: 100%; border-radius: 12px; padding: 8px; display: flex; justify-content: center; align-items: center; font-size: 1.1rem; cursor: pointer; border: 1px solid var(--border-color); background: rgba(255,255,255,0.05); color: var(--text-color); display: none; } /* フィルタボタンは基本隠すか、デザインに合わせて配置 */
+body.is-mobile #btn-toggle-mobile-nav { background: transparent; border: none; font-size: 1.5rem; color: var(--text-color); cursor: pointer; padding: 10px; display: flex; justify-content: center; align-items: center; }
 
 body.is-mobile #library-nav-wrapper { order: 2; margin: 0 15px 5px 15px; border-radius: 12px; flex-direction: column; display: none; }
 body.is-mobile.show-mobile-nav #library-nav-wrapper { display: flex !important; background: rgba(255,255,255,0.05); padding: 15px;}
@@ -264,12 +263,6 @@ body.is-mobile .w-t-thumb { display: block; width: 55px; height: 55px; border-ra
 .w-t-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
 .track-title-text { font-size: 0.95rem; font-weight: bold; transition: color 0.2s; }
 .track-artist-text { font-size: 0.75rem; opacity: 0.7; transition: color 0.2s; display: flex; align-items: center; gap: 5px; }
-
-/* 編集モード (ドラッグ&ドロップ) */
-.drag-handle { padding: 10px; color: var(--sub-text-color); cursor: grab; font-size: 1.2rem; display: none; }
-.edit-mode .drag-handle { display: block; }
-.edit-mode .w-t-item { padding-right: 5px; }
-.w-t-item.dragging { opacity: 0.5; background: rgba(255,255,255,0.1); transform: scale(0.98); z-index: 100; }
 
 .m-f-item { display: flex; justify-content: space-between; align-items: center; padding: 20px 15px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 1.1rem; cursor: pointer; color: var(--text-color);}
 .m-f-item.active { color: var(--text-color); font-weight: bold; }
