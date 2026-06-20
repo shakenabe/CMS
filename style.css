@@ -52,6 +52,9 @@ button { border-radius: 0; }
 .overlay-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.85); z-index: 9000; }
 .start-content { padding: 40px; text-align: center; } .start-content p { margin-bottom: 20px; }
 .custom-file-upload { display: inline-block; padding: 10px 20px; cursor: pointer; } #import-json { display: none; }
+.cloud-btn { display:block; margin:12px auto 0; padding:10px 20px; }
+.cloud-status { margin-top:8px; font-size:0.75rem; opacity:0.8; overflow-wrap:anywhere; }
+.cloud-action { flex:1; min-width:110px; padding:5px; font-size:0.8rem; }
 .btn-start { padding: 15px 30px; font-size: 1.2rem; }
 @keyframes pulse-icon { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
