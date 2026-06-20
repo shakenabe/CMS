@@ -1,20 +1,9 @@
-// --- Firebase 準備構成 --- 
-const firebaseConfig = {
-    // apiKey: "API_KEY",
-    // authDomain: "PROJECT_ID.firebaseapp.com",
-    // databaseURL: "https://PROJECT_ID.firebaseio.com",
-    // projectId: "PROJECT_ID",
-    // storageBucket: "PROJECT_ID.appspot.com",
-    // messagingSenderId: "SENDER_ID",
-    // appId: "APP_ID"
-};
-
 const defaultSettings = {
-    theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, clockType: 'digital1', pocketClockType: 'digital1', nicoBoost: 1.0,
-    baseFontSize: 100, pcLeftWidth: 350, musicMode: false, showClock: true, showThumbnails: true,
-    simpleLayoutMode: false, performanceMode: false, dataSaverMode: false,
+    theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, nicoBoost: 1.0,
+    baseFontSize: 100, pcLeftWidth: 350, showClock: false, showThumbnails: true,
+    performanceMode: false, dataSaverMode: false,
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff',
-    pocketAlwaysOn: false, pocketSwipeUnlock: true, forcePcLayout: false, windowMode: false, useFirebase: false, windowPositions: {},
+    pocketAlwaysOn: false, pocketSwipeUnlock: true, forcePcLayout: false, windowMode: false, windowPositions: {},
     defaultSortOrder: 'custom'
 };
 let appSettings = { ...defaultSettings };
@@ -34,7 +23,6 @@ let currentPlayingItem = null;
 
 let ytPlayer = null;
 let isTransitioning = false;
-let isListVisible = false;
 
 let nicoDuration = 0;
 let nicoCurrentTime = 0;
@@ -47,13 +35,17 @@ let currentRenderedCount = 0;
 const RENDER_CHUNK_SIZE = 50;
 let currentRenderSongs =[];
 
+// 編集モード管理
+let isEditMode = false;
+let selectedItems = new Set();
+
 const importScreen = document.getElementById('import-screen');
 const readyScreen = document.getElementById('ready-screen');
 const mainApp = document.getElementById('main-app');
 const folderListEl = document.getElementById('widget-folder-list');
 const trackListEl = document.getElementById('widget-track-list');
 
-// 🌟 無音オーディオ
+// 無音オーディオ
 let silentAudio = null;
 function setupBackgroundPlayback() {
     if (!silentAudio) {
@@ -65,8 +57,8 @@ function setupBackgroundPlayback() {
 function startSilentAudio() { if (silentAudio && silentAudio.paused) silentAudio.play().catch(e => {}); }
 function stopSilentAudio() { if (silentAudio && !silentAudio.paused) silentAudio.pause(); }
 
-// 🌟 IndexedDB
-const DB_NAME = 'cms_player_db'; const STORE_NAME = 'bg_images';
+// IndexedDB (背景画像保存処理)
+const DB_NAME = 'cms_player_db_v3'; const STORE_NAME = 'bg_images';
 function saveBgImageToDB(file) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -78,35 +70,49 @@ function saveBgImageToDB(file) {
                 canvas.width = width; canvas.height = height; canvas.getContext('2d').drawImage(img, 0, 0, width, height);
                 const base64 = canvas.toDataURL('image/jpeg', 0.8);
                 const req = indexedDB.open(DB_NAME, 1);
-                req.onupgradeneeded = ev => ev.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
-                req.onsuccess = ev => { ev.target.result.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put({ id: 'bg1', data: base64 }).oncomplete = () => { document.documentElement.style.setProperty('--bg-image', `url(${base64})`); resolve(); }; };
+                req.onupgradeneeded = ev => {
+                    const db = ev.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) { db.createObjectStore(STORE_NAME, { keyPath: 'id' }); }
+                };
+                req.onsuccess = ev => { 
+                    try {
+                        const tx = ev.target.result.transaction(STORE_NAME, 'readwrite');
+                        tx.objectStore(STORE_NAME).put({ id: 'bg1', data: base64 });
+                        tx.oncomplete = () => { document.documentElement.style.setProperty('--bg-image', `url(${base64})`); resolve(); }; 
+                        tx.onerror = () => resolve();
+                    } catch (err) { resolve(); }
+                };
+                req.onerror = () => resolve();
             };
+            img.onerror = () => resolve();
             img.src = e.target.result;
         };
+        reader.onerror = () => resolve();
         reader.readAsDataURL(file);
     });
 }
 function loadBgImageFromDB() {
     return new Promise(resolve => {
-        const req = indexedDB.open(DB_NAME, 1); req.onupgradeneeded = ev => ev.target.result.createObjectStore(STORE_NAME, { keyPath: 'id' });
-        req.onsuccess = ev => { try { const getReq = ev.target.result.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get('bg1'); getReq.onsuccess = () => { if (getReq.result) document.documentElement.style.setProperty('--bg-image', `url(${getReq.result.data})`); resolve(); }; } catch(err) { resolve(); } }; req.onerror = () => resolve();
+        const req = indexedDB.open(DB_NAME, 1); 
+        req.onupgradeneeded = ev => {
+            const db = ev.target.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) { db.createObjectStore(STORE_NAME, { keyPath: 'id' }); }
+        };
+        req.onsuccess = ev => { 
+            try { 
+                const tx = ev.target.result.transaction(STORE_NAME, 'readonly');
+                const getReq = tx.objectStore(STORE_NAME).get('bg1'); 
+                getReq.onsuccess = () => { if (getReq.result) document.documentElement.style.setProperty('--bg-image', `url(${getReq.result.data})`); resolve(); }; 
+                getReq.onerror = () => resolve();
+            } catch(err) { resolve(); } 
+        }; 
+        req.onerror = () => resolve();
     });
 }
-function clearBgImageDB() { const req = indexedDB.open(DB_NAME, 1); req.onsuccess = ev => { try { ev.target.result.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete('bg1'); document.documentElement.style.setProperty('--bg-image', 'none'); } catch(e){} }; }
-
-// 🌟 Firebase
-async function initFirebase() {
-    if (!appSettings.useFirebase) return false;
-    try {
-        if (!window.firebase) {
-            await new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = "https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"; s.onload = resolve; s.onerror = reject; document.head.appendChild(s); });
-            await new Promise((resolve, reject) => { const s = document.createElement('script'); s.src = "https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"; s.onload = resolve; s.onerror = reject; document.head.appendChild(s); });
-        }
-        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-        return true;
-    } catch (e) { return false; }
+function clearBgImageDB() { 
+    const req = indexedDB.open(DB_NAME, 1); 
+    req.onsuccess = ev => { try { ev.target.result.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete('bg1'); document.documentElement.style.setProperty('--bg-image', 'none'); } catch(e){} }; 
 }
-async function loadDataFromFirebase() { try { const data = (await firebase.database().ref('cms_data').once('value')).val(); if (data && data.mediaItems) return data; } catch (e) {} return null; }
 
 document.addEventListener('DOMContentLoaded', async () => {
     loadSettings();
@@ -114,27 +120,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('widget-sort-select').value = currentSortOrder;
     
     updateLayoutMode(); applyThemeSettings(); await loadBgImageFromDB();
-    
-    if (appSettings.useFirebase) { const fbReady = await initFirebase(); if (fbReady) { const fbData = await loadDataFromFirebase(); if (fbData) { processImportData(fbData); importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden'); } } }
 
-    updateClock(); setInterval(updateClock, 1000); loadYouTubeAPI();
+    loadYouTubeAPI();
 
     window.addEventListener('resize', () => { 
         clearTimeout(resizeTimer); 
         resizeTimer = setTimeout(() => {
             updateLayoutMode(); scheduleMarqueeUpdate();
-            if (window.innerWidth > 900 && !appSettings.forcePcLayout && !appSettings.windowMode) { document.body.classList.remove('player-expanded', 'show-mobile-nav', 'mobile-list-fullscreen'); }
         }, 200); 
     });
 
-    const widgetControls = document.getElementById('widget-controls');
-    widgetControls.addEventListener('click', (e) => {
-        if (document.body.classList.contains('is-mobile') && document.body.classList.contains('music-mode')) {
-            if (e.target.closest('.controls-main') || e.target.closest('.settings-btn') || e.target.closest('.progress-area') || e.target.closest('#btn-pocket-mode')) return;
-            document.body.classList.toggle('player-expanded');
-        }
+    // リスト追加読込
+    trackListEl.addEventListener('scroll', () => { 
+        if (trackListEl.scrollTop + trackListEl.clientHeight >= trackListEl.scrollHeight - 100) loadMoreTracks(); 
     });
-    document.getElementById('widget-art').addEventListener('click', () => { if (document.body.classList.contains('player-expanded')) document.body.classList.remove('player-expanded'); });
 
     document.getElementById('import-json').addEventListener('change', handleFileImport);
     document.getElementById('btn-user-start').addEventListener('click', startGame);
@@ -144,43 +143,56 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('widget-btn-fullscreen').addEventListener('click', toggleFullscreen);
     document.getElementById('progress-container').addEventListener('click', handleProgressClick);
 
+    // モバイル用フォルダ切り替え
     document.getElementById('btn-open-mobile-folder').addEventListener('click', () => { document.getElementById('mobile-folder-modal').classList.remove('hidden'); });
     document.getElementById('btn-close-folder-modal').addEventListener('click', () => document.getElementById('mobile-folder-modal').classList.add('hidden'));
-    document.getElementById('btn-toggle-mobile-nav').addEventListener('click', () => document.body.classList.toggle('show-mobile-nav'));
-    document.getElementById('btn-toggle-list').addEventListener('click', () => { isListVisible = !isListVisible; document.body.classList.toggle('list-visible', isListVisible); document.getElementById('toggle-list-text').textContent = isListVisible ? 'リストを隠す' : 'リストを表示'; scheduleMarqueeUpdate(); });
-
-    // モバイル用スクロール・フルスクリーン制御
-    setupMobileListScroll();
     
+    // フィルタ・ソートメニューのトグル
+    document.getElementById('btn-toggle-mobile-nav').addEventListener('click', () => { 
+        document.body.classList.toggle('show-mobile-nav'); 
+    });
+
+    // フィルタメニュー内のフォルダ変更
+    document.getElementById('widget-folder-select').addEventListener('change', (e) => {
+        selectFolder(e.target.value);
+    });
+
     setupPlayerControls(); setupSettingsModal(); window.addEventListener('message', handleNicoMessage); setupPocketMode();
-    applyWindowMode(); // ロード後最後に適用
+    setupEditMode();
+    applyWindowMode(); 
 });
 
 function loadYouTubeAPI() { if (!window.YT) { const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api"; document.getElementsByTagName('script')[0].parentNode.insertBefore(tag, document.getElementsByTagName('script')[0]); } }
 
 function loadSettings() {
-    try { const saved = localStorage.getItem('cms_player_settings_v18'); if (saved) { appSettings = { ...defaultSettings, ...JSON.parse(saved) }; } else { const isMobile = window.innerWidth <= 900; if (isMobile) { appSettings.performanceMode = true; appSettings.showClock = false; } } } catch (e) {}
+    try { const saved = localStorage.getItem('cms_player_settings_v23'); if (saved) { appSettings = { ...defaultSettings, ...JSON.parse(saved) }; } else { const isMobile = window.innerWidth <= 900; if (isMobile) { appSettings.performanceMode = true; appSettings.showClock = false; } } } catch (e) {}
 }
-function saveSettings() { localStorage.setItem('cms_player_settings_v18', JSON.stringify(appSettings)); }
+function saveSettings() { localStorage.setItem('cms_player_settings_v23', JSON.stringify(appSettings)); }
 
 function updateLayoutMode() {
     if (appSettings.windowMode) { document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile'); return; }
     if (window.innerWidth <= 900 && !appSettings.forcePcLayout) { document.body.classList.add('is-mobile'); document.body.classList.remove('is-pc'); } else { document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile'); }
 }
 
-// 🌟 ウィンドウモード（自由配置・リサイズ）
+// ウィンドウモード（5つのパネル完全独立）
 let isDraggingPanel = false;
 function applyWindowMode() {
-    const panels = ['widget-clock', 'widget-player', 'widget-controls', 'widget-library'];
+    const panels = ['widget-player', 'widget-controls', 'widget-folder-list-wrapper', 'widget-track-list-wrapper', 'library-nav-wrapper'];
+    
     if (appSettings.windowMode) {
         document.body.classList.add('window-mode');
         panels.forEach(id => {
             const el = document.getElementById(id);
             if (el) {
-                // 初期位置がない場合は現在のレイアウト上の位置を記憶
                 if (!appSettings.windowPositions[id]) {
-                    const rect = el.getBoundingClientRect();
-                    appSettings.windowPositions[id] = { top: rect.top + 'px', left: rect.left + 'px', width: rect.width + 'px', height: rect.height + 'px' };
+                    const defaults = {
+                        'widget-player': { top: '20px', left: '20px', width: '450px', height: '300px' },
+                        'widget-controls': { top: '340px', left: '20px', width: '450px', height: '180px' },
+                        'widget-folder-list-wrapper': { top: '20px', left: '490px', width: '250px', height: '500px' },
+                        'widget-track-list-wrapper': { top: '20px', left: '760px', width: '400px', height: '500px' },
+                        'library-nav-wrapper': { top: '540px', left: '490px', width: '670px', height: '80px' }
+                    };
+                    appSettings.windowPositions[id] = defaults[id] || { top: '50px', left: '50px', width: '300px', height: '200px' };
                 }
                 el.style.position = 'absolute'; el.style.top = appSettings.windowPositions[id].top; el.style.left = appSettings.windowPositions[id].left;
                 if (appSettings.windowPositions[id].width) el.style.width = appSettings.windowPositions[id].width;
@@ -198,25 +210,44 @@ function makeDraggable(el) {
     el.onmousedown = (e) => {
         if (!appSettings.windowMode) return;
         const rect = el.getBoundingClientRect();
-        // 右下の角はリサイズ領域とみなす
-        if (e.clientX > rect.right - 25 && e.clientY > rect.bottom - 25) return;
-        if (['INPUT', 'BUTTON', 'SELECT', 'OPTION', 'TEXTAREA', 'I'].includes(e.target.tagName)) return;
-        if (e.target.closest('.w-t-item') || e.target.closest('.w-f-item') || e.target.closest('.progress-container')) return;
         
+        // 右下（リサイズ用領域）は除外
+        if (e.clientX > rect.right - 20 && e.clientY > rect.bottom - 20) return;
+        
+        // パネル上部25px（ドラッグハンドル領域）以外ならドラッグ開始しない
+        if (e.clientY - rect.top > 25) return;
+        
+        if (['INPUT', 'BUTTON', 'SELECT', 'OPTION', 'TEXTAREA', 'I'].includes(e.target.tagName)) return;
+
         e.preventDefault(); isDraggingPanel = true;
+        
+        // iframeによるmousemove/mouseupイベントの吸収を防ぐための透明シールド
+        const shield = document.createElement('div');
+        shield.style.position = 'fixed'; shield.style.top = 0; shield.style.left = 0;
+        shield.style.width = '100vw'; shield.style.height = '100vh';
+        shield.style.zIndex = 999999; shield.style.cursor = 'move';
+        document.body.appendChild(shield);
+
         let posX = e.clientX, posY = e.clientY;
         
-        document.onmouseup = () => { 
-            document.onmouseup = null; document.onmousemove = null; isDraggingPanel = false;
+        const onMouseUp = () => { 
+            isDraggingPanel = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            if (shield.parentNode) shield.parentNode.removeChild(shield);
             appSettings.windowPositions[el.id] = { top: el.style.top, left: el.style.left, width: el.style.width, height: el.style.height }; 
             saveSettings(); 
         };
-        document.onmousemove = (ev) => { 
+        const onMouseMove = (ev) => { 
             if (!isDraggingPanel) return; ev.preventDefault(); 
             const dx = ev.clientX - posX; const dy = ev.clientY - posY; posX = ev.clientX; posY = ev.clientY; 
             el.style.top = (el.offsetTop + dy) + "px"; el.style.left = (el.offsetLeft + dx) + "px"; 
         };
+        
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
     };
+    
     const ro = new ResizeObserver(() => {
         if (!isDraggingPanel && appSettings.windowMode) {
             appSettings.windowPositions[el.id] = { top: el.style.top, left: el.style.left, width: el.style.width, height: el.style.height }; saveSettings();
@@ -230,14 +261,11 @@ function applyThemeSettings() {
     if (appSettings.forcePcLayout || appSettings.windowMode) document.body.classList.add('is-pc');
     if (appSettings.windowMode) document.body.classList.add('window-mode');
     
-    document.body.classList.toggle('music-mode', appSettings.musicMode); document.body.classList.toggle('show-list-thumbnails', appSettings.showThumbnails);
-    document.body.classList.toggle('show-clock', appSettings.showClock); document.body.classList.toggle('simple-layout-mode', appSettings.simpleLayoutMode);
+    document.body.classList.toggle('show-list-thumbnails', appSettings.showThumbnails);
     document.body.classList.toggle('performance-mode', appSettings.performanceMode);
     
-    if (appSettings.simpleLayoutMode && isListVisible) { document.body.classList.add('list-visible'); document.getElementById('toggle-list-text').textContent = 'リストを隠す'; } 
-    else { document.body.classList.remove('list-visible'); document.getElementById('toggle-list-text').textContent = 'リストを表示'; }
-    
-    document.documentElement.style.setProperty('--base-font-size', `${appSettings.baseFontSize}%`); document.documentElement.style.setProperty('--pc-left-width', `${appSettings.pcLeftWidth}px`);
+    document.documentElement.style.setProperty('--base-font-size', `${appSettings.baseFontSize}%`); 
+    document.documentElement.style.setProperty('--pc-left-width', `${appSettings.pcLeftWidth}px`);
     document.documentElement.style.setProperty('--bg-position', appSettings.bgPosition); document.documentElement.style.setProperty('--bg-size', appSettings.bgSize);
     
     if (appSettings.customColorEnabled) { document.body.style.setProperty('--text-color', appSettings.customAccentColor); document.body.style.setProperty('--accent-color', appSettings.customAccentColor); document.body.style.setProperty('--border-color', appSettings.customBorderColor); } 
@@ -256,15 +284,13 @@ function setupSettingsModal() {
         document.getElementById('set-pc-left-width').value = appSettings.pcLeftWidth; document.getElementById('pc-width-val').textContent = appSettings.pcLeftWidth;
         document.getElementById('set-bg-position').value = appSettings.bgPosition; document.getElementById('set-bg-size').value = appSettings.bgSize;
         document.getElementById('set-opacity').value = appSettings.bgOpacity; document.getElementById('op-val').textContent = appSettings.bgOpacity;
-        document.getElementById('set-clock-type').value = appSettings.clockType; document.getElementById('set-pocket-clock-type').value = appSettings.pocketClockType || 'digital1';
         document.getElementById('set-nico-boost').value = appSettings.nicoBoost || 1.0; document.getElementById('boost-val').textContent = parseFloat(appSettings.nicoBoost || 1.0).toFixed(1);
         document.getElementById('set-default-sort').value = appSettings.defaultSortOrder || 'custom';
         
-        document.getElementById('set-simple-layout').checked = appSettings.simpleLayoutMode; document.getElementById('set-performance-mode').checked = appSettings.performanceMode;
-        document.getElementById('set-data-saver').checked = appSettings.dataSaverMode; document.getElementById('set-music-mode').checked = appSettings.musicMode;
-        document.getElementById('set-show-clock').checked = appSettings.showClock; document.getElementById('set-show-thumbnails').checked = appSettings.showThumbnails;
+        document.getElementById('set-performance-mode').checked = appSettings.performanceMode; document.getElementById('set-data-saver').checked = appSettings.dataSaverMode;
+        document.getElementById('set-show-thumbnails').checked = appSettings.showThumbnails;
         document.getElementById('set-pocket-always-on').checked = appSettings.pocketAlwaysOn; document.getElementById('set-pocket-swipe-unlock').checked = appSettings.pocketSwipeUnlock;
-        document.getElementById('set-force-pc-layout').checked = appSettings.forcePcLayout; document.getElementById('set-window-mode').checked = appSettings.windowMode; document.getElementById('set-use-firebase').checked = appSettings.useFirebase;
+        document.getElementById('set-force-pc-layout').checked = appSettings.forcePcLayout; document.getElementById('set-window-mode').checked = appSettings.windowMode;
         document.getElementById('set-use-custom-color').checked = appSettings.customColorEnabled; document.getElementById('set-accent-color').value = appSettings.customAccentColor; document.getElementById('set-border-color').value = appSettings.customBorderColor;
         modal.classList.remove('hidden');
     };
@@ -273,34 +299,19 @@ function setupSettingsModal() {
     document.getElementById('set-opacity').oninput = (e) => document.getElementById('op-val').textContent = e.target.value; document.getElementById('set-nico-boost').oninput = (e) => document.getElementById('boost-val').textContent = parseFloat(e.target.value).toFixed(1);
 
     document.getElementById('btn-close-settings').onclick = () => modal.classList.add('hidden');
-    document.getElementById('btn-reset-settings').onclick = () => { if (confirm('初期化しますか？')) { localStorage.removeItem('cms_player_settings_v18'); clearBgImageDB(); location.reload(); } };
+    document.getElementById('btn-reset-settings').onclick = () => { if (confirm('初期化しますか？')) { localStorage.removeItem('cms_player_settings_v23'); clearBgImageDB(); location.reload(); } };
     document.getElementById('btn-clear-bg').onclick = () => { clearBgImageDB(); alert('背景をクリアしました。Saveを押してください。'); };
     document.getElementById('btn-reset-window').onclick = () => { appSettings.windowPositions = {}; alert('配置をリセットしました。Saveを押してください。'); };
-    document.getElementById('btn-save-firebase').onclick = async () => { if (!appSettings.useFirebase || !window.firebase || !firebase.database) return alert('Firebaseが無効です。'); try { await firebase.database().ref('cms_data').set({ mediaItems: allItems, folderSettings: folderSettings }); alert('保存しました。'); } catch(e) { alert('失敗: ' + e.message); } };
-    document.getElementById('btn-load-firebase').onclick = async () => { if (!appSettings.useFirebase || !window.firebase) return alert('Firebaseが無効です。'); const data = await loadDataFromFirebase(); if (data) { processImportData(data); alert('ロードしました。'); modal.classList.add('hidden'); } else alert('データがありません。'); };
 
     document.getElementById('btn-save-settings').onclick = async () => {
-        appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value; appSettings.bgSize = document.getElementById('set-bg-size').value; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
-        appSettings.simpleLayoutMode = document.getElementById('set-simple-layout').checked; appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.useFirebase = document.getElementById('set-use-firebase').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value;
-        const fInput = document.getElementById('set-bg-img'); if (fInput.files.length > 0) { await saveBgImageToDB(fInput.files[0]); }
-        saveSettings(); applyVolume(); modal.classList.add('hidden'); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); updateClock(); scheduleMarqueeUpdate(); 
+        appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value; appSettings.bgSize = document.getElementById('set-bg-size').value; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
+        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value;
+        
+        const fInput = document.getElementById('set-bg-img'); 
+        if (fInput.files.length > 0) { await saveBgImageToDB(fInput.files[0]); }
+        
+        saveSettings(); applyVolume(); modal.classList.add('hidden'); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); scheduleMarqueeUpdate(); 
     };
-}
-
-function updateClock() {
-    const now = new Date(); const dStr = now.toLocaleDateString('ja-JP'); const h = String(now.getHours()).padStart(2, '0'); const m = String(now.getMinutes()).padStart(2, '0'); const s = String(now.getSeconds()).padStart(2, '0');
-    if (appSettings.showClock) {
-        document.getElementById('clock-date').textContent = dStr; document.getElementById('clock-time').textContent = `${h}:${m}:${s}`;
-        const timeEl = document.getElementById('clock-time'); const analogEl = document.getElementById('analog-clock');
-        if (appSettings.clockType === 'analog') { timeEl.classList.add('hidden'); analogEl.classList.remove('hidden'); const sd = now.getSeconds()*6; const md = now.getMinutes()*6 + now.getSeconds()/10; const hd = (now.getHours()%12)*30 + now.getMinutes()/2; analogEl.querySelector('.second-hand').style.transform = `rotate(${sd}deg)`; analogEl.querySelector('.minute-hand').style.transform = `rotate(${md}deg)`; analogEl.querySelector('.hour-hand').style.transform = `rotate(${hd}deg)`; } 
-        else { timeEl.classList.remove('hidden'); analogEl.classList.add('hidden'); if (appSettings.clockType === 'digital2') timeEl.classList.add('digital2'); else timeEl.classList.remove('digital2'); }
-    }
-    const pContainer = document.getElementById('pocket-clock-container'); const pText = document.getElementById('pocket-clock-text'); const pAnalog = document.getElementById('pocket-analog-clock');
-    if (appSettings.pocketClockType === 'none') { pContainer.classList.add('hidden'); } else {
-        pContainer.classList.remove('hidden');
-        if (appSettings.pocketClockType === 'analog') { pText.classList.add('hidden'); pAnalog.classList.remove('hidden'); const sd = now.getSeconds()*6; const md = now.getMinutes()*6 + now.getSeconds()/10; const hd = (now.getHours()%12)*30 + now.getMinutes()/2; pAnalog.querySelector('.second-hand').style.transform = `rotate(${sd}deg)`; pAnalog.querySelector('.minute-hand').style.transform = `rotate(${md}deg)`; pAnalog.querySelector('.hour-hand').style.transform = `rotate(${hd}deg)`; } 
-        else { pText.classList.remove('hidden'); pAnalog.classList.add('hidden'); pText.textContent = `${h}:${m}`; if (appSettings.pocketClockType === 'digital2') pText.classList.add('digital2'); else pText.classList.remove('digital2'); }
-    }
 }
 
 function updateMarquee() {
@@ -327,15 +338,43 @@ function renderFolders() {
     folderListEl.innerHTML = ''; const mList = document.getElementById('mobile-folder-list-modal'); if (mList) mList.innerHTML = '';
     musicLibrary.forEach(f => {
         const div = document.createElement('div'); div.className = 'w-f-item'; div.textContent = f.name; div.dataset.folderId = f.id; div.title = f.name; div.onclick = () => selectFolder(f.id); folderListEl.appendChild(div);
-        if (mList) { const mDiv = document.createElement('div'); mDiv.className = 'm-f-item'; mDiv.dataset.folderId = f.id; mDiv.innerHTML = `<span>${f.name.replace('📁 ', '').replace('📚 ', '')}</span> <i class="fas fa-music" style="opacity:0.6; font-size:0.9rem;"></i>`; mDiv.onclick = () => { selectFolder(f.id); document.getElementById('mobile-folder-modal').classList.add('hidden'); }; mList.appendChild(mDiv); }
+        if (mList) { 
+            const mDiv = document.createElement('div'); mDiv.className = 'm-f-item'; mDiv.dataset.folderId = f.id; 
+            mDiv.innerHTML = `
+                ${f.id === currentFolderId ? '<i class="fas fa-check"></i>' : '<i class="fas fa-check" style="visibility:hidden;"></i>'}
+                <span>${f.name.replace('📁 ', '').replace('📚 ', '')}</span>
+                <i class="fas fa-music"></i>
+            `; 
+            mDiv.onclick = () => { selectFolder(f.id); document.getElementById('mobile-folder-modal').classList.add('hidden'); }; 
+            mList.appendChild(mDiv); 
+        }
     });
+    populateEditFolders();
 }
 
 function selectFolder(id) {
     currentFolderId = id;
     document.querySelectorAll('.w-f-item').forEach(e => e.classList.toggle('active', e.dataset.folderId === id));
-    document.querySelectorAll('.m-f-item').forEach(e => { const act = e.dataset.folderId === id; e.classList.toggle('active', act); e.innerHTML = act ? `<span><i class="fas fa-check" style="margin-right:8px;"></i>${e.textContent.trim()}</span> <i class="fas fa-music"></i>` : `<span>${e.textContent.trim()}</span> <i class="fas fa-music" style="opacity:0.6; font-size:0.9rem;"></i>`; });
-    const f = musicLibrary.find(f => f.id === id); if (f) { document.getElementById('current-folder-name').innerHTML = `${f.name.replace('📁 ', '').replace('📚 ', '')} <i class="fas fa-chevron-down" style="font-size:0.8rem; opacity:0.7; margin-left:5px;"></i>`; document.getElementById('current-folder-count').textContent = `${f.songs.length}件のアイテム`; }
+    document.querySelectorAll('.m-f-item').forEach(e => { 
+        const act = e.dataset.folderId === id; e.classList.toggle('active', act); 
+        e.innerHTML = `
+            ${act ? '<i class="fas fa-check"></i>' : '<i class="fas fa-check" style="visibility:hidden;"></i>'}
+            <span>${e.querySelector('span').textContent}</span>
+            <i class="fas fa-music"></i>
+        `;
+    });
+    
+    const filterSelect = document.getElementById('widget-folder-select');
+    if(filterSelect && filterSelect.value !== id) filterSelect.value = id;
+
+    const f = musicLibrary.find(f => f.id === id); 
+    if (f) { 
+        const name = f.name.replace('📁 ', '').replace('📚 ', '');
+        document.getElementById('current-folder-title').textContent = name;
+        document.getElementById('current-folder-name').innerHTML = `${name} <i class="fas fa-chevron-down" style="font-size:0.8rem; opacity:0.7; margin-left:5px;"></i>`; 
+        document.getElementById('current-folder-count').textContent = `${f.songs.length}件のアイテム`; 
+    }
+    selectedItems.clear(); updateEditBar();
     renderTracks(f ? f.songs :[]);
 }
 
@@ -348,26 +387,34 @@ function loadMoreTracks() {
     const frag = document.createDocumentFragment(); const end = Math.min(currentRenderedCount + RENDER_CHUNK_SIZE, currentRenderSongs.length);
     for (let i = currentRenderedCount; i < end; i++) {
         const s = currentRenderSongs[i]; const div = document.createElement('div'); div.className = 'w-t-item'; div.title = s.title; div.dataset.index = i;
-        div.innerHTML = `<span class="w-t-idx">${i + 1}</span><span class="w-t-playing-icon hidden"><i class="fa-solid fa-volume-high"></i></span><img class="w-t-thumb" src="${s.thumbnail || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>"}" loading="lazy"><div class="w-t-info overflow-hidden"><div class="marquee-wrapper"><span class="track-title-text marquee-content">${escapeHTML(s.title)}</span></div><div class="marquee-wrapper"><span class="track-artist-text marquee-content">${escapeHTML(s.channelName || s.site)}</span></div></div>`;
-        div.onclick = () => { document.body.classList.remove('mobile-list-fullscreen'); startPlaylist(currentRenderSongs, i); }; frag.appendChild(div);
+        const isChecked = selectedItems.has(s.originalIndex);
+        
+        div.innerHTML = `
+            <div class="w-t-checkbox" style="display: ${isEditMode ? 'flex' : 'none'}; align-items:center; padding-right:15px;">
+                <input type="checkbox" class="edit-cb" data-original-idx="${s.originalIndex}" ${isChecked ? 'checked' : ''}>
+            </div>
+            <span class="w-t-idx" style="display: ${isEditMode ? 'none' : 'block'};">${i + 1}</span>
+            <span class="w-t-playing-icon hidden"><i class="fa-solid fa-volume-high"></i></span>
+            <img class="w-t-thumb" src="${s.thumbnail || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>"}" loading="lazy">
+            <div class="w-t-info overflow-hidden">
+                <div class="marquee-wrapper"><span class="track-title-text marquee-content">${escapeHTML(s.title)}</span></div>
+                <div class="marquee-wrapper"><span class="track-artist-text marquee-content">${escapeHTML(s.channelName || s.site)}</span></div>
+            </div>
+        `;
+        div.onclick = (e) => { 
+            if (isEditMode) {
+                const cb = div.querySelector('.edit-cb');
+                if (e.target !== cb) cb.checked = !cb.checked;
+                if (cb.checked) selectedItems.add(s.originalIndex);
+                else selectedItems.delete(s.originalIndex);
+                updateEditBar();
+            } else {
+                startPlaylist(currentRenderSongs, i); 
+            }
+        }; 
+        frag.appendChild(div);
     }
     trackListEl.appendChild(frag); currentRenderedCount = end; updateActiveTrackUI(); scheduleMarqueeUpdate();
-}
-
-// 🌟 モバイル スクロール展開ロジック
-function setupMobileListScroll() {
-    let tStartY = 0; let isTop = true;
-    trackListEl.addEventListener('touchstart', (e) => { tStartY = e.touches[0].clientY; isTop = trackListEl.scrollTop <= 0; }, {passive: true});
-    trackListEl.addEventListener('touchmove', (e) => {
-        if (!document.body.classList.contains('is-mobile')) return;
-        const dy = e.touches[0].clientY - tStartY;
-        if (dy < -10) { document.body.classList.add('mobile-list-fullscreen'); document.getElementById('mobile-list-fullscreen-header').classList.remove('hidden'); }
-        else if (dy > 30 && isTop && trackListEl.scrollTop <= 0) { document.body.classList.remove('mobile-list-fullscreen'); document.getElementById('mobile-list-fullscreen-header').classList.add('hidden'); }
-    }, {passive: true});
-    trackListEl.addEventListener('scroll', () => { if (trackListEl.scrollTop + trackListEl.clientHeight >= trackListEl.scrollHeight - 100) loadMoreTracks(); });
-
-    const closeBtn = document.getElementById('mobile-list-close-btn');
-    if (closeBtn) closeBtn.addEventListener('click', () => { document.body.classList.remove('mobile-list-fullscreen'); document.getElementById('mobile-list-fullscreen-header').classList.add('hidden'); });
 }
 
 function updateActiveTrackUI() {
@@ -377,8 +424,89 @@ function updateActiveTrackUI() {
     const activeEl = trackListEl.children[tIdx];
     if (activeEl) {
         activeEl.classList.add('active'); activeEl.querySelector('.w-t-idx').classList.add('hidden'); activeEl.querySelector('.w-t-playing-icon').classList.remove('hidden');
-        setTimeout(() => { const cTop = trackListEl.scrollTop; const cHeight = trackListEl.clientHeight; const eTop = activeEl.offsetTop; const eHeight = activeEl.clientHeight; if (eTop < cTop || eTop + eHeight > cTop + cHeight) trackListEl.scrollTo({ top: eTop - (cHeight / 2) + (eHeight / 2), behavior: 'smooth' }); }, 100);
+        
+        setTimeout(() => { 
+            const cTop = trackListEl.scrollTop; const cHeight = trackListEl.clientHeight; const eTop = activeEl.offsetTop; const eHeight = activeEl.clientHeight; 
+            if (eTop < cTop || eTop + eHeight > cTop + cHeight) trackListEl.scrollTo({ top: eTop - (cHeight / 2) + (eHeight / 2), behavior: 'smooth' }); 
+        }, 100);
     }
+}
+
+// 🌟 編集モードとダウンロード
+function toggleEditMode() {
+    if (isEditMode) {
+        if (confirm("編集モードを終了しますか？")) {
+            if (confirm("変更内容をJSONファイルとして保存（ダウンロード）しますか？")) {
+                downloadJSON();
+            }
+            isEditMode = false; selectedItems.clear();
+            document.body.classList.remove('edit-mode');
+            document.getElementById('edit-action-bar').classList.add('hidden');
+            document.getElementById('btn-edit-mode').textContent = "編集";
+            renderTracks(currentRenderSongs);
+        }
+    } else {
+        isEditMode = true; selectedItems.clear(); updateEditBar();
+        document.body.classList.add('edit-mode');
+        document.getElementById('edit-action-bar').classList.remove('hidden');
+        document.getElementById('btn-edit-mode').textContent = "完了";
+        renderTracks(currentRenderSongs);
+    }
+}
+
+function downloadJSON() {
+    const exportData = {
+        mediaItems: allItems.map(item => {
+            const { originalIndex, safeDate, safePlayCount, ...rest } = item;
+            return rest;
+        }),
+        folderSettings: folderSettings
+    };
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+    const dlAnchorElem = document.createElement('a');
+    dlAnchorElem.setAttribute("href", dataStr);
+    dlAnchorElem.setAttribute("download", "cms_playlist_edited.json");
+    document.body.appendChild(dlAnchorElem);
+    dlAnchorElem.click();
+    document.body.removeChild(dlAnchorElem);
+}
+
+function setupEditMode() {
+    document.getElementById('btn-edit-mode').onclick = toggleEditMode;
+    document.getElementById('btn-edit-cancel').onclick = toggleEditMode;
+
+    document.getElementById('btn-edit-delete').onclick = () => {
+        if (selectedItems.size === 0) return;
+        if (confirm(`${selectedItems.size}件のアイテムを削除しますか？`)) {
+            allItems = allItems.filter(item => !selectedItems.has(item.originalIndex));
+            selectedItems.clear(); buildLibrary(); selectFolder(currentFolderId || '__all');
+        }
+    };
+
+    document.getElementById('btn-edit-move').onclick = () => {
+        if (selectedItems.size === 0) return;
+        const targetFolder = document.getElementById('edit-folder-target').value;
+        if (!targetFolder) return alert('移動先フォルダを選択してください');
+        allItems.forEach(item => { if (selectedItems.has(item.originalIndex)) { item.folder = targetFolder; item.folders = [targetFolder]; } });
+        selectedItems.clear(); buildLibrary(); selectFolder(currentFolderId || '__all'); alert('移動しました');
+    };
+}
+function updateEditBar() { document.getElementById('edit-count').textContent = `${selectedItems.size}件`; }
+function populateEditFolders() {
+    const selEdit = document.getElementById('edit-folder-target'); 
+    selEdit.innerHTML = '<option value="">移動先...</option>';
+    
+    const selFilter = document.getElementById('widget-folder-select');
+    selFilter.innerHTML = '';
+    
+    musicLibrary.forEach(f => { 
+        if(f.id !== '__all') { 
+            const opt1 = document.createElement('option'); opt1.value = f.id; opt1.textContent = f.name.replace('📁 ', ''); selEdit.appendChild(opt1); 
+        }
+        const opt2 = document.createElement('option'); opt2.value = f.id; opt2.textContent = f.name; selFilter.appendChild(opt2);
+    });
+    
+    if(currentFolderId) selFilter.value = currentFolderId;
 }
 
 function handleSearch(e) { currentSearchQuery = e.target.value; buildLibrary(); renderFolders(); selectFolder(currentFolderId || musicLibrary[0]?.id); }
@@ -468,7 +596,6 @@ function updatePlayPauseIcon() {
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
 }
 
-// 🌟 ポケットモード解除
 function setupPocketMode() {
     const pOverlay = document.getElementById('pocket-overlay');
     document.getElementById('btn-pocket-mode').addEventListener('click', () => { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen(); else if (document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen(); pOverlay.classList.remove('hidden'); });
