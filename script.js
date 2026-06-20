@@ -4,7 +4,7 @@ const defaultSettings = {
     performanceMode: false, dataSaverMode: false,
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff',
     pocketAlwaysOn: false, pocketSwipeUnlock: true, forcePcLayout: false, windowMode: false, windowPositions: {},
-    defaultSortOrder: 'custom'
+    defaultSortOrder: 'custom', useFirebase: false
 };
 let appSettings = { ...defaultSettings };
 
@@ -153,7 +153,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     // フィルタメニュー内のフォルダ変更
-    document.getElementById('widget-folder-select').addEventListener('change', (e) => {
+    const folderSelect = document.getElementById('widget-folder-select');
+    if (folderSelect) folderSelect.addEventListener('change', (e) => {
         selectFolder(e.target.value);
     });
 
@@ -291,6 +292,7 @@ function setupSettingsModal() {
         document.getElementById('set-show-thumbnails').checked = appSettings.showThumbnails;
         document.getElementById('set-pocket-always-on').checked = appSettings.pocketAlwaysOn; document.getElementById('set-pocket-swipe-unlock').checked = appSettings.pocketSwipeUnlock;
         document.getElementById('set-force-pc-layout').checked = appSettings.forcePcLayout; document.getElementById('set-window-mode').checked = appSettings.windowMode;
+        document.getElementById('set-use-firebase').checked = Boolean(appSettings.useFirebase);
         document.getElementById('set-use-custom-color').checked = appSettings.customColorEnabled; document.getElementById('set-accent-color').value = appSettings.customAccentColor; document.getElementById('set-border-color').value = appSettings.customBorderColor;
         modal.classList.remove('hidden');
     };
@@ -305,7 +307,7 @@ function setupSettingsModal() {
 
     document.getElementById('btn-save-settings').onclick = async () => {
         appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value; appSettings.bgSize = document.getElementById('set-bg-size').value; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
-        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value;
+        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         
         const fInput = document.getElementById('set-bg-img'); 
         if (fInput.files.length > 0) { await saveBgImageToDB(fInput.files[0]); }
@@ -320,8 +322,39 @@ function updateMarquee() {
 }
 function scheduleMarqueeUpdate() { setTimeout(updateMarquee, 100); }
 
-function handleFileImport(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { processImportData(JSON.parse(ev.target.result)); importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden'); } catch (err) { alert('JSON解析失敗'); } }; reader.readAsText(file); }
-function processImportData(data) { const items = Array.isArray(data) ? data : (data.mediaItems ||[]); allItems = items.filter(i => i.site !== 'system').map((item, idx) => ({ ...item, originalIndex: idx, safeDate: item.savedAt ? new Date(item.savedAt).getTime() : 0, safePlayCount: item.playCount || 0 })); folderSettings = data.folderSettings ||[]; if (allItems.length > 0) { buildLibrary(); renderFolders(); selectFolder(musicLibrary[0]?.id || '__all'); } else alert('データがありません'); }
+function handleFileImport(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { const data = JSON.parse(ev.target.result); processImportData(data); window.CmsWebFirebase?.cacheImportedData(data); importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden'); } catch (err) { alert('JSON解析失敗'); } }; reader.readAsText(file); }
+function processImportData(data) {
+    const items = Array.isArray(data) ? data : (data.mediaItems || []);
+    if (!Array.isArray(data) && data.webSettings && typeof data.webSettings === 'object') {
+        Object.keys(defaultSettings).forEach(key => {
+            if (Object.prototype.hasOwnProperty.call(data.webSettings, key)) appSettings[key] = data.webSettings[key];
+        });
+        saveSettings();
+        currentSortOrder = appSettings.defaultSortOrder || 'custom';
+        updateLayoutMode();
+        applyThemeSettings();
+    }
+    allItems = items.filter(i => i.site !== 'system').map((item, idx) => ({
+        ...item,
+        originalIndex: idx,
+        safeDate: item.savedAt ? new Date(item.savedAt).getTime() : 0,
+        safePlayCount: item.playCount || 0
+    }));
+    folderSettings = Array.isArray(data.folderSettings) ? data.folderSettings : [];
+    if (allItems.length > 0) {
+        buildLibrary(); renderFolders(); selectFolder(musicLibrary[0]?.id || '__all');
+    } else alert('データがありません');
+}
+
+window.CmsWebPlayer = {
+    applyLibrary(data, source = 'cloud') {
+        processImportData(data);
+        importScreen.classList.add('hidden');
+        readyScreen.classList.remove('hidden');
+        return { count: allItems.length, source };
+    },
+    getUseFirebase: () => Boolean(appSettings.useFirebase)
+};
 
 function startGame() { readyScreen.classList.add('hidden'); setupBackgroundPlayback(); startSilentAudio(); mainApp.classList.remove('hidden'); scheduleMarqueeUpdate(); if (currentFolderId) { const f = musicLibrary.find(f => f.id === currentFolderId); startPlaylist(f ? f.songs : (musicLibrary.find(f => f.id === '__all')?.songs ||[]), 0); } }
 
@@ -456,11 +489,16 @@ function toggleEditMode() {
 
 function downloadJSON() {
     const exportData = {
+        schemaVersion: 4,
+        version: '4.0',
+        exportedAt: new Date().toISOString(),
         mediaItems: allItems.map(item => {
             const { originalIndex, safeDate, safePlayCount, ...rest } = item;
             return rest;
         }),
-        folderSettings: folderSettings
+        folderSettings: folderSettings,
+        settings: {},
+        webSettings: { ...appSettings }
     };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
     const dlAnchorElem = document.createElement('a');
@@ -472,7 +510,9 @@ function downloadJSON() {
 }
 
 function setupEditMode() {
-    document.getElementById('btn-edit-mode').onclick = toggleEditMode;
+    const editModeButton = document.getElementById('btn-edit-mode');
+    if (!editModeButton) return;
+    editModeButton.onclick = toggleEditMode;
     document.getElementById('btn-edit-cancel').onclick = toggleEditMode;
 
     document.getElementById('btn-edit-delete').onclick = () => {
