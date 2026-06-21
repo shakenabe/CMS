@@ -3,7 +3,9 @@ const defaultSettings = {
     baseFontSize: 100, pcLeftWidth: 350, showClock: false, showThumbnails: true,
     performanceMode: false, dataSaverMode: false,
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff',
-    pocketAlwaysOn: false, pocketSwipeUnlock: true, forcePcLayout: false, windowMode: false, windowPositions: {},
+    pocketAlwaysOn: false, pocketSwipeUnlock: true, forcePcLayout: false,
+    musicMode: false, autoScrollActiveTrack: true,
+    windowMode: false, windowPositions: {}, windowStates: {},
     defaultSortOrder: 'custom', useFirebase: false
 };
 let appSettings = { ...defaultSettings };
@@ -28,8 +30,9 @@ let nicoDuration = 0;
 let nicoCurrentTime = 0;
 let nicoEndedFlag = false;
 
-let resizeTimer;       
-let progressInterval;  
+let resizeTimer;
+let progressInterval;
+let windowZCounter = 200;
 
 let currentRenderedCount = 0;
 const RENDER_CHUNK_SIZE = 50;
@@ -126,7 +129,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('resize', () => { 
         clearTimeout(resizeTimer); 
         resizeTimer = setTimeout(() => {
-            updateLayoutMode(); scheduleMarqueeUpdate();
+            updateLayoutMode();
+            if (appSettings.windowMode) clampAllWindowPanels();
+            scheduleMarqueeUpdate();
         }, 200); 
     });
 
@@ -134,6 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     trackListEl.addEventListener('scroll', () => { 
         if (trackListEl.scrollTop + trackListEl.clientHeight >= trackListEl.scrollHeight - 100) loadMoreTracks(); 
     });
+    setupMobileTrackListFocus();
 
     document.getElementById('import-json').addEventListener('change', handleFileImport);
     document.getElementById('btn-user-start').addEventListener('click', startGame);
@@ -158,7 +164,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         selectFolder(e.target.value);
     });
 
-    setupPlayerControls(); setupSettingsModal(); window.addEventListener('message', handleNicoMessage); setupPocketMode();
+    setupPlayerControls(); setupSettingsModal(); window.addEventListener('message', handleNicoMessage); setupPocketMode(); setupClockUI();
     setupEditMode();
     applyWindowMode(); 
 });
@@ -172,98 +178,232 @@ function saveSettings() { localStorage.setItem('cms_player_settings_v23', JSON.s
 
 function updateLayoutMode() {
     if (appSettings.windowMode) { document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile'); return; }
-    if (window.innerWidth <= 900 && !appSettings.forcePcLayout) { document.body.classList.add('is-mobile'); document.body.classList.remove('is-pc'); } else { document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile'); }
-}
-
-// ウィンドウモード（5つのパネル完全独立）
-let isDraggingPanel = false;
-function applyWindowMode() {
-    const panels = ['widget-player', 'widget-controls', 'widget-folder-list-wrapper', 'widget-track-list-wrapper', 'library-nav-wrapper'];
-    
-    if (appSettings.windowMode) {
-        document.body.classList.add('window-mode');
-        panels.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                if (!appSettings.windowPositions[id]) {
-                    const defaults = {
-                        'widget-player': { top: '20px', left: '20px', width: '450px', height: '300px' },
-                        'widget-controls': { top: '340px', left: '20px', width: '450px', height: '180px' },
-                        'widget-folder-list-wrapper': { top: '20px', left: '490px', width: '250px', height: '500px' },
-                        'widget-track-list-wrapper': { top: '20px', left: '760px', width: '400px', height: '500px' },
-                        'library-nav-wrapper': { top: '540px', left: '490px', width: '670px', height: '80px' }
-                    };
-                    appSettings.windowPositions[id] = defaults[id] || { top: '50px', left: '50px', width: '300px', height: '200px' };
-                }
-                el.style.position = 'absolute'; el.style.top = appSettings.windowPositions[id].top; el.style.left = appSettings.windowPositions[id].left;
-                if (appSettings.windowPositions[id].width) el.style.width = appSettings.windowPositions[id].width;
-                if (appSettings.windowPositions[id].height) el.style.height = appSettings.windowPositions[id].height;
-                makeDraggable(el);
-            }
-        });
+    if (window.innerWidth <= 900 && !appSettings.forcePcLayout) {
+        document.body.classList.add('is-mobile'); document.body.classList.remove('is-pc');
     } else {
-        document.body.classList.remove('window-mode');
-        panels.forEach(id => { const el = document.getElementById(id); if (el) { el.style.position = ''; el.style.top = ''; el.style.left = ''; el.style.width = ''; el.style.height = ''; el.onmousedown = null; } });
+        document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile', 'mobile-list-focus');
+        document.getElementById('mobile-list-fullscreen-header')?.classList.add('hidden');
     }
 }
 
-function makeDraggable(el) {
-    el.onmousedown = (e) => {
-        if (!appSettings.windowMode) return;
-        const rect = el.getBoundingClientRect();
-        
-        // 右下（リサイズ用領域）は除外
-        if (e.clientX > rect.right - 20 && e.clientY > rect.bottom - 20) return;
-        
-        // パネル上部25px（ドラッグハンドル領域）以外ならドラッグ開始しない
-        if (e.clientY - rect.top > 25) return;
-        
-        if (['INPUT', 'BUTTON', 'SELECT', 'OPTION', 'TEXTAREA', 'I'].includes(e.target.tagName)) return;
-
-        e.preventDefault(); isDraggingPanel = true;
-        
-        // iframeによるmousemove/mouseupイベントの吸収を防ぐための透明シールド
-        const shield = document.createElement('div');
-        shield.style.position = 'fixed'; shield.style.top = 0; shield.style.left = 0;
-        shield.style.width = '100vw'; shield.style.height = '100vh';
-        shield.style.zIndex = 999999; shield.style.cursor = 'move';
-        document.body.appendChild(shield);
-
-        let posX = e.clientX, posY = e.clientY;
-        
-        const onMouseUp = () => { 
-            isDraggingPanel = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            if (shield.parentNode) shield.parentNode.removeChild(shield);
-            appSettings.windowPositions[el.id] = { top: el.style.top, left: el.style.left, width: el.style.width, height: el.style.height }; 
-            saveSettings(); 
-        };
-        const onMouseMove = (ev) => { 
-            if (!isDraggingPanel) return; ev.preventDefault(); 
-            const dx = ev.clientX - posX; const dy = ev.clientY - posY; posX = ev.clientX; posY = ev.clientY; 
-            el.style.top = (el.offsetTop + dy) + "px"; el.style.left = (el.offsetLeft + dx) + "px"; 
-        };
-        
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
+function setupMobileTrackListFocus() {
+    const header = document.getElementById('mobile-list-fullscreen-header');
+    const closeButton = document.getElementById('mobile-list-close-btn');
+    let pointerStart = null;
+    const open = () => {
+        if (!document.body.classList.contains('is-mobile')) return;
+        document.body.classList.add('mobile-list-focus'); header?.classList.remove('hidden');
     };
-    
-    const ro = new ResizeObserver(() => {
-        if (!isDraggingPanel && appSettings.windowMode) {
-            appSettings.windowPositions[el.id] = { top: el.style.top, left: el.style.left, width: el.style.width, height: el.style.height }; saveSettings();
-        }
+    const close = () => { document.body.classList.remove('mobile-list-focus'); header?.classList.add('hidden'); };
+    trackListEl.addEventListener('wheel', open, { passive: true });
+    trackListEl.addEventListener('pointerdown', (e) => { pointerStart = { id: e.pointerId, x: e.clientX, y: e.clientY, type: e.pointerType }; }, { passive: true });
+    trackListEl.addEventListener('pointermove', (e) => {
+        if (!pointerStart || pointerStart.id !== e.pointerId) return;
+        const distance = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
+        if (distance >= (pointerStart.type === 'mouse' ? 5 : 10)) open();
+    }, { passive: true });
+    const clearPointer = () => { pointerStart = null; };
+    trackListEl.addEventListener('pointerup', clearPointer, { passive: true });
+    trackListEl.addEventListener('pointercancel', clearPointer, { passive: true });
+    closeButton?.addEventListener('click', close);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('mobile-list-focus')) close(); });
+}
+
+const WINDOW_PANEL_IDS = ['widget-player', 'widget-controls', 'widget-folder-list-wrapper', 'widget-track-list-wrapper', 'library-nav-wrapper'];
+const WINDOW_PANEL_TITLES = {
+    'widget-player': 'Player', 'widget-controls': 'Now Playing', 'widget-folder-list-wrapper': 'Folders',
+    'widget-track-list-wrapper': 'Tracks', 'library-nav-wrapper': 'Library Tools'
+};
+
+function applyWindowMode() {
+    appSettings.windowPositions = appSettings.windowPositions || {};
+    appSettings.windowStates = appSettings.windowStates || {};
+    if (appSettings.windowMode) {
+        document.body.classList.add('window-mode');
+        ensureWindowTaskbar();
+        WINDOW_PANEL_IDS.forEach((id, index) => {
+            const el = document.getElementById(id);
+            if (el) {
+                setupWindowPanel(el);
+                if (!appSettings.windowPositions[id]) appSettings.windowPositions[id] = getDefaultWindowRect(id, index);
+                if (!appSettings.windowStates[id]) appSettings.windowStates[id] = { mode: 'normal' };
+                applyWindowPanelState(el);
+            }
+        });
+        updateWindowTaskbar();
+    } else {
+        document.body.classList.remove('window-mode');
+        WINDOW_PANEL_IDS.forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.remove('window-minimized', 'window-closed', 'window-maximized');
+            el.style.position = ''; el.style.top = ''; el.style.left = ''; el.style.width = ''; el.style.height = ''; el.style.zIndex = '';
+        });
+    }
+}
+
+function getDefaultWindowRect(id, index) {
+    const wideDefaults = {
+        'widget-player': { top: 16, left: 16, width: 450, height: 300 },
+        'widget-controls': { top: 332, left: 16, width: 450, height: 210 },
+        'widget-folder-list-wrapper': { top: 16, left: 482, width: 250, height: 526 },
+        'widget-track-list-wrapper': { top: 16, left: 748, width: 410, height: 526 },
+        'library-nav-wrapper': { top: 558, left: 482, width: 676, height: 130 }
+    };
+    if (window.innerWidth >= 1200) return windowRectToCss(wideDefaults[id] || { top: 30, left: 30, width: 360, height: 240 });
+    const availableHeight = Math.max(180, window.innerHeight - 56);
+    const width = Math.min(560, Math.max(260, window.innerWidth - 32));
+    const height = Math.min(id === 'library-nav-wrapper' ? 180 : 430, Math.max(150, availableHeight - 32));
+    const offset = 12 + index * 24;
+    return windowRectToCss(clampWindowRect({ top: offset, left: offset, width, height }));
+}
+
+function windowRectToCss(rect) {
+    return { top: `${Math.round(rect.top)}px`, left: `${Math.round(rect.left)}px`, width: `${Math.round(rect.width)}px`, height: `${Math.round(rect.height)}px` };
+}
+
+function cssWindowRect(rect, fallback) {
+    const number = (value, defaultValue) => Number.isFinite(parseFloat(value)) ? parseFloat(value) : defaultValue;
+    return {
+        top: number(rect?.top, fallback.top), left: number(rect?.left, fallback.left),
+        width: number(rect?.width, fallback.width), height: number(rect?.height, fallback.height)
+    };
+}
+
+function clampWindowRect(rect) {
+    const taskbarHeight = 48;
+    const maxWidth = Math.max(220, window.innerWidth - 8);
+    const maxHeight = Math.max(140, window.innerHeight - taskbarHeight - 8);
+    const width = Math.min(maxWidth, Math.max(Math.min(240, maxWidth), rect.width));
+    const height = Math.min(maxHeight, Math.max(Math.min(120, maxHeight), rect.height));
+    return {
+        width, height,
+        left: Math.min(Math.max(4, rect.left), Math.max(4, window.innerWidth - width - 4)),
+        top: Math.min(Math.max(4, rect.top), Math.max(4, window.innerHeight - taskbarHeight - height - 4))
+    };
+}
+
+function setupWindowPanel(el) {
+    el.classList.add('wm-panel');
+    if (el.dataset.windowReady === '1') return;
+    el.dataset.windowReady = '1';
+    const titlebar = document.createElement('div');
+    titlebar.className = 'window-titlebar';
+    titlebar.innerHTML = `<span class="window-title">${WINDOW_PANEL_TITLES[el.id] || el.id}</span><span class="window-actions"><button type="button" class="window-minimize" aria-label="最小化"><i class="fas fa-window-minimize"></i></button><button type="button" class="window-maximize" aria-label="最大化・復元"><i class="far fa-square"></i></button><button type="button" class="window-close" aria-label="閉じる"><i class="fas fa-xmark"></i></button></span>`;
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'window-resize-handle';
+    el.prepend(titlebar); el.appendChild(resizeHandle);
+    el.addEventListener('pointerdown', () => focusWindowPanel(el));
+    titlebar.querySelector('.window-minimize').addEventListener('click', (e) => { e.stopPropagation(); setWindowPanelMode(el, 'minimized'); });
+    titlebar.querySelector('.window-maximize').addEventListener('click', (e) => { e.stopPropagation(); setWindowPanelMode(el, appSettings.windowStates[el.id]?.mode === 'maximized' ? 'normal' : 'maximized'); });
+    titlebar.querySelector('.window-close').addEventListener('click', (e) => { e.stopPropagation(); setWindowPanelMode(el, 'closed'); });
+    titlebar.addEventListener('dblclick', (e) => { if (!e.target.closest('button')) setWindowPanelMode(el, appSettings.windowStates[el.id]?.mode === 'maximized' ? 'normal' : 'maximized'); });
+    setupWindowPointerDrag(el, titlebar);
+    setupWindowPointerResize(el, resizeHandle);
+}
+
+function setupWindowPointerDrag(el, handle) {
+    handle.addEventListener('pointerdown', (e) => {
+        if (!appSettings.windowMode || e.target.closest('button')) return;
+        if (appSettings.windowStates[el.id]?.mode === 'maximized') return;
+        e.preventDefault(); focusWindowPanel(el);
+        const start = el.getBoundingClientRect(); const startX = e.clientX; const startY = e.clientY;
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+        const move = (ev) => {
+            const next = clampWindowRect({ top: start.top + ev.clientY - startY, left: start.left + ev.clientX - startX, width: start.width, height: start.height });
+            el.style.top = `${next.top}px`; el.style.left = `${next.left}px`;
+        };
+        const end = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end); saveWindowPanelRect(el); };
+        handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end);
     });
-    ro.observe(el);
+}
+
+function setupWindowPointerResize(el, handle) {
+    handle.addEventListener('pointerdown', (e) => {
+        if (!appSettings.windowMode || appSettings.windowStates[el.id]?.mode === 'maximized') return;
+        e.preventDefault(); e.stopPropagation(); focusWindowPanel(el);
+        const start = el.getBoundingClientRect(); const startX = e.clientX; const startY = e.clientY;
+        try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+        const move = (ev) => {
+            const next = clampWindowRect({ top: start.top, left: start.left, width: start.width + ev.clientX - startX, height: start.height + ev.clientY - startY });
+            el.style.width = `${next.width}px`; el.style.height = `${next.height}px`;
+        };
+        const end = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end); saveWindowPanelRect(el); };
+        handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end);
+    });
+}
+
+function saveWindowPanelRect(el) {
+    if (!appSettings.windowMode || appSettings.windowStates[el.id]?.mode !== 'normal') return;
+    const rect = clampWindowRect(el.getBoundingClientRect());
+    appSettings.windowPositions[el.id] = windowRectToCss(rect); saveSettings();
+}
+
+function focusWindowPanel(el) {
+    if (!appSettings.windowMode) return;
+    el.style.zIndex = String(++windowZCounter); updateWindowTaskbar(el.id);
+}
+
+function setWindowPanelMode(el, mode) {
+    appSettings.windowStates[el.id] = { mode };
+    applyWindowPanelState(el); saveSettings(); updateWindowTaskbar(mode === 'normal' || mode === 'maximized' ? el.id : null);
+}
+
+function applyWindowPanelState(el) {
+    const state = appSettings.windowStates[el.id] || { mode: 'normal' };
+    el.classList.toggle('window-minimized', state.mode === 'minimized');
+    el.classList.toggle('window-closed', state.mode === 'closed');
+    el.classList.toggle('window-maximized', state.mode === 'maximized');
+    if (state.mode === 'maximized') {
+        el.style.top = '0px'; el.style.left = '0px'; el.style.width = `${window.innerWidth}px`; el.style.height = `${Math.max(140, window.innerHeight - 44)}px`;
+    } else {
+        const fallback = cssWindowRect(getDefaultWindowRect(el.id, WINDOW_PANEL_IDS.indexOf(el.id)), { top: 10, left: 10, width: 360, height: 240 });
+        const rect = clampWindowRect(cssWindowRect(appSettings.windowPositions[el.id], fallback));
+        appSettings.windowPositions[el.id] = windowRectToCss(rect);
+        Object.assign(el.style, appSettings.windowPositions[el.id]);
+    }
+    if (state.mode === 'normal' || state.mode === 'maximized') focusWindowPanel(el);
+}
+
+function clampAllWindowPanels() {
+    if (!appSettings.windowMode) return;
+    WINDOW_PANEL_IDS.forEach(id => { const el = document.getElementById(id); if (el) applyWindowPanelState(el); });
+    saveSettings();
+}
+
+function ensureWindowTaskbar() {
+    let taskbar = document.getElementById('window-taskbar');
+    if (!taskbar) {
+        taskbar = document.createElement('div'); taskbar.id = 'window-taskbar'; taskbar.setAttribute('role', 'toolbar');
+        WINDOW_PANEL_IDS.forEach(id => {
+            const button = document.createElement('button'); button.type = 'button'; button.dataset.windowId = id; button.textContent = WINDOW_PANEL_TITLES[id];
+            button.addEventListener('click', () => { const el = document.getElementById(id); if (!el) return; setWindowPanelMode(el, 'normal'); focusWindowPanel(el); });
+            taskbar.appendChild(button);
+        });
+        const exit = document.createElement('button'); exit.type = 'button'; exit.className = 'window-exit'; exit.innerHTML = '<i class="fas fa-right-from-bracket"></i> 終了';
+        exit.addEventListener('click', () => { appSettings.windowMode = false; saveSettings(); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); });
+        taskbar.appendChild(exit); document.body.appendChild(taskbar);
+    }
+}
+
+function updateWindowTaskbar(activeId) {
+    const taskbar = document.getElementById('window-taskbar'); if (!taskbar) return;
+    taskbar.querySelectorAll('[data-window-id]').forEach(button => {
+        const id = button.dataset.windowId; const mode = appSettings.windowStates[id]?.mode || 'normal';
+        button.classList.toggle('active', id === activeId && mode !== 'closed' && mode !== 'minimized');
+        button.style.opacity = mode === 'closed' || mode === 'minimized' ? '0.62' : '1';
+    });
 }
 
 function applyThemeSettings() {
-    document.body.className = `theme-${appSettings.theme} ${document.body.className.match(/is-(pc|mobile)/)[0]}`;
+    const layoutClass = document.body.classList.contains('is-mobile') ? 'is-mobile' : 'is-pc';
+    document.body.className = `theme-${appSettings.theme} ${layoutClass}`;
     if (appSettings.forcePcLayout || appSettings.windowMode) document.body.classList.add('is-pc');
     if (appSettings.windowMode) document.body.classList.add('window-mode');
     
     document.body.classList.toggle('show-list-thumbnails', appSettings.showThumbnails);
     document.body.classList.toggle('performance-mode', appSettings.performanceMode);
+    document.body.classList.toggle('music-mode', Boolean(appSettings.musicMode));
     
     document.documentElement.style.setProperty('--base-font-size', `${appSettings.baseFontSize}%`); 
     document.documentElement.style.setProperty('--pc-left-width', `${appSettings.pcLeftWidth}px`);
@@ -289,6 +429,7 @@ function setupSettingsModal() {
         document.getElementById('set-default-sort').value = appSettings.defaultSortOrder || 'custom';
         
         document.getElementById('set-performance-mode').checked = appSettings.performanceMode; document.getElementById('set-data-saver').checked = appSettings.dataSaverMode;
+        document.getElementById('set-music-mode').checked = Boolean(appSettings.musicMode);
         document.getElementById('set-show-thumbnails').checked = appSettings.showThumbnails;
         document.getElementById('set-pocket-always-on').checked = appSettings.pocketAlwaysOn; document.getElementById('set-pocket-swipe-unlock').checked = appSettings.pocketSwipeUnlock;
         document.getElementById('set-force-pc-layout').checked = appSettings.forcePcLayout; document.getElementById('set-window-mode').checked = appSettings.windowMode;
@@ -303,11 +444,11 @@ function setupSettingsModal() {
     document.getElementById('btn-close-settings').onclick = () => modal.classList.add('hidden');
     document.getElementById('btn-reset-settings').onclick = () => { if (confirm('初期化しますか？')) { localStorage.removeItem('cms_player_settings_v23'); clearBgImageDB(); location.reload(); } };
     document.getElementById('btn-clear-bg').onclick = () => { clearBgImageDB(); alert('背景をクリアしました。Saveを押してください。'); };
-    document.getElementById('btn-reset-window').onclick = () => { appSettings.windowPositions = {}; alert('配置をリセットしました。Saveを押してください。'); };
+    document.getElementById('btn-reset-window').onclick = () => { appSettings.windowPositions = {}; appSettings.windowStates = {}; alert('配置をリセットしました。Saveを押してください。'); };
 
     document.getElementById('btn-save-settings').onclick = async () => {
         appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value; appSettings.bgSize = document.getElementById('set-bg-size').value; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
-        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
+        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         
         const fInput = document.getElementById('set-bg-img'); 
         if (fInput.files.length > 0) { await saveBgImageToDB(fInput.files[0]); }
@@ -466,11 +607,16 @@ function updateActiveTrackUI() {
     if (activeEl) {
         activeEl.classList.add('active'); activeEl.querySelector('.w-t-idx').classList.add('hidden'); activeEl.querySelector('.w-t-playing-icon').classList.remove('hidden');
         
-        setTimeout(() => { 
-            const cTop = trackListEl.scrollTop; const cHeight = trackListEl.clientHeight; const eTop = activeEl.offsetTop; const eHeight = activeEl.clientHeight; 
-            if (eTop < cTop || eTop + eHeight > cTop + cHeight) trackListEl.scrollTo({ top: eTop - (cHeight / 2) + (eHeight / 2), behavior: 'smooth' }); 
-        }, 100);
+        if (appSettings.autoScrollActiveTrack !== false) setTimeout(() => scrollActiveTrackInList(activeEl), 100);
     }
+}
+
+function scrollActiveTrackInList(activeEl) {
+    if (!activeEl || !trackListEl.clientHeight) return;
+    const listRect = trackListEl.getBoundingClientRect(); const itemRect = activeEl.getBoundingClientRect();
+    const desired = trackListEl.scrollTop + (itemRect.top - listRect.top) - (trackListEl.clientHeight - itemRect.height) / 2;
+    const max = Math.max(0, trackListEl.scrollHeight - trackListEl.clientHeight);
+    trackListEl.scrollTo({ top: Math.min(max, Math.max(0, desired)), behavior: 'smooth' });
 }
 
 // 🌟 編集モードとダウンロード
@@ -567,7 +713,14 @@ function handleSearch(e) { currentSearchQuery = e.target.value; buildLibrary(); 
 function handleSortChange(e) { currentSortOrder = e.target.value; buildLibrary(); selectFolder(currentFolderId || musicLibrary[0]?.id); }
 function handleNicoFilterChange(e) { excludeNico = e.target.checked; buildLibrary(); renderFolders(); selectFolder(currentFolderId || musicLibrary[0]?.id); }
 
-function setupPlayerControls() { document.getElementById('widget-btn-play').onclick = () => togglePlay(); document.getElementById('widget-btn-next').onclick = playNextVideo; document.getElementById('widget-btn-prev').onclick = playPrevVideo; }
+function setupPlayerControls() {
+    document.getElementById('widget-btn-play').onclick = () => togglePlay();
+    document.getElementById('widget-btn-next').onclick = playNextVideo;
+    document.getElementById('widget-btn-prev').onclick = playPrevVideo;
+    document.getElementById('pocket-btn-play').onclick = () => togglePlay();
+    document.getElementById('pocket-btn-next').onclick = playNextVideo;
+    document.getElementById('pocket-btn-prev').onclick = playPrevVideo;
+}
 function toggleFullscreen() { const pw = document.getElementById('widget-player'); if (!document.fullscreenElement && !document.webkitFullscreenElement) { if (pw.requestFullscreen) pw.requestFullscreen(); else if (pw.webkitRequestFullscreen) pw.webkitRequestFullscreen(); else document.body.classList.toggle('pseudo-fullscreen'); } else { if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); else document.body.classList.remove('pseudo-fullscreen'); } }
 
 function applyVolume() {
@@ -647,18 +800,52 @@ function updatePlayerUI(i) {
 function updatePlayPauseIcon() {
     document.getElementById('widget-play-icon').className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
     const mIcon = document.getElementById('m-header-play-icon'); if (mIcon) mIcon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
+    const pocketIcon = document.getElementById('pocket-play-icon'); if (pocketIcon) pocketIcon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+}
+
+function setupClockUI() {
+    const update = () => {
+        const now = new Date();
+        const time = now.toLocaleTimeString('ja-JP', { hour12: false });
+        const shortTime = time.slice(0, 5);
+        const date = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+        const clockTime = document.getElementById('clock-time'); if (clockTime) clockTime.textContent = time;
+        const clockDate = document.getElementById('clock-date'); if (clockDate) clockDate.textContent = date;
+        const pocketClock = document.getElementById('pocket-clock-text'); if (pocketClock) pocketClock.textContent = shortTime;
+    };
+    update(); setInterval(update, 1000);
 }
 
 function setupPocketMode() {
     const pOverlay = document.getElementById('pocket-overlay');
-    document.getElementById('btn-pocket-mode').addEventListener('click', () => { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen(); else if (document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen(); pOverlay.classList.remove('hidden'); });
-    let hTimer = null; let tStartY = 0;
-    function sHold(e) { pOverlay.classList.add('touch-holding'); if (e && e.touches) tStartY = e.touches[0].clientY; hTimer = setTimeout(unlock, 2000); }
-    function eHold() { pOverlay.classList.remove('touch-holding'); clearTimeout(hTimer); }
-    function unlock() { if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen(); else if (document.webkitExitFullscreen && document.webkitFullscreenElement) document.webkitExitFullscreen(); pOverlay.classList.add('hidden'); pOverlay.classList.remove('touch-holding'); clearTimeout(hTimer); }
-    pOverlay.addEventListener('mousedown', sHold); pOverlay.addEventListener('mouseup', eHold); pOverlay.addEventListener('mouseleave', eHold);
-    pOverlay.addEventListener('touchstart', sHold, {passive: true}); pOverlay.addEventListener('touchend', eHold, {passive: true}); pOverlay.addEventListener('touchcancel', eHold, {passive: true});
-    pOverlay.addEventListener('touchmove', (e) => { if (appSettings.pocketSwipeUnlock && tStartY && (tStartY - e.touches[0].clientY > 80)) unlock(); }, {passive: true});
+    let holdTimer = null; let startY = null; let activePointer = null;
+    const open = () => {
+        pOverlay.classList.remove('hidden'); document.body.classList.add('pocket-active');
+        const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+        if (request) { try { const result = request.call(document.documentElement); if (result?.catch) result.catch(() => {}); } catch (_) {} }
+    };
+    const cancelHold = () => { pOverlay.classList.remove('touch-holding'); clearTimeout(holdTimer); holdTimer = null; activePointer = null; startY = null; };
+    const unlock = () => {
+        cancelHold(); activePointer = null; startY = null;
+        pOverlay.classList.add('hidden'); document.body.classList.remove('pocket-active');
+        try {
+            const exit = document.exitFullscreen || document.webkitExitFullscreen;
+            if (exit && (document.fullscreenElement || document.webkitFullscreenElement)) { const result = exit.call(document); if (result?.catch) result.catch(() => {}); }
+        } catch (_) {}
+    };
+    document.getElementById('btn-pocket-mode').addEventListener('click', open);
+    document.getElementById('pocket-unlock-btn').addEventListener('click', (e) => { e.stopPropagation(); unlock(); });
+    pOverlay.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return;
+        activePointer = e.pointerId; startY = e.clientY; pOverlay.classList.add('touch-holding');
+        clearTimeout(holdTimer); holdTimer = setTimeout(unlock, 2000);
+    });
+    pOverlay.addEventListener('pointermove', (e) => {
+        if (activePointer !== e.pointerId || startY === null) return;
+        if (appSettings.pocketSwipeUnlock && (e.pointerType === 'touch' || e.pointerType === 'pen') && startY - e.clientY > 80) unlock();
+    });
+    pOverlay.addEventListener('pointerup', cancelHold);
+    pOverlay.addEventListener('pointercancel', cancelHold);
     pOverlay.addEventListener('contextmenu', e => e.preventDefault());
 }
