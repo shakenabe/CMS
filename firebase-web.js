@@ -215,8 +215,20 @@ async function syncCloud({ force = false } = {}) {
 }
 
 async function login() {
-  await signInWithPopup(auth, provider);
-  return syncCloud({ force: false });
+  try {
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+    console.info('[auth] login success', {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName
+    });
+    return await syncCloud({ force: false });
+  } catch (error) {
+    console.error('[auth] login failed', error);
+    updateStatus(`Firebaseエラー: ${error.code || error.message}`);
+    throw error;
+  }
 }
 
 window.CmsWebFirebase = {
@@ -231,7 +243,9 @@ window.CmsWebFirebase = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const bind = (id, handler) => document.getElementById(id)?.addEventListener('click', () => handler().catch(() => {}));
+  const bind = (id, handler) => document.getElementById(id)?.addEventListener('click', () => {
+    handler().catch(error => console.error(`[firebase-ui] ${id}`, error));
+  });
   bind('btn-cloud-login', login);
   bind('btn-cloud-login-settings', login);
   bind('btn-load-firebase', () => syncCloud({ force: true }));
