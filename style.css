@@ -174,6 +174,7 @@ body.is-mobile.mobile-list-focus #mobile-list-fullscreen-header {
     border-bottom: 1px solid var(--border-color); background: var(--bg-color);
 }
 #mobile-list-fullscreen-header .fs-title { font-weight: 700; }
+body.is-mobile.mobile-list-focus #mobile-list-fullscreen-header { cursor: pointer; touch-action: manipulation; }
 #mobile-list-close-btn { padding: 8px 12px; color: var(--text-color); background: transparent; border: 1px solid var(--border-color); }
 
 /* 編集モード時 (モバイル) */
@@ -199,6 +200,22 @@ body.theme-nerv .controls-main .play-btn { border: 1px solid var(--text-color); 
 
 /* 現行HTMLのプレイヤー操作レイアウト */
 #widget-clock { display: none !important; }
+body.is-pc.show-clock #widget-clock {
+    display: flex !important; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 150px; padding: 14px; flex: 0 0 auto;
+}
+body.window-mode.show-clock #widget-clock.wm-panel { display: flex !important; }
+.clock-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; width: 100%; height: 100%; }
+#clock-date { font-size: 0.82rem; opacity: 0.72; }
+#clock-time { font-size: 2.1rem; font-variant-numeric: tabular-nums; }
+#clock-time.digital2, #pocket-clock-text.digital2 { font-family: "Share Tech Mono", monospace; letter-spacing: 0.08em; text-shadow: 0 0 10px currentColor; }
+#list-toggle-wrapper { display: none !important; }
+.analog-clock { position: relative; width: 118px; height: 118px; border: 2px solid currentColor; border-radius: 50%; }
+.analog-clock .hand { position: absolute; left: 50%; bottom: 50%; width: 2px; background: currentColor; transform-origin: 50% 100%; transform: translateX(-50%) rotate(0deg); }
+.analog-clock .hour-hand { height: 29%; width: 4px; }
+.analog-clock .minute-hand { height: 39%; width: 3px; }
+.analog-clock .second-hand { height: 43%; background: var(--accent-color); }
+.analog-clock .center-dot { position: absolute; left: 50%; top: 50%; width: 9px; height: 9px; border-radius: 50%; background: currentColor; transform: translate(-50%, -50%); }
 .player-controls-inner { display: flex; align-items: center; gap: 15px; width: 100%; min-width: 0; }
 .widget-info-container { flex: 1; min-width: 0; }
 .widget-controls { display: flex; align-items: center; justify-content: center; position: relative; width: 100%; min-height: 60px; }
@@ -236,6 +253,7 @@ body.music-mode .widget-info-container { width: min(100%, 560px); }
 body.music-mode .widget-info { text-align: center; }
 body.is-mobile.music-mode #widget-controls { min-height: min(54dvh, 480px); overflow: hidden; }
 body.is-mobile.music-mode .widget-art { width: min(46vw, 210px); }
+body.is-mobile.music-mode .player-controls-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; }
 body.is-mobile.music-mode #right-pane { flex: 1; }
 
 .progress-area { display: flex; align-items: center; gap: 15px; width: 100%; }
@@ -306,7 +324,8 @@ body.window-mode #widget-library {
 body.window-mode .wm-panel {
     position: absolute !important; z-index: 100; overflow: hidden; min-width: 240px; min-height: 120px;
     display: flex !important; flex-direction: column; padding: 0 !important;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.55); background: rgba(var(--panel-rgb), 0.96); border: 1px solid var(--border-color);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.55); background: rgba(var(--panel-rgb), var(--panel-alpha));
+    backdrop-filter: blur(var(--panel-blur)); -webkit-backdrop-filter: blur(var(--panel-blur)); border: 1px solid var(--border-color);
 }
 body.window-mode .wm-panel > :not(.window-titlebar):not(.window-resize-handle) { min-height: 0; }
 body.window-mode .wm-panel > .w-track-list,
