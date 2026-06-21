@@ -66,7 +66,8 @@ button { border-radius: 0; }
     color: #fff; background: radial-gradient(circle at top, #26344d 0%, #0b1020 48%, #03050b 100%);
     overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;
 }
-#pocket-overlay::before { content: ""; position: absolute; inset: 0; background: rgba(0,0,0,0.22); pointer-events: none; }
+#pocket-overlay.use-background { background-image: var(--bg-image), radial-gradient(circle at top, #26344d 0%, #0b1020 48%, #03050b 100%); background-position: var(--bg-position), center; background-size: var(--bg-size), cover; background-repeat: no-repeat; }
+#pocket-overlay::before { content: ""; position: absolute; inset: 0; background: rgba(0,0,0,var(--pocket-dim, 0.35)); pointer-events: none; }
 .pocket-hint { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 1; text-align: center; font-size: 0.78rem; opacity: 0.72; }
 .pocket-content { position: relative; z-index: 1; width: min(92vw, 430px); max-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 #pocket-art { width: min(58vw, 260px); aspect-ratio: 1; object-fit: cover; border: 1px solid rgba(255,255,255,0.22); box-shadow: 0 18px 45px rgba(0,0,0,0.45); }
@@ -76,6 +77,16 @@ button { border-radius: 0; }
 .pocket-controls button { width: 52px; height: 52px; font-size: 1.15rem; }
 .pocket-controls .pocket-play-btn { width: 68px; height: 68px; border-radius: 50%; color: #000; background: #fff; font-size: 1.45rem; }
 .pocket-unlock-btn { margin-top: 22px; padding: 10px 18px; }
+#pocket-layout-done { position: fixed; right: max(16px, env(safe-area-inset-right)); bottom: max(16px, env(safe-area-inset-bottom)); z-index: 5; padding: 12px 16px; }
+#pocket-overlay.layout-editing { touch-action: none; }
+#pocket-overlay.layout-editing .pocket-hint { color: #fff; opacity: 1; }
+#pocket-overlay.layout-editing .pocket-content,
+#pocket-overlay.pocket-layout-custom .pocket-content { position: absolute; inset: 0; width: 100%; max-width: none; max-height: none; display: block; }
+#pocket-overlay.layout-editing .pocket-layout-item,
+#pocket-overlay.pocket-layout-custom .pocket-layout-item { position: absolute; margin: 0 !important; transform: translate(-50%, -50%); }
+#pocket-overlay.layout-editing .pocket-layout-item { outline: 2px dashed var(--accent-color); outline-offset: 5px; cursor: move; touch-action: none; }
+#pocket-overlay .pocket-layout-hidden { display: none !important; }
+#pocket-overlay.layout-editing .pocket-layout-hidden { display: block !important; opacity: 0.35; }
 #pocket-overlay.touch-holding .pocket-hint { color: var(--accent-color); animation: pulse-icon 0.6s infinite; }
 body.pocket-active { overflow: hidden !important; }
 
@@ -110,7 +121,6 @@ body.is-pc.edit-mode #widget-folder-list-wrapper { display: none !important; }
 /* ============================================================
    モバイルレイアウト (動画固定・リストのみスクロール)
 ============================================================ */
-body.is-mobile #widget-btn-fullscreen { display: none !important; }
 body.is-mobile #main-app { display: flex; flex-direction: column; height: 100%; width: 100%; }
 body.is-mobile .widget-container { display: flex; flex-direction: column; height: 100%; gap: 0; }
 body.is-mobile .pc-column { display: contents; } 
@@ -324,7 +334,7 @@ body.window-mode #widget-library {
 body.window-mode .wm-panel {
     position: absolute !important; z-index: 100; overflow: hidden; min-width: 240px; min-height: 120px;
     display: flex !important; flex-direction: column; padding: 0 !important;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.55); background: rgba(var(--panel-rgb), var(--panel-alpha));
+    box-shadow: 0 12px 32px rgba(0,0,0,0.55); background: rgba(var(--window-panel-rgb, var(--panel-rgb)), var(--window-panel-alpha, var(--panel-alpha)));
     backdrop-filter: blur(var(--panel-blur)); -webkit-backdrop-filter: blur(var(--panel-blur)); border: 1px solid var(--border-color);
 }
 body.window-mode .wm-panel > :not(.window-titlebar):not(.window-resize-handle) { min-height: 0; }
@@ -333,7 +343,7 @@ body.window-mode .wm-panel > .w-folder-list,
 body.window-mode .wm-panel > #player-container { flex: 1; }
 body.window-mode .window-titlebar {
     display: flex; align-items: center; flex: 0 0 34px; height: 34px; padding-left: 10px;
-    color: #fff; background: #1f4f8f; border-bottom: 1px solid rgba(255,255,255,0.22);
+    color: #fff; background: rgba(var(--window-title-rgb, 31, 79, 143), var(--window-title-alpha, 1)); border-bottom: 1px solid rgba(255,255,255,0.22);
     touch-action: none; cursor: move;
 }
 .window-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; }
@@ -350,7 +360,7 @@ body.window-mode #window-taskbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 8000; height: calc(44px + env(safe-area-inset-bottom));
     display: flex; align-items: flex-start; gap: 2px; padding-bottom: env(safe-area-inset-bottom); background: rgba(18,18,18,0.98); border-top: 1px solid rgba(255,255,255,0.15);
 }
-#window-taskbar button { height: 44px; min-width: 46px; padding: 0 12px; color: #fff; background: transparent; border: 0; border-bottom: 2px solid transparent; }
+#window-taskbar button { height: 44px; min-width: 46px; padding: 0 12px; color: #fff; background: transparent; border: 0; border-bottom: 2px solid transparent; touch-action: manipulation; }
 #window-taskbar button:hover, #window-taskbar button.active { background: rgba(255,255,255,0.13); border-bottom-color: var(--accent-color); }
 #window-taskbar .window-exit { margin-left: auto; background: #8b1e1e; }
 body.window-mode input, body.window-mode button, body.window-mode select, body.window-mode .w-track-list, body.window-mode .w-folder-list, body.window-mode .progress-container { cursor: default; }
@@ -368,7 +378,7 @@ body.window-mode #widget-player { min-width: min(300px, calc(100vw - 24px)); }
 @keyframes scroll-left-alternate { 0%, 15% { transform: translateX(0); } 45%, 55% { transform: translateX(calc(var(--parent-width) - 100%)); } 85%, 100% { transform: translateX(0); } }
 
 /* 設定モーダル */
-.settings-window { width: 500px; max-width: 90%; padding: 30px; display: flex; flex-direction: column; gap: 15px; border-radius: 0; }
+.settings-window { width: 500px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding: 30px; display: flex; flex-direction: column; gap: 15px; border-radius: 0; overflow: hidden; }
 .settings-tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 10px; }
 .tab-btn { flex: 1; background: transparent; border: none; color: var(--sub-text-color); padding: 10px; cursor: pointer; font-weight: bold; border-bottom: 2px solid transparent; transition: 0.2s; border-radius: 0; }
 .tab-btn.active { color: var(--text-color); border-bottom-color: var(--text-color); }
@@ -377,11 +387,30 @@ body.window-mode #widget-player { min-width: min(300px, calc(100vw - 24px)); }
 .setting-scroll-area { max-height: 60vh; overflow-y: auto; padding-right: 10px; display: flex; flex-direction: column; gap: 10px; }
 .setting-row { display: flex; flex-direction: column; gap: 5px; }
 .setting-row label { font-size: 0.9rem; font-weight: bold; color: var(--text-color); display: flex; align-items: center; gap: 8px; cursor: pointer;}
-.settings-actions { display: flex; gap: 10px; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color); }
+.settings-actions { display: flex; flex: 0 0 auto; gap: 10px; margin-top: 0; padding-top: 15px; padding-bottom: env(safe-area-inset-bottom); border-top: 1px solid var(--border-color); background: rgba(var(--panel-rgb), 0.96); position: sticky; bottom: 0; z-index: 3; }
 .settings-actions button { padding: 10px; font-weight: bold; border-radius: 0; }
 .setting-row input[type="file"] { padding: 5px; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-color); border-radius: 0; color: var(--text-color); }
 .setting-row input[type="range"] { accent-color: var(--text-color); }
 input[type="color"] { appearance: none; -webkit-appearance: none; background-color: transparent; border: 2px solid var(--border-color); border-radius: 0; width: 100%; height: 40px; padding: 0; cursor: pointer; }
+.setting-group { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-color); }
+.setting-group h3 { margin: 0 0 10px; font-size: 0.95rem; }
+.window-color-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pocket-visible-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin: 10px 0; }
+.pocket-visible-grid label { display: flex; align-items: center; gap: 7px; font-size: 0.82rem; }
+.pocket-layout-buttons { display: flex; gap: 8px; }
+.pocket-layout-buttons button { flex: 1; min-height: 40px; }
+.setting-help { display: block; margin-top: 7px; font-size: 0.72rem; opacity: 0.78; }
+@media (max-width: 600px), (max-height: 620px) {
+    #settings-modal { align-items: stretch; padding: max(6px, env(safe-area-inset-top)) 6px max(6px, env(safe-area-inset-bottom)); }
+    .settings-window { width: 100%; max-width: 100%; max-height: 100%; padding: 14px; gap: 8px; }
+    .settings-window h2 { font-size: 1.1rem; margin-bottom: 0 !important; }
+    .settings-tabs { margin-bottom: 2px; }
+    .setting-scroll-area { min-height: 0; }
+    .settings-actions { gap: 6px; flex-wrap: wrap; }
+    .settings-actions button { min-height: 44px; padding: 9px 6px; }
+    .window-color-grid { grid-template-columns: 1fr; }
+    .pocket-visible-grid { grid-template-columns: 1fr 1fr; }
+}
 input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
 input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0; }
 
