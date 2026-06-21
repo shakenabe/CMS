@@ -124,6 +124,7 @@ body.is-mobile #right-pane {
     background: rgba(0, 0, 0, 0.6); 
     backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
 }
+body.is-mobile #widget-library { display: flex; flex-direction: column; flex: 1; height: 100%; min-height: 0; overflow: hidden; }
 /* 軽量化ON時の背景（単色） */
 body.performance-mode.is-mobile #right-pane {
     background: var(--bg-color) !important;
