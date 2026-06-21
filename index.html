@@ -6,7 +6,7 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=202606212328">
+    <link rel="stylesheet" href="style.css?v=202606220015">
 </head>
 <body class="theme-modern is-pc">
 
@@ -224,6 +224,11 @@
                         <div style="flex:1;"><label>文字色</label><input type="color" id="set-accent-color" value="#00aaff"></div>
                         <div style="flex:1;"><label>枠線の色</label><input type="color" id="set-border-color" value="#ffffff"></div>
                     </div>
+                    <div class="setting-row">
+                        <label>ぼかしパネルの基調色</label>
+                        <input type="color" id="set-blur-base-color" value="#000000">
+                        <span style="font-size:0.75rem; opacity:0.8;">ぼかしが弱い時やパネル背景の基準色になります。</span>
+                    </div>
                     <div class="setting-row" style="display: flex; flex-direction: row; gap: 15px; margin-top: 10px;">
                         <div style="flex:1;"><label>文字サイズ: <span id="font-val">100</span>%</label><input type="range" id="set-font-size" min="80" max="150" step="5" value="100"></div>
                         <div style="flex:1;"><label>PC左パネル幅: <span id="pc-width-val">350</span>px</label><input type="range" id="set-pc-left-width" min="250" max="600" step="10" value="350"></div>
@@ -277,6 +282,6 @@
     </div>
 
     <script type="module" src="firebase-web.js"></script>
-    <script src="script.js?v=202606212328"></script>
+    <script src="script.js?v=202606220015"></script>
 </body>
 </html>
