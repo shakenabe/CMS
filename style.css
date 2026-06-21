@@ -155,6 +155,27 @@ body.is-mobile.edit-mode #widget-player, body.is-mobile.edit-mode #widget-contro
 .controls-main .play-btn { width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; background: var(--text-color); color: #000; border-radius: 0; }
 body.theme-nerv .controls-main .play-btn { border: 1px solid var(--text-color); background: transparent; color: var(--text-color); }
 
+/* 現行HTMLのプレイヤー操作レイアウト */
+#widget-clock { display: none !important; }
+.player-controls-inner { display: flex; align-items: center; gap: 15px; width: 100%; min-width: 0; }
+.widget-info-container { flex: 1; min-width: 0; }
+.widget-controls { display: flex; align-items: center; justify-content: center; position: relative; width: 100%; min-height: 60px; }
+.widget-controls .controls-main { justify-content: center; }
+.settings-btn {
+    position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+    width: 40px; height: 40px; padding: 0; display: flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--text-color); border: 1px solid var(--border-color);
+    font-size: 1rem; cursor: pointer;
+}
+.settings-btn:active { transform: translateY(-50%) scale(0.95); }
+
+body.is-mobile .player-controls-inner { display: block; }
+body.is-mobile .widget-info-container { width: 100%; }
+body.is-mobile .widget-controls { padding-inline: 36px; flex-wrap: nowrap; }
+body.is-mobile .controls-main { gap: clamp(8px, 3vw, 14px); flex-wrap: nowrap; }
+body.is-mobile .controls-main button { padding: 8px; flex: 0 0 auto; }
+body.is-mobile .settings-btn { width: 36px; height: 36px; }
+
 .progress-area { display: flex; align-items: center; gap: 15px; width: 100%; }
 .time-text { font-size: 0.9rem; opacity: 0.9; font-variant-numeric: tabular-nums; flex-shrink: 0; width: 45px; text-align: center;}
 .progress-container { flex: 1; height: 12px; background: rgba(255,255,255,0.2); cursor: pointer; position: relative; border-radius: 0; }
