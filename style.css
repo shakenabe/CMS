@@ -220,6 +220,377 @@ body.is-mobile .controls-main { gap: clamp(8px, 3vw, 14px); flex-wrap: nowrap; }
 body.is-mobile .controls-main button { padding: 8px; flex: 0 0 auto; }
 body.is-mobile .control-tool-btn { width: 34px; height: 34px; }
 
+/* 音楽モード: Safariが再生を停止しないよう、埋め込みは極小の描画状態で保持 */
+body.music-mode #widget-player {
+    display: block !important; position: fixed !important; left: 0 !important; top: 0 !important;
+    width: 2px !important; height: 2px !important; min-width: 0 !important; min-height: 0 !important;
+    opacity: 0.01; overflow: hidden; pointer-events: none; z-index: 0 !important; border: 0 !important; padding: 0 !important;
+}
+body.music-mode #widget-controls { flex: 1 1 auto; justify-content: center; }
+body.music-mode .player-controls-inner { flex-direction: column; justify-content: center; }
+body.music-mode .widget-art {
+    display: block !important; width: min(52vw, 260px); height: auto; aspect-ratio: 1;
+    object-fit: cover; border: 1px solid var(--border-color); box-shadow: 0 16px 34px rgba(0,0,0,0.35);
+}
+body.music-mode .widget-info-container { width: min(100%, 560px); }
+body.music-mode .widget-info { text-align: center; }
+body.is-mobile.music-mode #widget-controls { min-height: min(54dvh, 480px); overflow: hidden; }
+body.is-mobile.music-mode .widget-art { width: min(46vw, 210px); }
+body.is-mobile.music-mode #right-pane { flex: 1; }
+
+.progress-area { display: flex; align-items: center; gap: 15px; width: 100%; }
+.time-text { font-size: 0.9rem; opacity: 0.9; font-variant-numeric: tabular-nums; flex-shrink: 0; width: 45px; text-align: center;}
+.progress-container { flex: 1; height: 12px; background: rgba(255,255,255,0.2); cursor: pointer; position: relative; border-radius: 0; }
+.progress-bar { height: 100%; width: 0%; background: var(--text-color); pointer-events: none; transition: width 0.1s linear; border-radius: 0; }
+
+.widget-search { background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 0; padding: 8px 15px; color: var(--text-color); outline: none; flex: 1; min-width: 120px; font-size: 0.9rem;}
+select.widget-search option { background-color: var(--bg-color); color: var(--text-color); }
+
+.w-f-item { padding: 12px 15px; cursor: pointer; transition: 0.2s; border-left: 3px solid transparent; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-color); border-radius: 0; }
+.w-f-item:hover { background: rgba(255,255,255,0.1); }
+.w-f-item.active { background: rgba(255,255,255,0.2); font-weight: bold; border-left: 3px solid var(--text-color); color: var(--text-color); }
+
+.w-t-item { display: flex; align-items: center; padding: 12px 10px; cursor: pointer; transition: 0.2s; border-left: 3px solid transparent; color: var(--text-color); border-bottom: 1px solid rgba(255,255,255,0.05); border-radius: 0; }
+.w-t-item:hover { background: rgba(255,255,255,0.1); }
+.w-t-item.active { background: rgba(255,255,255,0.15); border-left: 3px solid var(--text-color); color: var(--text-color); }
+.w-t-item.active .track-title-text { color: var(--text-color); }
+
+body.theme-nerv .w-f-item.active, body.theme-nerv .w-t-item.active { background: var(--text-color); color: #000 !important; border-left: none; }
+body.theme-nerv .w-t-item.active .track-title-text, body.theme-nerv .w-t-item.active .track-artist-text { color: #000; }
+
+.w-t-idx { width: 25px; text-align: right; margin-right: 12px; opacity: 0.6; font-size: 0.85rem; flex-shrink: 0;}
+.w-t-playing-icon { display: flex; justify-content: center; align-items: center; width: 25px; margin-right: 12px; color: var(--text-color); animation: pulse-icon 1.5s infinite; flex-shrink: 0;}
+.w-t-thumb { width: 50px; height: 50px; object-fit: cover; margin-right: 12px; flex-shrink: 0; display: none; border-radius: 0; }
+body.show-list-thumbnails .w-t-thumb { display: block; }
+body.is-mobile .w-t-thumb { display: block; width: 60px; height: 60px; } 
+.w-t-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+.track-title-text { font-size: 1rem; font-weight: bold; transition: color 0.2s; }
+.track-artist-text { font-size: 0.8rem; opacity: 0.7; transition: color 0.2s; display: flex; align-items: center; gap: 5px; }
+
+/* スマホ用フォルダ選択モーダル内のアイテム */
+.m-f-item {
+    display: flex; justify-content: flex-start; align-items: center; gap: 10px;
+    padding: 15px 20px; border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 1.1rem; cursor: pointer; color: var(--text-color);
+}
+.m-f-item span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left;}
+.m-f-item .fa-check { color: var(--text-color); width: 20px; text-align: center; }
+.m-f-item .fa-music { font-size: 0.9rem; opacity: 0.6; margin-left: auto; }
+.m-f-item.active { color: var(--text-color); font-weight: bold; background: rgba(255,255,255,0.05); }
+
+/* 編集モード関連 */
+input[type="checkbox"] { appearance: none; -webkit-appearance: none; width: 22px; height: 22px; border: 2px solid var(--border-color); border-radius: 0; background-color: transparent; cursor: pointer; position: relative; margin: 0; flex-shrink:0; }
+input[type="checkbox"]:checked { background-color: var(--text-color); border-color: var(--text-color); }
+input[type="checkbox"]:checked::after { content: ''; position: absolute; top: 2px; left: 6px; width: 6px; height: 12px; border: solid var(--bg-color); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+
+#edit-action-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; padding: 15px 20px;
+    background: rgba(var(--panel-rgb), 0.95); border-top: 1px solid var(--border-color);
+    display: flex; align-items: center; justify-content: center; gap: 15px; z-index: 10000;
+}
+#edit-action-bar button { padding: 10px 20px; font-size: 1rem; }
+
+/* ウィンドウモード（5パネル独立・Windows風制御） */
+body.window-mode .widget-container,
+body.window-mode .library-lists-container,
+body.window-mode #left-pane,
+body.window-mode #right-pane {
+    display: block !important; position: static !important; width: 100%; height: 100%; overflow: visible; background: transparent;
+}
+/* backdrop-filterが作るスタッキングコンテキストへ子ウィンドウを閉じ込めない */
+body.window-mode #widget-library {
+    position: static !important; width: 100%; height: 100%; background: transparent !important;
+    border: 0 !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+.window-titlebar, #window-taskbar { display: none; }
+body.window-mode .wm-panel {
+    position: absolute !important; z-index: 100; overflow: hidden; min-width: 240px; min-height: 120px;
+    display: flex !important; flex-direction: column; padding: 0 !important;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.55); background: rgba(var(--panel-rgb), 0.96); border: 1px solid var(--border-color);
+}
+body.window-mode .wm-panel > :not(.window-titlebar):not(.window-resize-handle) { min-height: 0; }
+body.window-mode .wm-panel > .w-track-list,
+body.window-mode .wm-panel > .w-folder-list,
+body.window-mode .wm-panel > #player-container { flex: 1; }
+body.window-mode .window-titlebar {
+    display: flex; align-items: center; flex: 0 0 34px; height: 34px; padding-left: 10px;
+    color: #fff; background: #1f4f8f; border-bottom: 1px solid rgba(255,255,255,0.22);
+    touch-action: none; cursor: move;
+}
+.window-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; }
+.window-actions { align-self: stretch; display: flex; }
+.window-actions button { width: 42px; height: 100%; padding: 0; color: #fff; background: transparent; border: 0; font-size: 0.78rem; }
+.window-actions button:hover { background: rgba(255,255,255,0.16); }
+.window-actions .window-close:hover { background: #c42b1c; }
+.window-resize-handle { position: absolute; right: 0; bottom: 0; z-index: 3; width: 24px; height: 24px; cursor: nwse-resize; touch-action: none; }
+.window-resize-handle::after { content: ""; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid rgba(255,255,255,0.65); border-bottom: 2px solid rgba(255,255,255,0.65); }
+body.window-mode .wm-panel.window-minimized,
+body.window-mode .wm-panel.window-closed { display: none !important; }
+body.window-mode .wm-panel.window-maximized { border-width: 0; }
+body.window-mode #window-taskbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 8000; height: calc(44px + env(safe-area-inset-bottom));
+    display: flex; align-items: flex-start; gap: 2px; padding-bottom: env(safe-area-inset-bottom); background: rgba(18,18,18,0.98); border-top: 1px solid rgba(255,255,255,0.15);
+}
+#window-taskbar button { height: 44px; min-width: 46px; padding: 0 12px; color: #fff; background: transparent; border: 0; border-bottom: 2px solid transparent; }
+#window-taskbar button:hover, #window-taskbar button.active { background: rgba(255,255,255,0.13); border-bottom-color: var(--accent-color); }
+#window-taskbar .window-exit { margin-left: auto; background: #8b1e1e; }
+body.window-mode input, body.window-mode button, body.window-mode select, body.window-mode .w-track-list, body.window-mode .w-folder-list, body.window-mode .progress-container { cursor: default; }
+body.window-mode #widget-player { min-width: min(300px, calc(100vw - 24px)); }
+@media (pointer: coarse) {
+    body.window-mode .window-titlebar { height: 42px; flex-basis: 42px; }
+    body.window-mode .window-actions button { width: 46px; }
+    body.window-mode .window-resize-handle { width: 34px; height: 34px; }
+}
+
+/* マーキーアニメーション */
+.marquee-wrapper { overflow: hidden; white-space: nowrap; position: relative; width: 100%; }
+.marquee-content { display: inline-block; will-change: transform; }
+.is-marquee { animation: scroll-left-alternate 8s linear infinite; }
+@keyframes scroll-left-alternate { 0%, 15% { transform: translateX(0); } 45%, 55% { transform: translateX(calc(var(--parent-width) - 100%)); } 85%, 100% { transform: translateX(0); } }
+
+/* 設定モーダル */
+.settings-window { width: 500px; max-width: 90%; padding: 30px; display: flex; flex-direction: column; gap: 15px; border-radius: 0; }
+.settings-tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 10px; }
+.tab-btn { flex: 1; background: transparent; border: none; color: var(--sub-text-color); padding: 10px; cursor: pointer; font-weight: bold; border-bottom: 2px solid transparent; transition: 0.2s; border-radius: 0; }
+.tab-btn.active { color: var(--text-color); border-bottom-color: var(--text-color); }
+.tab-content { display: none; flex-direction: column; gap: 10px; }
+.tab-content.active { display: flex; }
+.setting-scroll-area { max-height: 60vh; overflow-y: auto; padding-right: 10px; display: flex; flex-direction: column; gap: 10px; }
+.setting-row { display: flex; flex-direction: column; gap: 5px; }
+.setting-row label { font-size: 0.9rem; font-weight: bold; color: var(--text-color); display: flex; align-items: center; gap: 8px; cursor: pointer;}
+.settings-actions { display: flex; gap: 10px; margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color); }
+.settings-actions button { padding: 10px; font-weight: bold; border-radius: 0; }
+.setting-row input[type="file"] { padding: 5px; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-color); border-radius: 0; color: var(--text-color); }
+.setting-row input[type="range"] { accent-color: var(--text-color); }
+input[type="color"] { appearance: none; -webkit-appearance: none; background-color: transparent; border: 2px solid var(--border-color); border-radius: 0; width: 100%; height: 40px; padding: 0; cursor: pointer; }
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+input[type="color"]::-webkit-color-swatch { border: none; border-radius: 0; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 0; }
+:root {
+    --bg-color: #0f172a; --panel-rgb: 255, 255, 255; --panel-alpha: 0.5; --panel-blur: 10px;
+    --border-color: rgba(255, 255, 255, 0.15); --text-color: #fff; --sub-text-color: rgba(255, 255, 255, 0.7);
+    --accent-color: #00aaff; --panel-shadow: 0 10px 30px rgba(0,0,0,0.3); --border-radius: 0px; 
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --base-font-size: 100%; --pc-left-width: 350px; --bg-image: none; --bg-position: center; --bg-size: cover;
+}
+
+body.theme-toyota {
+    --bg-color: #0a0a0c; --panel-rgb: 20, 25, 30; --border-color: #004488; --accent-color: #00aaff;
+    --panel-shadow: inset 0 0 10px rgba(0, 170, 255, 0.1); --border-radius: 0px;
+    --font-family: "Meiryo", "Hiragino Kaku Gothic Pro", sans-serif;
+}
+
+body.theme-nerv {
+    --bg-color: #000; --panel-rgb: 0, 0, 0; --border-color: #ff3300; --accent-color: #ff9d00;
+    --text-color: #ff9d00; --sub-text-color: rgba(255, 157, 0, 0.7);
+    --panel-shadow: 0 0 10px rgba(255, 51, 0, 0.3); --border-radius: 0px;
+    --font-family: "Hiragino Mincho ProN", "Hiragino Mincho Pro", "Yu Mincho", "MS PMincho", serif;
+}
+body.theme-nerv * { font-weight: bold; letter-spacing: 1px; }
+
+html { font-size: var(--base-font-size); }
+html, body {
+    margin: 0; padding: 0; width: 100%; font-family: var(--font-family); background-color: var(--bg-color);
+    background-image: var(--bg-image); background-position: var(--bg-position); background-size: var(--bg-size); background-repeat: no-repeat;
+    color: var(--text-color); user-select: none; overscroll-behavior: none; touch-action: manipulation; box-sizing: border-box;
+}
+*, *:before, *:after { box-sizing: inherit; }
+
+body.is-pc { height: 100dvh; overflow: hidden; }
+
+/* モバイル: 全体固定・リストのみスクロール */
+body.is-mobile { height: 100dvh; overflow: hidden; }
+
+.hidden { display: none !important; }
+.overflow-hidden { overflow: hidden; }
+
+.panel-glass {
+    background: rgba(var(--panel-rgb), var(--panel-alpha)); backdrop-filter: blur(var(--panel-blur)); -webkit-backdrop-filter: blur(var(--panel-blur));
+    border: 1px solid var(--border-color); border-radius: var(--border-radius); box-shadow: var(--panel-shadow);
+}
+body.performance-mode .panel-glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; background: var(--bg-color) !important; border: 1px solid var(--border-color); }
+body.performance-mode .is-marquee { animation: none !important; transform: none !important; }
+body.performance-mode .w-t-playing-icon { animation: none !important; }
+
+.theme-text { color: var(--text-color); }
+.theme-btn { background: var(--text-color); color: #000; border: 1px solid var(--border-color); border-radius: var(--border-radius); cursor: pointer; font-weight: bold; transition: 0.2s; }
+.theme-btn:hover { filter: brightness(1.2); }
+button { border-radius: 0; }
+
+.overlay-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.85); z-index: 9000; }
+.start-content { padding: 40px; text-align: center; } .start-content p { margin-bottom: 20px; }
+.custom-file-upload { display: inline-block; padding: 10px 20px; cursor: pointer; } #import-json { display: none; }
+.cloud-btn { display:block; margin:12px auto 0; padding:10px 20px; }
+.cloud-status { margin-top:8px; font-size:0.75rem; opacity:0.8; overflow-wrap:anywhere; }
+.cloud-action { flex:1; min-width:110px; padding:5px; font-size:0.8rem; }
+.btn-start { padding: 15px 30px; font-size: 1.2rem; }
+@keyframes pulse-icon { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* 画面ロック（Fullscreen APIが使えない環境でも固定レイヤーとして動作） */
+#pocket-overlay {
+    position: fixed; inset: 0; z-index: 12000; width: 100vw; height: 100dvh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom));
+    color: #fff; background: radial-gradient(circle at top, #26344d 0%, #0b1020 48%, #03050b 100%);
+    overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+#pocket-overlay::before { content: ""; position: absolute; inset: 0; background: rgba(0,0,0,0.22); pointer-events: none; }
+.pocket-hint { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 1; text-align: center; font-size: 0.78rem; opacity: 0.72; }
+.pocket-content { position: relative; z-index: 1; width: min(92vw, 430px); max-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+#pocket-art { width: min(58vw, 260px); aspect-ratio: 1; object-fit: cover; border: 1px solid rgba(255,255,255,0.22); box-shadow: 0 18px 45px rgba(0,0,0,0.45); }
+#pocket-title { width: 100%; max-height: 3.2em; overflow: hidden; overflow-wrap: anywhere; }
+.pocket-controls { display: flex; align-items: center; justify-content: center; gap: 24px; margin-top: 22px; }
+.pocket-controls button, .pocket-unlock-btn { border: 1px solid rgba(255,255,255,0.28); color: #fff; background: rgba(255,255,255,0.08); cursor: pointer; }
+.pocket-controls button { width: 52px; height: 52px; font-size: 1.15rem; }
+.pocket-controls .pocket-play-btn { width: 68px; height: 68px; border-radius: 50%; color: #000; background: #fff; font-size: 1.45rem; }
+.pocket-unlock-btn { margin-top: 22px; padding: 10px 18px; }
+#pocket-overlay.touch-holding .pocket-hint { color: var(--accent-color); animation: pulse-icon 0.6s infinite; }
+body.pocket-active { overflow: hidden !important; }
+
+/* ============================================================
+   PCレイアウト 
+============================================================ */
+body.is-pc #main-app { height: 100dvh; display: flex; flex-direction: column; }
+body.is-pc .widget-container { display: grid; grid-template-columns: var(--pc-left-width) 1fr; gap: 15px; width: 100%; height: 100%; padding: 15px; margin: 0; }
+body.is-pc #left-pane { display: flex; flex-direction: column; gap: 15px; height: 100%; overflow-y: auto; }
+body.is-pc #right-pane { display: flex; flex-direction: column; gap: 15px; height: 100%; overflow: hidden; }
+
+body.is-pc #widget-player { width: 100%; aspect-ratio: 16 / 9; flex-shrink: 0; }
+body.is-pc #widget-controls { padding: 20px 15px; display: flex; flex-direction: column; gap: 20px; flex-shrink: 0; }
+body.is-pc .widget-info-row { display: flex; gap: 15px; align-items: center; width: 100%; }
+body.is-pc .widget-art { width: 80px; height: 80px; border-radius: var(--border-radius); object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0; }
+body.is-pc .widget-info { flex: 1; text-align: left; }
+
+body.is-pc #library-nav-wrapper { padding: 10px 15px; flex-shrink: 0; }
+body.is-pc .library-lists-container { display: grid; grid-template-columns: 220px 1fr; gap: 15px; flex: 1; min-height: 0; }
+body.is-pc #widget-folder-list-wrapper, body.is-pc #widget-track-list-wrapper { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+body.is-pc .sidebar-header, body.is-pc .list-header { padding: 15px; font-weight: bold; border-bottom: 1px solid var(--border-color); flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;}
+body.is-pc .w-track-list, body.is-pc .w-folder-list { flex: 1; overflow-y: auto; min-height: 0; padding: 10px 0; }
+
+body.is-pc #mobile-tools-wrapper { display: none; }
+
+/* 編集モード時 (PC) */
+body.is-pc.edit-mode .widget-container { grid-template-columns: 1fr; }
+body.is-pc.edit-mode #left-pane { display: none !important; }
+body.is-pc.edit-mode .library-lists-container { grid-template-columns: 1fr; }
+body.is-pc.edit-mode #widget-folder-list-wrapper { display: none !important; }
+
+/* ============================================================
+   モバイルレイアウト (動画固定・リストのみスクロール)
+============================================================ */
+body.is-mobile #widget-btn-fullscreen { display: none !important; }
+body.is-mobile #main-app { display: flex; flex-direction: column; height: 100%; width: 100%; }
+body.is-mobile .widget-container { display: flex; flex-direction: column; height: 100%; gap: 0; }
+body.is-mobile .pc-column { display: contents; } 
+body.is-mobile .panel-glass { border-radius: 0; border: none; box-shadow: none; background: transparent; backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+body.is-mobile #widget-player { order: 1; width: 100%; aspect-ratio: 16 / 9; flex-shrink: 0; background: #000; z-index: 20; }
+body.is-mobile #widget-controls { order: 2; padding: 15px 15px; flex-shrink: 0; border-bottom: 1px solid rgba(255,255,255,0.1); background: var(--bg-color); z-index: 20; display: flex; flex-direction: column; gap: 15px; }
+body.is-mobile #right-pane { 
+    order: 3; display: flex; flex-direction: column; flex: 1; min-height: 0; 
+    /* 軽量化OFF時の背景（暗めの半透明） */
+    background: rgba(0, 0, 0, 0.6); 
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+body.is-mobile #widget-library { display: flex; flex-direction: column; flex: 1; height: 100%; min-height: 0; overflow: hidden; }
+/* 軽量化ON時の背景（単色） */
+body.performance-mode.is-mobile #right-pane {
+    background: var(--bg-color) !important;
+    backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+
+body.is-mobile .widget-info-row { display: flex; gap: 15px; align-items: center; width: 100%; }
+body.is-mobile .widget-art { display: none; } 
+body.is-mobile .widget-info { flex: 1; text-align: left; }
+
+/* モバイル コントロール中央配置 */
+body.is-mobile .controls-row { justify-content: center; position: relative; width: 100%; }
+body.is-mobile .player-right-controls { position: absolute; right: 0; top: 50%; transform: translateY(-50%); }
+
+body.is-mobile #mobile-tools-wrapper { display: flex; flex-direction: column; padding: 10px 15px; flex-shrink: 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+body.is-mobile .m-folder-header { display: flex; align-items: center; justify-content: space-between; gap: 15px; width: 100%; }
+body.is-mobile .m-play-btn-circle { width: 45px; height: 45px; background: var(--text-color); color: #000; display: flex; justify-content: center; align-items: center; font-size: 1.2rem; cursor: pointer; flex-shrink: 0; border-radius: 0; }
+body.is-mobile .m-folder-info { display: flex; flex-direction: column; flex: 1; cursor: pointer; min-width: 0; }
+body.is-mobile #btn-toggle-mobile-nav { background: transparent; border: none; font-size: 1.5rem; color: var(--text-color); cursor: pointer; padding: 10px 15px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;}
+
+body.is-mobile #library-nav-wrapper { display: none; padding: 10px 15px; flex-shrink: 0; }
+body.is-mobile.show-mobile-nav #library-nav-wrapper { display: block !important; }
+body.is-mobile .controls-wrapper { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+body.is-mobile .filter-option { background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: 10px; width: 100%; justify-content: center; }
+
+body.is-mobile .library-lists-container { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+body.is-mobile #widget-folder-list-wrapper { display: none; }
+body.is-mobile #widget-track-list-wrapper { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+body.is-mobile .list-header { padding: 10px 15px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
+body.is-mobile .w-track-list { flex: 1; overflow-y: auto; padding: 0 10px; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+
+/* モバイルでリストを操作した時だけ、リスト領域を画面全体へ展開 */
+body.is-mobile.mobile-list-focus #right-pane {
+    position: fixed !important; inset: 0 !important; z-index: 7000; width: 100vw; height: 100dvh;
+    background: var(--bg-color) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+body.is-mobile.mobile-list-focus #widget-library { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
+body.is-mobile.mobile-list-focus #mobile-tools-wrapper,
+body.is-mobile.mobile-list-focus #library-nav-wrapper { display: none !important; }
+body.is-mobile.mobile-list-focus .library-lists-container,
+body.is-mobile.mobile-list-focus #widget-track-list-wrapper { flex: 1; min-height: 0; }
+body.is-mobile.mobile-list-focus .w-track-list { height: 100%; padding-top: 4px; overscroll-behavior: contain; }
+#mobile-list-fullscreen-header { display: none; }
+body.is-mobile.mobile-list-focus #mobile-list-fullscreen-header {
+    display: flex !important; align-items: center; justify-content: space-between; flex: 0 0 auto;
+    min-height: 54px; padding: calc(8px + env(safe-area-inset-top)) 14px 8px;
+    border-bottom: 1px solid var(--border-color); background: var(--bg-color);
+}
+#mobile-list-fullscreen-header .fs-title { font-weight: 700; }
+#mobile-list-close-btn { padding: 8px 12px; color: var(--text-color); background: transparent; border: 1px solid var(--border-color); }
+
+/* 編集モード時 (モバイル) */
+body.is-mobile.edit-mode #widget-player, body.is-mobile.edit-mode #widget-controls { display: none !important; }
+
+/* ============================================================
+   共通コンポーネント 
+============================================================ */
+#player-container { width: 100%; height: 100%; background: #000; overflow: hidden; position: relative; }
+#player-container iframe { width: 100%; height: 100%; border: none; }
+
+#widget-title { font-size: 1.2rem; margin: 0 0 5px 0; }
+#widget-artist { font-size: 0.9rem; opacity: 0.8; margin: 0; }
+
+.controls-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.controls-main { display: flex; align-items: center; gap: 20px; }
+.player-right-controls { display: flex; align-items: center; gap: 15px; }
+
+.controls-main button, .player-right-controls button { background: transparent; border: none; color: var(--text-color); font-size: 1.5rem; cursor: pointer; transition: transform 0.1s; padding: 10px; border-radius: 0; }
+.controls-main button:active, .player-right-controls button:active { transform: scale(0.9); }
+.controls-main .play-btn { width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; background: var(--text-color); color: #000; border-radius: 0; }
+body.theme-nerv .controls-main .play-btn { border: 1px solid var(--text-color); background: transparent; color: var(--text-color); }
+
+/* 現行HTMLのプレイヤー操作レイアウト */
+#widget-clock { display: none !important; }
+.player-controls-inner { display: flex; align-items: center; gap: 15px; width: 100%; min-width: 0; }
+.widget-info-container { flex: 1; min-width: 0; }
+.widget-controls { display: flex; align-items: center; justify-content: center; position: relative; width: 100%; min-height: 60px; }
+.widget-controls .controls-main { justify-content: center; }
+.control-tools { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; }
+.control-tool-btn {
+    width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--text-color); border: 1px solid var(--border-color);
+    font-size: 0.95rem; cursor: pointer;
+}
+.control-tool-btn:active { transform: scale(0.94); }
+body.is-pc .controls-main { gap: 8px; }
+body.is-pc .controls-main button { padding: 6px; }
+
+body.is-mobile .player-controls-inner { display: block; }
+body.is-mobile .widget-info-container { width: 100%; }
+body.is-mobile .widget-controls { padding-inline: 72px; flex-wrap: nowrap; }
+body.is-mobile .controls-main { gap: clamp(8px, 3vw, 14px); flex-wrap: nowrap; }
+body.is-mobile .controls-main button { padding: 8px; flex: 0 0 auto; }
+body.is-mobile .control-tool-btn { width: 34px; height: 34px; }
+
 /* 音楽モード: 埋め込みプレイヤーは再生用に保持し、映像面だけ非表示 */
 body.music-mode #widget-player { display: none !important; }
 body.music-mode #widget-controls { flex: 1 1 auto; justify-content: center; }
