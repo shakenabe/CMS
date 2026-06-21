@@ -58,6 +58,27 @@ button { border-radius: 0; }
 .btn-start { padding: 15px 30px; font-size: 1.2rem; }
 @keyframes pulse-icon { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
+/* 画面ロック（Fullscreen APIが使えない環境でも固定レイヤーとして動作） */
+#pocket-overlay {
+    position: fixed; inset: 0; z-index: 12000; width: 100vw; height: 100dvh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: calc(24px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom));
+    color: #fff; background: radial-gradient(circle at top, #26344d 0%, #0b1020 48%, #03050b 100%);
+    overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+#pocket-overlay::before { content: ""; position: absolute; inset: 0; background: rgba(0,0,0,0.22); pointer-events: none; }
+.pocket-hint { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 1; text-align: center; font-size: 0.78rem; opacity: 0.72; }
+.pocket-content { position: relative; z-index: 1; width: min(92vw, 430px); max-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+#pocket-art { width: min(58vw, 260px); aspect-ratio: 1; object-fit: cover; border: 1px solid rgba(255,255,255,0.22); box-shadow: 0 18px 45px rgba(0,0,0,0.45); }
+#pocket-title { width: 100%; max-height: 3.2em; overflow: hidden; overflow-wrap: anywhere; }
+.pocket-controls { display: flex; align-items: center; justify-content: center; gap: 24px; margin-top: 22px; }
+.pocket-controls button, .pocket-unlock-btn { border: 1px solid rgba(255,255,255,0.28); color: #fff; background: rgba(255,255,255,0.08); cursor: pointer; }
+.pocket-controls button { width: 52px; height: 52px; font-size: 1.15rem; }
+.pocket-controls .pocket-play-btn { width: 68px; height: 68px; border-radius: 50%; color: #000; background: #fff; font-size: 1.45rem; }
+.pocket-unlock-btn { margin-top: 22px; padding: 10px 18px; }
+#pocket-overlay.touch-holding .pocket-hint { color: var(--accent-color); animation: pulse-icon 0.6s infinite; }
+body.pocket-active { overflow: hidden !important; }
+
 /* ============================================================
    PCレイアウト 
 ============================================================ */
@@ -134,6 +155,26 @@ body.is-mobile #widget-track-list-wrapper { display: flex; flex-direction: colum
 body.is-mobile .list-header { padding: 10px 15px; display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
 body.is-mobile .w-track-list { flex: 1; overflow-y: auto; padding: 0 10px; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
 
+/* モバイルでリストを操作した時だけ、リスト領域を画面全体へ展開 */
+body.is-mobile.mobile-list-focus #right-pane {
+    position: fixed !important; inset: 0 !important; z-index: 7000; width: 100vw; height: 100dvh;
+    background: var(--bg-color) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+}
+body.is-mobile.mobile-list-focus #widget-library { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
+body.is-mobile.mobile-list-focus #mobile-tools-wrapper,
+body.is-mobile.mobile-list-focus #library-nav-wrapper { display: none !important; }
+body.is-mobile.mobile-list-focus .library-lists-container,
+body.is-mobile.mobile-list-focus #widget-track-list-wrapper { flex: 1; min-height: 0; }
+body.is-mobile.mobile-list-focus .w-track-list { height: 100%; padding-top: 4px; overscroll-behavior: contain; }
+#mobile-list-fullscreen-header { display: none; }
+body.is-mobile.mobile-list-focus #mobile-list-fullscreen-header {
+    display: flex !important; align-items: center; justify-content: space-between; flex: 0 0 auto;
+    min-height: 54px; padding: calc(8px + env(safe-area-inset-top)) 14px 8px;
+    border-bottom: 1px solid var(--border-color); background: var(--bg-color);
+}
+#mobile-list-fullscreen-header .fs-title { font-weight: 700; }
+#mobile-list-close-btn { padding: 8px 12px; color: var(--text-color); background: transparent; border: 1px solid var(--border-color); }
+
 /* 編集モード時 (モバイル) */
 body.is-mobile.edit-mode #widget-player, body.is-mobile.edit-mode #widget-controls { display: none !important; }
 
@@ -161,20 +202,36 @@ body.theme-nerv .controls-main .play-btn { border: 1px solid var(--text-color); 
 .widget-info-container { flex: 1; min-width: 0; }
 .widget-controls { display: flex; align-items: center; justify-content: center; position: relative; width: 100%; min-height: 60px; }
 .widget-controls .controls-main { justify-content: center; }
-.settings-btn {
-    position: absolute; right: 0; top: 50%; transform: translateY(-50%);
-    width: 40px; height: 40px; padding: 0; display: flex; align-items: center; justify-content: center;
+.control-tools { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; }
+.control-tool-btn {
+    width: 36px; height: 36px; padding: 0; display: flex; align-items: center; justify-content: center;
     background: transparent; color: var(--text-color); border: 1px solid var(--border-color);
-    font-size: 1rem; cursor: pointer;
+    font-size: 0.95rem; cursor: pointer;
 }
-.settings-btn:active { transform: translateY(-50%) scale(0.95); }
+.control-tool-btn:active { transform: scale(0.94); }
+body.is-pc .controls-main { gap: 8px; }
+body.is-pc .controls-main button { padding: 6px; }
 
 body.is-mobile .player-controls-inner { display: block; }
 body.is-mobile .widget-info-container { width: 100%; }
-body.is-mobile .widget-controls { padding-inline: 36px; flex-wrap: nowrap; }
+body.is-mobile .widget-controls { padding-inline: 72px; flex-wrap: nowrap; }
 body.is-mobile .controls-main { gap: clamp(8px, 3vw, 14px); flex-wrap: nowrap; }
 body.is-mobile .controls-main button { padding: 8px; flex: 0 0 auto; }
-body.is-mobile .settings-btn { width: 36px; height: 36px; }
+body.is-mobile .control-tool-btn { width: 34px; height: 34px; }
+
+/* 音楽モード: 埋め込みプレイヤーは再生用に保持し、映像面だけ非表示 */
+body.music-mode #widget-player { display: none !important; }
+body.music-mode #widget-controls { flex: 1 1 auto; justify-content: center; }
+body.music-mode .player-controls-inner { flex-direction: column; justify-content: center; }
+body.music-mode .widget-art {
+    display: block !important; width: min(52vw, 260px); height: auto; aspect-ratio: 1;
+    object-fit: cover; border: 1px solid var(--border-color); box-shadow: 0 16px 34px rgba(0,0,0,0.35);
+}
+body.music-mode .widget-info-container { width: min(100%, 560px); }
+body.music-mode .widget-info { text-align: center; }
+body.is-mobile.music-mode #widget-controls { min-height: min(54dvh, 480px); overflow: hidden; }
+body.is-mobile.music-mode .widget-art { width: min(46vw, 210px); }
+body.is-mobile.music-mode #right-pane { flex: 1; }
 
 .progress-area { display: flex; align-items: center; gap: 15px; width: 100%; }
 .time-text { font-size: 0.9rem; opacity: 0.9; font-variant-numeric: tabular-nums; flex-shrink: 0; width: 45px; text-align: center;}
@@ -228,28 +285,52 @@ input[type="checkbox"]:checked::after { content: ''; position: absolute; top: 2p
 }
 #edit-action-bar button { padding: 10px 20px; font-size: 1rem; }
 
-/* ウィンドウモード（5パネル独立・自由配置・リサイズ） */
+/* ウィンドウモード（5パネル独立・Windows風制御） */
 body.window-mode .widget-container,
 body.window-mode .library-lists-container,
 body.window-mode #left-pane,
 body.window-mode #right-pane {
     display: block !important; position: static !important; width: 100%; height: 100%; overflow: visible; background: transparent;
 }
-body.window-mode .panel-glass { 
-    position: absolute !important; z-index: 100; resize: both; overflow: hidden; min-width: 250px; min-height: 100px; 
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
-    padding-top: 25px !important; /* ドラッグハンドルの確保 */
-    background: rgba(var(--panel-rgb), var(--panel-alpha));
+.window-titlebar, #window-taskbar { display: none; }
+body.window-mode .wm-panel {
+    position: absolute !important; z-index: 100; overflow: hidden; min-width: 240px; min-height: 120px;
+    display: flex !important; flex-direction: column; padding: 0 !important;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.55); background: rgba(var(--panel-rgb), 0.96); border: 1px solid var(--border-color);
 }
-/* ドラッグ用ハンドル（見た目） */
-body.window-mode .panel-glass::before {
-    content: "≡ DRAG ≡"; position: absolute; top: 0; left: 0; right: 0; height: 25px;
-    background: rgba(255,255,255,0.15); border-bottom: 1px solid var(--border-color);
-    display: flex; justify-content: center; align-items: center;
-    font-size: 10px; color: var(--text-color); opacity: 0.8; pointer-events: auto; cursor: move;
+body.window-mode .wm-panel > :not(.window-titlebar):not(.window-resize-handle) { min-height: 0; }
+body.window-mode .wm-panel > .w-track-list,
+body.window-mode .wm-panel > .w-folder-list,
+body.window-mode .wm-panel > #player-container { flex: 1; }
+body.window-mode .window-titlebar {
+    display: flex; align-items: center; flex: 0 0 34px; height: 34px; padding-left: 10px;
+    color: #fff; background: #1f4f8f; border-bottom: 1px solid rgba(255,255,255,0.22);
+    touch-action: none; cursor: move;
 }
+.window-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; }
+.window-actions { align-self: stretch; display: flex; }
+.window-actions button { width: 42px; height: 100%; padding: 0; color: #fff; background: transparent; border: 0; font-size: 0.78rem; }
+.window-actions button:hover { background: rgba(255,255,255,0.16); }
+.window-actions .window-close:hover { background: #c42b1c; }
+.window-resize-handle { position: absolute; right: 0; bottom: 0; z-index: 3; width: 24px; height: 24px; cursor: nwse-resize; touch-action: none; }
+.window-resize-handle::after { content: ""; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid rgba(255,255,255,0.65); border-bottom: 2px solid rgba(255,255,255,0.65); }
+body.window-mode .wm-panel.window-minimized,
+body.window-mode .wm-panel.window-closed { display: none !important; }
+body.window-mode .wm-panel.window-maximized { border-width: 0; }
+body.window-mode #window-taskbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 8000; height: calc(44px + env(safe-area-inset-bottom));
+    display: flex; align-items: flex-start; gap: 2px; padding-bottom: env(safe-area-inset-bottom); background: rgba(18,18,18,0.98); border-top: 1px solid rgba(255,255,255,0.15);
+}
+#window-taskbar button { height: 44px; min-width: 46px; padding: 0 12px; color: #fff; background: transparent; border: 0; border-bottom: 2px solid transparent; }
+#window-taskbar button:hover, #window-taskbar button.active { background: rgba(255,255,255,0.13); border-bottom-color: var(--accent-color); }
+#window-taskbar .window-exit { margin-left: auto; background: #8b1e1e; }
 body.window-mode input, body.window-mode button, body.window-mode select, body.window-mode .w-track-list, body.window-mode .w-folder-list, body.window-mode .progress-container { cursor: default; }
-body.window-mode #widget-player { min-width: 300px; }
+body.window-mode #widget-player { min-width: min(300px, calc(100vw - 24px)); }
+@media (pointer: coarse) {
+    body.window-mode .window-titlebar { height: 42px; flex-basis: 42px; }
+    body.window-mode .window-actions button { width: 46px; }
+    body.window-mode .window-resize-handle { width: 34px; height: 34px; }
+}
 
 /* マーキーアニメーション */
 .marquee-wrapper { overflow: hidden; white-space: nowrap; position: relative; width: 100%; }
