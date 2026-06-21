@@ -32,6 +32,12 @@
                 <div class="progress-container"><div class="progress-bar" id="pocket-progress-bar"></div></div>
                 <span id="pocket-time-duration" class="time-text">0:00</span>
             </div>
+            <div class="pocket-controls" aria-label="ロック画面の再生操作">
+                <button id="pocket-btn-prev" type="button" aria-label="前の曲"><i class="fas fa-backward-step"></i></button>
+                <button id="pocket-btn-play" type="button" class="pocket-play-btn" aria-label="再生・一時停止"><i class="fas fa-play" id="pocket-play-icon"></i></button>
+                <button id="pocket-btn-next" type="button" aria-label="次の曲"><i class="fas fa-forward-step"></i></button>
+            </div>
+            <button id="pocket-unlock-btn" type="button" class="pocket-unlock-btn"><i class="fas fa-unlock"></i> ロック解除</button>
         </div>
     </div>
 
@@ -95,9 +101,11 @@
                                     <button id="widget-btn-play" class="play-btn theme-btn"><i class="fas fa-play" id="widget-play-icon"></i></button>
                                     <button id="widget-btn-next"><i class="fas fa-forward-step"></i></button>
                                     <button id="widget-btn-fullscreen"><i class="fas fa-expand"></i></button>
-                                    <button id="btn-pocket-mode" style="color:var(--accent-color); margin-left: 10px;"><i class="fas fa-lock"></i></button>
                                 </div>
-                                <button id="btn-open-settings" class="settings-btn"><i class="fas fa-cog"></i></button>
+                                <div class="control-tools">
+                                    <button id="btn-pocket-mode" class="control-tool-btn" aria-label="画面ロック"><i class="fas fa-lock"></i></button>
+                                    <button id="btn-open-settings" class="settings-btn control-tool-btn" aria-label="設定"><i class="fas fa-cog"></i></button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -108,11 +116,8 @@
             <div id="right-pane" class="pc-column">
                 <div id="widget-library" class="panel-glass">
                     <div id="mobile-list-fullscreen-header" class="hidden">
-                        <div style="flex:1;"></div>
-                        <span class="fs-title">完了</span>
-                        <div style="flex:1; text-align:right;">
-                            <button id="mobile-list-close-btn"><i class="fas fa-chevron-down"></i></button>
-                        </div>
+                        <span class="fs-title"><i class="fas fa-list"></i> 動画リスト</span>
+                        <button id="mobile-list-close-btn" type="button" aria-label="動画リストを閉じる"><i class="fas fa-chevron-down"></i> 完了</button>
                     </div>
 
                     <div id="mobile-tools-wrapper">
