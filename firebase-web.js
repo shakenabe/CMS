@@ -8,7 +8,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-lite.js';
 
 const firebaseConfig = Object.freeze({
-  apiKey: 'AIzaSyCI9q0ulhG-LVLqqNKxpRVlnntRB1RhxkE',
+  apiKey: 'AIzaSyBEHDu0Y8Gnu-Cf9bkgIcrJ9HhL1OYJGUY',
   authDomain: 'cms-sync-test.firebaseapp.com',
   projectId: 'cms-sync-test',
   storageBucket: 'cms-sync-test.firebasestorage.app',
