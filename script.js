@@ -403,9 +403,17 @@ function selectFolder(id) {
     const f = musicLibrary.find(f => f.id === id); 
     if (f) { 
         const name = f.name.replace('📁 ', '').replace('📚 ', '');
-        document.getElementById('current-folder-title').textContent = name;
-        document.getElementById('current-folder-name').innerHTML = `${name} <i class="fas fa-chevron-down" style="font-size:0.8rem; opacity:0.7; margin-left:5px;"></i>`; 
-        document.getElementById('current-folder-count').textContent = `${f.songs.length}件のアイテム`; 
+        const folderTitle = document.getElementById('current-folder-title');
+        const folderName = document.getElementById('current-folder-name');
+        const folderCount = document.getElementById('current-folder-count');
+        if (folderTitle) folderTitle.textContent = name;
+        if (folderName) {
+            const icon = document.createElement('i');
+            icon.className = 'fas fa-chevron-down';
+            icon.style.cssText = 'font-size:0.8rem; opacity:0.7; margin-left:5px;';
+            folderName.replaceChildren(document.createTextNode(name), icon);
+        }
+        if (folderCount) folderCount.textContent = `${f.songs.length}件のアイテム`;
     }
     selectedItems.clear(); updateEditBar();
     renderTracks(f ? f.songs :[]);
@@ -531,22 +539,28 @@ function setupEditMode() {
         selectedItems.clear(); buildLibrary(); selectFolder(currentFolderId || '__all'); alert('移動しました');
     };
 }
-function updateEditBar() { document.getElementById('edit-count').textContent = `${selectedItems.size}件`; }
+function updateEditBar() {
+    const editCount = document.getElementById('edit-count');
+    if (editCount) editCount.textContent = `${selectedItems.size}件`;
+}
 function populateEditFolders() {
     const selEdit = document.getElementById('edit-folder-target'); 
-    selEdit.innerHTML = '<option value="">移動先...</option>';
-    
     const selFilter = document.getElementById('widget-folder-select');
-    selFilter.innerHTML = '';
-    
+    if (!selEdit && !selFilter) return;
+
+    if (selEdit) selEdit.innerHTML = '<option value="">移動先...</option>';
+    if (selFilter) selFilter.innerHTML = '';
+
     musicLibrary.forEach(f => { 
-        if(f.id !== '__all') { 
+        if(selEdit && f.id !== '__all') {
             const opt1 = document.createElement('option'); opt1.value = f.id; opt1.textContent = f.name.replace('📁 ', ''); selEdit.appendChild(opt1); 
         }
-        const opt2 = document.createElement('option'); opt2.value = f.id; opt2.textContent = f.name; selFilter.appendChild(opt2);
+        if (selFilter) {
+            const opt2 = document.createElement('option'); opt2.value = f.id; opt2.textContent = f.name; selFilter.appendChild(opt2);
+        }
     });
-    
-    if(currentFolderId) selFilter.value = currentFolderId;
+
+    if(currentFolderId && selFilter) selFilter.value = currentFolderId;
 }
 
 function handleSearch(e) { currentSearchQuery = e.target.value; buildLibrary(); renderFolders(); selectFolder(currentFolderId || musicLibrary[0]?.id); }
