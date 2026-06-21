@@ -6,14 +6,14 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=202606220015">
+    <link rel="stylesheet" href="style.css?v=202606220200">
 </head>
 <body class="theme-modern is-pc">
 
     <!-- ポケットモード（疑似バックグラウンド）オーバーレイ -->
     <div id="pocket-overlay" class="hidden">
         <div class="pocket-hint"><i class="fas fa-lock"></i> 2秒長押し または 上スワイプで解除</div>
-        <div class="pocket-content">
+        <div class="pocket-content" id="pocket-content">
             <div id="pocket-clock-container" style="margin-bottom: 20px;">
                 <div id="pocket-clock-text" class="theme-text digital1" style="font-size: 4rem;">00:00</div>
                 <div id="pocket-analog-clock" class="analog-clock hidden">
@@ -27,18 +27,19 @@
             <img id="pocket-art" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>">
             <h2 id="pocket-title" class="theme-text" style="text-align: center; margin-top: 15px; font-size: 1.2rem; padding: 0 20px;">Not Playing</h2>
             
-            <div class="progress-area" style="width: 80%; max-width: 300px; margin-top: 15px;">
+            <div class="progress-area" id="pocket-progress-area" style="width: 80%; max-width: 300px; margin-top: 15px;">
                 <span id="pocket-time-current" class="time-text">0:00</span>
                 <div class="progress-container"><div class="progress-bar" id="pocket-progress-bar"></div></div>
                 <span id="pocket-time-duration" class="time-text">0:00</span>
             </div>
-            <div class="pocket-controls" aria-label="ロック画面の再生操作">
+            <div class="pocket-controls" id="pocket-controls" aria-label="ロック画面の再生操作">
                 <button id="pocket-btn-prev" type="button" aria-label="前の曲"><i class="fas fa-backward-step"></i></button>
                 <button id="pocket-btn-play" type="button" class="pocket-play-btn" aria-label="再生・一時停止"><i class="fas fa-play" id="pocket-play-icon"></i></button>
                 <button id="pocket-btn-next" type="button" aria-label="次の曲"><i class="fas fa-forward-step"></i></button>
             </div>
             <button id="pocket-unlock-btn" type="button" class="pocket-unlock-btn"><i class="fas fa-unlock"></i> ロック解除</button>
         </div>
+        <button id="pocket-layout-done" type="button" class="theme-btn hidden"><i class="fas fa-check"></i> 配置を保存して終了</button>
     </div>
 
     <div id="import-screen" class="overlay-screen">
@@ -100,7 +101,6 @@
                                     <button id="widget-btn-prev"><i class="fas fa-backward-step"></i></button>
                                     <button id="widget-btn-play" class="play-btn theme-btn"><i class="fas fa-play" id="widget-play-icon"></i></button>
                                     <button id="widget-btn-next"><i class="fas fa-forward-step"></i></button>
-                                    <button id="widget-btn-fullscreen"><i class="fas fa-expand"></i></button>
                                 </div>
                                 <div class="control-tools">
                                     <button id="btn-pocket-mode" class="control-tool-btn" aria-label="画面ロック"><i class="fas fa-lock"></i></button>
@@ -229,6 +229,16 @@
                         <input type="color" id="set-blur-base-color" value="#000000">
                         <span style="font-size:0.75rem; opacity:0.8;">ぼかしが弱い時やパネル背景の基準色になります。</span>
                     </div>
+                    <div class="setting-group window-style-settings">
+                        <h3>ウィンドウモードの外観</h3>
+                        <div class="setting-row"><label><input type="checkbox" id="set-window-colors-linked"> パネルとタイトルバーの色・透明度を連動</label></div>
+                        <div class="setting-row window-color-grid">
+                            <div><label>ウィンドウ内の色</label><input type="color" id="set-window-panel-color" value="#000000"></div>
+                            <div><label>内側の透明度: <span id="window-panel-alpha-val">55</span>%</label><input type="range" id="set-window-panel-alpha" min="10" max="100" value="55"></div>
+                            <div><label>タイトルバーの色</label><input type="color" id="set-window-title-color" value="#1f4f8f"></div>
+                            <div><label>見出しの透明度: <span id="window-title-alpha-val">100</span>%</label><input type="range" id="set-window-title-alpha" min="10" max="100" value="100"></div>
+                        </div>
+                    </div>
                     <div class="setting-row" style="display: flex; flex-direction: row; gap: 15px; margin-top: 10px;">
                         <div style="flex:1;"><label>文字サイズ: <span id="font-val">100</span>%</label><input type="range" id="set-font-size" min="80" max="150" step="5" value="100"></div>
                         <div style="flex:1;"><label>PC左パネル幅: <span id="pc-width-val">350</span>px</label><input type="range" id="set-pc-left-width" min="250" max="600" step="10" value="350"></div>
@@ -265,6 +275,24 @@
                             <option value="none">非表示</option>
                         </select>
                     </div>
+                    <div class="setting-group pocket-layout-settings">
+                        <h3>ロック画面の背景・レイアウト</h3>
+                        <div class="setting-row"><label><input type="checkbox" id="set-pocket-use-background"> 通常画面と同じ背景画像を表示</label></div>
+                        <div class="setting-row"><label>背景の暗さ: <span id="pocket-dim-val">35</span>%</label><input type="range" id="set-pocket-bg-dim" min="0" max="90" value="35"></div>
+                        <div class="pocket-visible-grid">
+                            <label><input type="checkbox" id="set-pocket-show-clock"> 時計</label>
+                            <label><input type="checkbox" id="set-pocket-show-art"> サムネイル</label>
+                            <label><input type="checkbox" id="set-pocket-show-title"> 曲名</label>
+                            <label><input type="checkbox" id="set-pocket-show-progress"> 進捗</label>
+                            <label><input type="checkbox" id="set-pocket-show-controls"> 再生操作</label>
+                            <label><input type="checkbox" id="set-pocket-show-unlock"> 解除ボタン</label>
+                        </div>
+                        <div class="pocket-layout-buttons">
+                            <button id="btn-edit-pocket-layout" type="button" class="theme-btn">画面上で配置を編集</button>
+                            <button id="btn-reset-pocket-layout" type="button">標準配置へ戻す</button>
+                        </div>
+                        <span class="setting-help">配置編集では各要素をドラッグ／タッチ移動できます。端末サイズが変わっても画面内に収まる比率で保存します。</span>
+                    </div>
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
                         <label>ニコニコ音量ブースト: <span id="boost-val">1.0</span>x</label>
                         <input type="range" id="set-nico-boost" min="1" max="5" step="0.5" value="1">
@@ -282,6 +310,6 @@
     </div>
 
     <script type="module" src="firebase-web.js"></script>
-    <script src="script.js?v=202606220015"></script>
+    <script src="script.js?v=202606220200"></script>
 </body>
 </html>
