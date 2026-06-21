@@ -1,8 +1,8 @@
 const defaultSettings = {
     theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, nicoBoost: 1.0,
-    baseFontSize: 100, pcLeftWidth: 350, showClock: false, showThumbnails: true,
+    baseFontSize: 100, pcLeftWidth: 350, showClock: false, clockType: 'digital1', pocketClockType: 'digital1', showThumbnails: true,
     performanceMode: false, dataSaverMode: false,
-    customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff',
+    customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff', blurBaseColor: '#000000',
     pocketAlwaysOn: false, pocketSwipeUnlock: true, forcePcLayout: false,
     musicMode: false, autoScrollActiveTrack: true,
     windowMode: false, windowPositions: {}, windowStates: {},
@@ -224,13 +224,13 @@ function setupMobileTrackListFocus() {
     const clearPointer = () => { pointerStart = null; };
     trackListEl.addEventListener('pointerup', clearPointer, { passive: true });
     trackListEl.addEventListener('pointercancel', clearPointer, { passive: true });
-    closeButton?.addEventListener('click', close);
+    header?.addEventListener('click', (e) => { e.stopPropagation(); close(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('mobile-list-focus')) close(); });
 }
 
-const WINDOW_PANEL_IDS = ['widget-player', 'widget-controls', 'widget-folder-list-wrapper', 'widget-track-list-wrapper', 'library-nav-wrapper'];
+const WINDOW_PANEL_IDS = ['widget-player', 'widget-controls', 'widget-clock', 'widget-folder-list-wrapper', 'widget-track-list-wrapper', 'library-nav-wrapper'];
 const WINDOW_PANEL_TITLES = {
-    'widget-player': 'Player', 'widget-controls': 'Now Playing', 'widget-folder-list-wrapper': 'Folders',
+    'widget-player': 'Player', 'widget-controls': 'Now Playing', 'widget-clock': 'Clock', 'widget-folder-list-wrapper': 'Folders',
     'widget-track-list-wrapper': 'Tracks', 'library-nav-wrapper': 'Library Tools'
 };
 
@@ -265,6 +265,7 @@ function getDefaultWindowRect(id, index) {
     const wideDefaults = {
         'widget-player': { top: 16, left: 16, width: 450, height: 300 },
         'widget-controls': { top: 332, left: 16, width: 450, height: 210 },
+        'widget-clock': { top: 558, left: 16, width: 450, height: 160 },
         'widget-folder-list-wrapper': { top: 16, left: 482, width: 250, height: 526 },
         'widget-track-list-wrapper': { top: 16, left: 748, width: 410, height: 526 },
         'library-nav-wrapper': { top: 558, left: 482, width: 676, height: 130 }
@@ -409,9 +410,16 @@ function updateWindowTaskbar(activeId) {
     const taskbar = document.getElementById('window-taskbar'); if (!taskbar) return;
     taskbar.querySelectorAll('[data-window-id]').forEach(button => {
         const id = button.dataset.windowId; const mode = appSettings.windowStates[id]?.mode || 'normal';
+        if (id === 'widget-clock') button.style.display = appSettings.showClock ? '' : 'none';
         button.classList.toggle('active', id === activeId && mode !== 'closed' && mode !== 'minimized');
         button.style.opacity = mode === 'closed' || mode === 'minimized' ? '0.62' : '1';
     });
+}
+
+function hexToRgbString(hex) {
+    const normalized = String(hex || '#000000').replace('#', '');
+    const value = normalized.length === 3 ? normalized.split('').map(c => c + c).join('') : normalized.padEnd(6, '0').slice(0, 6);
+    return `${parseInt(value.slice(0, 2), 16)}, ${parseInt(value.slice(2, 4), 16)}, ${parseInt(value.slice(4, 6), 16)}`;
 }
 
 function applyThemeSettings() {
@@ -423,6 +431,7 @@ function applyThemeSettings() {
     document.body.classList.toggle('show-list-thumbnails', appSettings.showThumbnails);
     document.body.classList.toggle('performance-mode', appSettings.performanceMode);
     document.body.classList.toggle('music-mode', Boolean(appSettings.musicMode));
+    document.body.classList.toggle('show-clock', Boolean(appSettings.showClock) && document.body.classList.contains('is-pc'));
     
     document.documentElement.style.setProperty('--base-font-size', `${appSettings.baseFontSize}%`); 
     document.documentElement.style.setProperty('--pc-left-width', `${appSettings.pcLeftWidth}px`);
@@ -430,8 +439,10 @@ function applyThemeSettings() {
     
     if (appSettings.customColorEnabled) { document.body.style.setProperty('--text-color', appSettings.customAccentColor); document.body.style.setProperty('--accent-color', appSettings.customAccentColor); document.body.style.setProperty('--border-color', appSettings.customBorderColor); } 
     else { document.body.style.removeProperty('--text-color'); document.body.style.removeProperty('--accent-color'); document.body.style.removeProperty('--border-color'); }
+    document.body.style.setProperty('--panel-rgb', hexToRgbString(appSettings.blurBaseColor || '#000000'));
+    document.body.style.setProperty('--bg-color', appSettings.blurBaseColor || '#000000');
     
-    const op = parseFloat(appSettings.bgOpacity); document.documentElement.style.setProperty('--panel-alpha', (100 - op) / 100 * 0.8); document.documentElement.style.setProperty('--panel-blur', appSettings.performanceMode ? '0px' : `${((100 - op) / 100 * 20)}px`);
+    const op = parseFloat(appSettings.bgOpacity); const panelAlpha = 0.12 + ((100 - op) / 100 * 0.68); document.documentElement.style.setProperty('--panel-alpha', panelAlpha); document.documentElement.style.setProperty('--panel-blur', appSettings.performanceMode ? '0px' : `${((100 - op) / 100 * 20)}px`);
     const pOverlay = document.getElementById('pocket-overlay'); if (appSettings.pocketAlwaysOn) pOverlay.classList.add('always-on'); else pOverlay.classList.remove('always-on');
 }
 
@@ -450,10 +461,13 @@ function setupSettingsModal() {
         document.getElementById('set-performance-mode').checked = appSettings.performanceMode; document.getElementById('set-data-saver').checked = appSettings.dataSaverMode;
         document.getElementById('set-music-mode').checked = Boolean(appSettings.musicMode);
         document.getElementById('set-show-thumbnails').checked = appSettings.showThumbnails;
+        document.getElementById('set-show-clock').checked = Boolean(appSettings.showClock);
+        document.getElementById('set-clock-type').value = appSettings.clockType || 'digital1';
+        document.getElementById('set-pocket-clock-type').value = appSettings.pocketClockType || 'digital1';
         document.getElementById('set-pocket-always-on').checked = appSettings.pocketAlwaysOn; document.getElementById('set-pocket-swipe-unlock').checked = appSettings.pocketSwipeUnlock;
         document.getElementById('set-force-pc-layout').checked = appSettings.forcePcLayout; document.getElementById('set-window-mode').checked = appSettings.windowMode;
         document.getElementById('set-use-firebase').checked = Boolean(appSettings.useFirebase);
-        document.getElementById('set-use-custom-color').checked = appSettings.customColorEnabled; document.getElementById('set-accent-color').value = appSettings.customAccentColor; document.getElementById('set-border-color').value = appSettings.customBorderColor;
+        document.getElementById('set-use-custom-color').checked = appSettings.customColorEnabled; document.getElementById('set-accent-color').value = appSettings.customAccentColor; document.getElementById('set-border-color').value = appSettings.customBorderColor; document.getElementById('set-blur-base-color').value = appSettings.blurBaseColor || '#000000';
         modal.classList.remove('hidden');
     };
 
@@ -467,7 +481,7 @@ function setupSettingsModal() {
 
     document.getElementById('btn-save-settings').onclick = async () => {
         appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value; appSettings.bgSize = document.getElementById('set-bg-size').value; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
-        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
+        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         
         const fInput = document.getElementById('set-bg-img'); 
         if (fInput.files.length > 0) { await saveBgImageToDB(fInput.files[0]); }
@@ -825,14 +839,30 @@ function updatePlayPauseIcon() {
 }
 
 function setupClockUI() {
+    const setHands = (clock, now) => {
+        if (!clock) return;
+        const seconds = now.getSeconds(); const minutes = now.getMinutes() + seconds / 60; const hours = (now.getHours() % 12) + minutes / 60;
+        const hour = clock.querySelector('.hour-hand'); const minute = clock.querySelector('.minute-hand'); const second = clock.querySelector('.second-hand');
+        if (hour) hour.style.transform = `translateX(-50%) rotate(${hours * 30}deg)`;
+        if (minute) minute.style.transform = `translateX(-50%) rotate(${minutes * 6}deg)`;
+        if (second) second.style.transform = `translateX(-50%) rotate(${seconds * 6}deg)`;
+    };
     const update = () => {
         const now = new Date();
         const time = now.toLocaleTimeString('ja-JP', { hour12: false });
         const shortTime = time.slice(0, 5);
         const date = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
-        const clockTime = document.getElementById('clock-time'); if (clockTime) clockTime.textContent = time;
+        const clockTime = document.getElementById('clock-time'); const analogClock = document.getElementById('analog-clock');
+        const clockType = appSettings.clockType || 'digital1';
+        if (clockTime) { clockTime.textContent = time; clockTime.className = `theme-text ${clockType}`; clockTime.classList.toggle('hidden', clockType === 'analog'); }
+        if (analogClock) analogClock.classList.toggle('hidden', clockType !== 'analog');
         const clockDate = document.getElementById('clock-date'); if (clockDate) clockDate.textContent = date;
-        const pocketClock = document.getElementById('pocket-clock-text'); if (pocketClock) pocketClock.textContent = shortTime;
+        const pocketClock = document.getElementById('pocket-clock-text'); const pocketAnalog = document.getElementById('pocket-analog-clock'); const pocketContainer = document.getElementById('pocket-clock-container');
+        const pocketType = appSettings.pocketClockType || 'digital1';
+        if (pocketContainer) pocketContainer.classList.toggle('hidden', pocketType === 'none');
+        if (pocketClock) { pocketClock.textContent = shortTime; pocketClock.className = `theme-text ${pocketType}`; pocketClock.classList.toggle('hidden', pocketType === 'analog' || pocketType === 'none'); }
+        if (pocketAnalog) pocketAnalog.classList.toggle('hidden', pocketType !== 'analog');
+        setHands(analogClock, now); setHands(pocketAnalog, now);
     };
     update(); setInterval(update, 1000);
 }
