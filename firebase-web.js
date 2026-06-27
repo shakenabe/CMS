@@ -14,12 +14,12 @@ function loadCmsSafePatch() {
   const css = document.createElement('link');
   css.id = 'cms-safe-patch-css';
   css.rel = 'stylesheet';
-  css.href = `cms-safe-patch-20260627.css?v=${CMS_SAFE_PATCH_VERSION}`;
+  css.href = `cms-runtime-20260627.css?v=${CMS_SAFE_PATCH_VERSION}`;
   document.head.appendChild(css);
 
   const script = document.createElement('script');
   script.id = 'cms-safe-patch-js';
-  script.src = `cms-safe-patch-20260627.js?v=${CMS_SAFE_PATCH_VERSION}`;
+  script.src = `cms-runtime-20260627.js?v=${CMS_SAFE_PATCH_VERSION}`;
   script.defer = true;
   document.head.appendChild(script);
 }
