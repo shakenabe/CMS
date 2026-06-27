@@ -7,6 +7,25 @@ import {
   orderBy, query, startAfter, Timestamp, where
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-lite.js';
 
+const CMS_SAFE_PATCH_VERSION = '20260627';
+
+function loadCmsSafePatch() {
+  if (document.getElementById('cms-safe-patch-css')) return;
+  const css = document.createElement('link');
+  css.id = 'cms-safe-patch-css';
+  css.rel = 'stylesheet';
+  css.href = `cms-safe-patch-20260627.css?v=${CMS_SAFE_PATCH_VERSION}`;
+  document.head.appendChild(css);
+
+  const script = document.createElement('script');
+  script.id = 'cms-safe-patch-js';
+  script.src = `cms-safe-patch-20260627.js?v=${CMS_SAFE_PATCH_VERSION}`;
+  script.defer = true;
+  document.head.appendChild(script);
+}
+
+loadCmsSafePatch();
+
 const firebaseConfig = Object.freeze({
   apiKey: 'AIzaSyBEHDu0Y8Gnu-Cf9bkgIcrJ9HhL1OYJGUY',
   authDomain: 'cms-sync-test.firebaseapp.com',
