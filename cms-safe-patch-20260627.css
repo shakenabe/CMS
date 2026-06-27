@@ -1,0 +1,47 @@
+/* CMS safe patch 2026-06-27
+   Small override file to avoid replacing large UTF-8 UI files from automation. */
+#pocket-overlay.use-background {
+  background-position: var(--pocket-bg-position, var(--bg-position)), center !important;
+  background-size: var(--pocket-bg-size, var(--bg-size)), cover !important;
+}
+
+#pocket-clock-container {
+  transform: scale(var(--pocket-item-scale, 1));
+  transform-origin: center;
+}
+
+#pocket-art {
+  width: calc(min(58vw, 260px) * var(--pocket-item-scale, 1));
+}
+
+#pocket-title {
+  font-size: calc(1.2rem * var(--pocket-item-scale, 1)) !important;
+}
+
+#pocket-progress-area,
+#pocket-controls,
+#pocket-unlock-btn {
+  transform: scale(var(--pocket-item-scale, 1));
+  transform-origin: center;
+}
+
+#pocket-overlay.pocket-layout-custom .pocket-layout-item,
+#pocket-overlay.layout-editing .pocket-layout-item {
+  transform: translate(-50%, -50%) scale(var(--pocket-item-scale, 1)) !important;
+}
+
+body.is-mobile.music-mode .widget-art {
+  margin-inline: auto !important;
+  align-self: center !important;
+}
+
+body.is-mobile.mobile-list-focus #mobile-list-fullscreen-header {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.cms-safe-patch-row small {
+  opacity: .72;
+  display: block;
+  margin-top: 4px;
+}
