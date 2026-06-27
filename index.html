@@ -6,7 +6,7 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=202606220200">
+    <link rel="stylesheet" href="style.css?v=202606270001">
 </head>
 <body class="theme-modern is-pc">
 
@@ -192,6 +192,7 @@
                     </div>
                     <div class="setting-row"><label><input type="checkbox" id="set-performance-mode"> ⚡ 軽量化 (動作を軽くする)</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-music-mode"> 🎵 音楽モード (モバイルSpotify風UI)</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-resume-last-playback"> 前回のフォルダ・曲から再開する</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-show-thumbnails"> 🖼 サムネイルを表示</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-show-clock"> 🕒 時計を表示</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-simple-layout"> 💻 PC向け シンプルレイアウト</label></div>
@@ -279,6 +280,12 @@
                         <h3>ロック画面の背景・レイアウト</h3>
                         <div class="setting-row"><label><input type="checkbox" id="set-pocket-use-background"> 通常画面と同じ背景画像を表示</label></div>
                         <div class="setting-row"><label>背景の暗さ: <span id="pocket-dim-val">35</span>%</label><input type="range" id="set-pocket-bg-dim" min="0" max="90" value="35"></div>
+                        <div class="setting-row"><label><input type="checkbox" id="set-pocket-bg-manual"> ロック画面の背景位置・拡大率を手動調整</label></div>
+                        <div class="setting-row window-color-grid">
+                            <div><label>背景X: <span id="pocket-bg-x-val">50</span>%</label><input type="range" id="set-pocket-bg-x" min="0" max="100" value="50"></div>
+                            <div><label>背景Y: <span id="pocket-bg-y-val">50</span>%</label><input type="range" id="set-pocket-bg-y" min="0" max="100" value="50"></div>
+                            <div><label>背景拡大: <span id="pocket-bg-scale-val">100</span>%</label><input type="range" id="set-pocket-bg-scale" min="50" max="250" value="100"></div>
+                        </div>
                         <div class="pocket-visible-grid">
                             <label><input type="checkbox" id="set-pocket-show-clock"> 時計</label>
                             <label><input type="checkbox" id="set-pocket-show-art"> サムネイル</label>
@@ -286,6 +293,14 @@
                             <label><input type="checkbox" id="set-pocket-show-progress"> 進捗</label>
                             <label><input type="checkbox" id="set-pocket-show-controls"> 再生操作</label>
                             <label><input type="checkbox" id="set-pocket-show-unlock"> 解除ボタン</label>
+                        </div>
+                        <div class="setting-row window-color-grid">
+                            <div><label>時計サイズ: <span id="pocket-scale-clock-val">100</span>%</label><input type="range" id="set-pocket-scale-clock" min="50" max="180" value="100"></div>
+                            <div><label>サムネサイズ: <span id="pocket-scale-art-val">100</span>%</label><input type="range" id="set-pocket-scale-art" min="50" max="180" value="100"></div>
+                            <div><label>曲名サイズ: <span id="pocket-scale-title-val">100</span>%</label><input type="range" id="set-pocket-scale-title" min="50" max="180" value="100"></div>
+                            <div><label>進捗サイズ: <span id="pocket-scale-progress-val">100</span>%</label><input type="range" id="set-pocket-scale-progress" min="50" max="180" value="100"></div>
+                            <div><label>操作部サイズ: <span id="pocket-scale-controls-val">100</span>%</label><input type="range" id="set-pocket-scale-controls" min="50" max="180" value="100"></div>
+                            <div><label>解除サイズ: <span id="pocket-scale-unlock-val">100</span>%</label><input type="range" id="set-pocket-scale-unlock" min="50" max="180" value="100"></div>
                         </div>
                         <div class="pocket-layout-buttons">
                             <button id="btn-edit-pocket-layout" type="button" class="theme-btn">画面上で配置を編集</button>
@@ -309,7 +324,7 @@
         </div>
     </div>
 
-    <script type="module" src="firebase-web.js"></script>
-    <script src="script.js?v=202606220200"></script>
+    <script type="module" src="firebase-web.js?v=2026062703"></script>
+    <script src="script.js?v=202606270001"></script>
 </body>
 </html>
