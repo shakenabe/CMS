@@ -7,7 +7,7 @@ import {
   orderBy, query, startAfter, Timestamp, where
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-lite.js';
 
-const CMS_SAFE_PATCH_VERSION = '20260627';
+const CMS_SAFE_PATCH_VERSION = '2026062704';
 
 function loadCmsSafePatch() {
   if (document.getElementById('cms-safe-patch-css')) return;
