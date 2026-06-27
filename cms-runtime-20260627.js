@@ -187,11 +187,17 @@
     };
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
+  function init() {
     exposeHelpers();
     installEventHooks();
     addSettingsControls();
     applyPocketVariables();
     console.info('[cms-runtime] loaded 2026-06-27');
-  });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
 })();
