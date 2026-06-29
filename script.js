@@ -45,6 +45,9 @@ let currentRenderedCount = 0;
 const RENDER_CHUNK_SIZE = 50;
 let currentRenderSongs =[];
 let lastPlaybackStateSavedAt = 0;
+let suppressSessionSave = false;
+const CMS_PLAYER_SESSION_KEY = 'cms_player_last_playback_v2';
+const CMS_PLAYER_SESSION_LEGACY_KEY = 'cms_player_last_playback_v1';
 
 // 編集モード管理
 let isEditMode = false;
@@ -209,21 +212,115 @@ function loadSettings() {
     } catch (e) {}
 }
 function saveSettings() { localStorage.setItem('cms_player_settings_v23', JSON.stringify(appSettings)); }
-function savePlaybackState(extra = {}) {
-    if (!currentPlayingItem) return;
+function saveCurrentSession(extra = {}) {
     const now = Date.now();
+    if (suppressSessionSave && !extra.force) return;
     if (!extra.force && now - lastPlaybackStateSavedAt < 5000) return;
     lastPlaybackStateSavedAt = now;
-    localStorage.setItem('cms_player_last_playback_v1', JSON.stringify({
-        folderId: currentFolderId || '__all',
-        itemId: currentPlayingItem.id,
-        index: currentIndex,
+    const item = extra.item || currentPlayingItem || null;
+    const folderId = extra.folderId || currentFolderId || '__all';
+    const itemIndex = item ? currentRenderSongs.findIndex(song => isSameMediaItem(song, item)) : -1;
+    const playlistIndex = item ? currentPlaylist.findIndex(song => isSameMediaItem(song, item)) : -1;
+    localStorage.setItem(CMS_PLAYER_SESSION_KEY, JSON.stringify({
+        folderId,
+        targetFolderId: folderId,
+        itemId: item?.id || null,
+        url: item?.url || null,
+        site: item?.site || null,
+        index: playlistIndex >= 0 ? playlistIndex : currentIndex,
+        renderIndex: itemIndex,
         currentTime: extra.currentTime ?? 0,
+        sortOrder: currentSortOrder,
+        searchQuery: currentSearchQuery,
+        excludeNico,
         updatedAt: now
     }));
 }
+
+function savePlaybackState(extra = {}) {
+    if (!currentPlayingItem) return;
+    saveCurrentSession(extra);
+}
+
 function getSavedPlaybackState() {
-    try { return JSON.parse(localStorage.getItem('cms_player_last_playback_v1') || 'null'); } catch (_) { return null; }
+    try {
+        return JSON.parse(localStorage.getItem(CMS_PLAYER_SESSION_KEY) || localStorage.getItem(CMS_PLAYER_SESSION_LEGACY_KEY) || 'null');
+    } catch (_) { return null; }
+}
+
+function isSameMediaItem(a, b) {
+    if (!a || !b) return false;
+    if (a === b) return true;
+    if (a.id && b.id && a.id === b.id) return true;
+    return Boolean(a.url && b.url && a.url === b.url);
+}
+
+function findSongIndex(songs, saved) {
+    if (!Array.isArray(songs) || !saved) return -1;
+    if (saved.itemId) {
+        const byId = songs.findIndex(song => song.id === saved.itemId);
+        if (byId >= 0) return byId;
+    }
+    if (saved.url) {
+        const byUrl = songs.findIndex(song => song.url === saved.url);
+        if (byUrl >= 0) return byUrl;
+    }
+    if (Number.isInteger(saved.index) && saved.index >= 0 && saved.index < songs.length) return saved.index;
+    return -1;
+}
+
+function resolveSavedPlayback(saved) {
+    if (!saved || !musicLibrary.length) return null;
+    const allFolder = musicLibrary.find(f => f.id === '__all') || musicLibrary[0];
+    const candidates = [
+        saved.targetFolderId,
+        saved.folderId,
+        currentFolderId,
+        '__all'
+    ].filter(Boolean);
+    for (const folderId of [...new Set(candidates)]) {
+        const folder = musicLibrary.find(f => f.id === folderId);
+        if (!folder?.songs?.length) continue;
+        const index = findSongIndex(folder.songs, saved);
+        if (index >= 0) return { folder, index, song: folder.songs[index] };
+    }
+    if (allFolder?.songs?.length) {
+        const index = findSongIndex(allFolder.songs, saved);
+        if (index >= 0) return { folder: allFolder, index, song: allFolder.songs[index] };
+    }
+    return null;
+}
+
+function resolveSavedPlaybackWithFallback(saved) {
+    let restored = resolveSavedPlayback(saved);
+    if (restored || !saved?.itemId && !saved?.url) return restored;
+    const hadFilter = Boolean(currentSearchQuery) || Boolean(excludeNico);
+    if (!hadFilter) return null;
+    currentSearchQuery = "";
+    excludeNico = false;
+    const searchBox = document.getElementById('widget-search-box'); if (searchBox) searchBox.value = "";
+    const nicoCheck = document.getElementById('exclude-nico'); if (nicoCheck) nicoCheck.checked = false;
+    buildLibrary(); renderFolders();
+    return resolveSavedPlayback(saved);
+}
+
+function restoreViewStateFromSession(saved) {
+    if (!saved || appSettings.resumeLastPlayback === false) return;
+    if (saved.sortOrder) currentSortOrder = saved.sortOrder;
+    currentSearchQuery = saved.searchQuery || "";
+    excludeNico = Boolean(saved.excludeNico);
+    const sortSelect = document.getElementById('widget-sort-select'); if (sortSelect) sortSelect.value = currentSortOrder;
+    const searchBox = document.getElementById('widget-search-box'); if (searchBox) searchBox.value = currentSearchQuery;
+    const nicoCheck = document.getElementById('exclude-nico'); if (nicoCheck) nicoCheck.checked = excludeNico;
+}
+
+function seekSavedPlaybackTime(saved) {
+    const time = Number(saved?.currentTime) || 0;
+    if (time <= 3) return;
+    setTimeout(() => {
+        if (currentPlayingItem?.site === 'youtube' && ytPlayer?.seekTo) ytPlayer.seekTo(time, true);
+        else if (currentPlayingItem?.site === 'niconico') nicoCurrentTime = time;
+    }, 1800);
 }
 function markPlaybackCompleted(item) {
     if (!item?.id) return;
@@ -753,6 +850,7 @@ function scheduleMarqueeUpdate() { setTimeout(updateMarquee, 100); }
 function handleFileImport(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { const data = JSON.parse(ev.target.result); processImportData(data); window.CmsWebFirebase?.cacheImportedData(data); importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden'); } catch (err) { alert('JSON解析失敗'); } }; reader.readAsText(file); }
 function processImportData(data) {
     const items = Array.isArray(data) ? data : (data.mediaItems || []);
+    const saved = appSettings.resumeLastPlayback ? getSavedPlaybackState() : null;
     if (!Array.isArray(data) && data.webSettings && typeof data.webSettings === 'object') {
         Object.keys(defaultSettings).forEach(key => {
             if (Object.prototype.hasOwnProperty.call(data.webSettings, key)) appSettings[key] = data.webSettings[key];
@@ -762,6 +860,7 @@ function processImportData(data) {
         updateLayoutMode();
         applyThemeSettings();
     }
+    restoreViewStateFromSession(saved);
     allItems = items.filter(i => i.site !== 'system').map((item, idx) => ({
         ...item,
         originalIndex: idx,
@@ -770,7 +869,14 @@ function processImportData(data) {
     }));
     folderSettings = Array.isArray(data.folderSettings) ? data.folderSettings : [];
     if (allItems.length > 0) {
-        buildLibrary(); renderFolders(); selectFolder(musicLibrary[0]?.id || '__all');
+        buildLibrary(); renderFolders();
+        const restored = resolveSavedPlaybackWithFallback(saved);
+        selectFolder(restored?.folder?.id || saved?.targetFolderId || saved?.folderId || musicLibrary[0]?.id || '__all', { preserveScroll: true, skipSave: true });
+        if (restored) {
+            while (restored.index >= currentRenderedCount && currentRenderedCount < currentRenderSongs.length) loadMoreTracks();
+            const activeEl = trackListEl.children[restored.index];
+            if (activeEl) setTimeout(() => scrollActiveTrackInList(activeEl), 120);
+        }
     } else alert('データがありません');
 }
 
@@ -788,21 +894,16 @@ function startGame() {
     readyScreen.classList.add('hidden'); setupBackgroundPlayback(); startSilentAudio(); mainApp.classList.remove('hidden'); scheduleMarqueeUpdate();
     if (currentFolderId) {
         const saved = appSettings.resumeLastPlayback ? getSavedPlaybackState() : null;
-        const targetFolderId = saved?.folderId || currentFolderId;
-        const f = musicLibrary.find(f => f.id === targetFolderId) || musicLibrary.find(f => f.id === currentFolderId);
-        const songs = f ? f.songs : (musicLibrary.find(f => f.id === '__all')?.songs || []);
-        let index = 0;
-        if (saved?.itemId) {
-            const savedIndex = songs.findIndex(song => song.id === saved.itemId);
-            if (savedIndex >= 0) index = savedIndex;
-            if (f?.id && f.id !== currentFolderId) selectFolder(f.id);
-        }
+        restoreViewStateFromSession(saved);
+        if (saved) { buildLibrary(); renderFolders(); }
+        const restored = resolveSavedPlaybackWithFallback(saved);
+        const f = restored?.folder || musicLibrary.find(f => f.id === currentFolderId) || musicLibrary.find(f => f.id === '__all');
+        const songs = f ? f.songs : [];
+        const index = restored ? restored.index : 0;
+        if (f?.id && f.id !== currentFolderId) selectFolder(f.id, { preserveScroll: true, skipSave: true });
         startPlaylist(songs, index);
-        if (saved?.currentTime && saved.currentTime > 3) {
-            setTimeout(() => {
-                if (currentPlayingItem?.site === 'youtube' && ytPlayer?.seekTo) ytPlayer.seekTo(saved.currentTime, true);
-            }, 1800);
-        }
+        if (saved?.currentTime) saveCurrentSession({ force: true, currentTime: Number(saved.currentTime) || 0 });
+        seekSavedPlaybackTime(saved);
     }
 }
 
@@ -833,7 +934,7 @@ function renderFolders() {
     populateEditFolders();
 }
 
-function selectFolder(id) {
+function selectFolder(id, options = {}) {
     currentFolderId = id;
     document.querySelectorAll('.w-f-item').forEach(e => e.classList.toggle('active', e.dataset.folderId === id));
     document.querySelectorAll('.m-f-item').forEach(e => { 
@@ -864,7 +965,8 @@ function selectFolder(id) {
         if (folderCount) folderCount.textContent = `${f.songs.length}件のアイテム`;
     }
     selectedItems.clear(); updateEditBar();
-    renderTracks(f ? f.songs :[]);
+    renderTracks(f ? f.songs :[], { preserveScroll: Boolean(options.preserveScroll) });
+    if (!options.skipSave) saveCurrentSession({ force: true, folderId: id });
 }
 
 function escapeHTML(str) { return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
@@ -1021,9 +1123,9 @@ function populateEditFolders() {
     if(currentFolderId && selFilter) selFilter.value = currentFolderId;
 }
 
-function handleSearch(e) { currentSearchQuery = e.target.value; buildLibrary(); renderFolders(); selectFolder(currentFolderId || musicLibrary[0]?.id); }
-function handleSortChange(e) { currentSortOrder = e.target.value; buildLibrary(); selectFolder(currentFolderId || musicLibrary[0]?.id); }
-function handleNicoFilterChange(e) { excludeNico = e.target.checked; buildLibrary(); renderFolders(); selectFolder(currentFolderId || musicLibrary[0]?.id); }
+function handleSearch(e) { currentSearchQuery = e.target.value; buildLibrary(); renderFolders(); selectFolder(currentFolderId || musicLibrary[0]?.id); saveCurrentSession({ force: true }); }
+function handleSortChange(e) { currentSortOrder = e.target.value; buildLibrary(); selectFolder(currentFolderId || musicLibrary[0]?.id); saveCurrentSession({ force: true }); }
+function handleNicoFilterChange(e) { excludeNico = e.target.checked; buildLibrary(); renderFolders(); selectFolder(currentFolderId || musicLibrary[0]?.id); saveCurrentSession({ force: true }); }
 
 function setupPlayerControls() {
     document.getElementById('widget-btn-play').onclick = () => togglePlay();
