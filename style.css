@@ -3,7 +3,7 @@
     --border-color: rgba(255, 255, 255, 0.15); --text-color: #fff; --sub-text-color: rgba(255, 255, 255, 0.7);
     --accent-color: #00aaff; --panel-shadow: 0 10px 30px rgba(0,0,0,0.3); --border-radius: 0px; 
     --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --base-font-size: 100%; --pc-left-width: 350px; --bg-image: none; --bg-position: center; --bg-size: cover;
+    --base-font-size: 100%; --pc-left-width: 350px; --bg-image: none; --bg-gradient: radial-gradient(circle at top, #26344d 0%, #0b1020 48%, #03050b 100%); --bg-position: center; --bg-size: cover;
 }
 
 body.theme-toyota {
@@ -23,7 +23,7 @@ body.theme-nerv * { font-weight: bold; letter-spacing: 1px; }
 html { font-size: var(--base-font-size); }
 html, body {
     margin: 0; padding: 0; width: 100%; font-family: var(--font-family); background-color: var(--bg-color);
-    background-image: var(--bg-image); background-position: var(--bg-position); background-size: var(--bg-size); background-repeat: no-repeat;
+    background-image: var(--bg-image, none), var(--bg-gradient); background-position: var(--bg-position), center; background-size: var(--bg-size), cover; background-repeat: no-repeat;
     color: var(--text-color); user-select: none; overscroll-behavior: none; touch-action: manipulation; box-sizing: border-box;
 }
 *, *:before, *:after { box-sizing: inherit; }
@@ -66,12 +66,14 @@ button { border-radius: 0; }
     color: #fff; background: radial-gradient(circle at top, #26344d 0%, #0b1020 48%, #03050b 100%);
     overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;
 }
-#pocket-overlay.use-background { background-image: var(--bg-image), radial-gradient(circle at top, #26344d 0%, #0b1020 48%, #03050b 100%); background-position: var(--bg-position), center; background-size: var(--bg-size), cover; background-repeat: no-repeat; }
+#pocket-overlay.use-background { background-image: var(--bg-image), radial-gradient(circle at top, #26344d 0%, #0b1020 48%, #03050b 100%); background-position: var(--pocket-bg-position, var(--bg-position)), center; background-size: var(--pocket-bg-size, var(--bg-size)), cover; background-repeat: no-repeat; }
 #pocket-overlay::before { content: ""; position: absolute; inset: 0; background: rgba(0,0,0,var(--pocket-dim, 0.35)); pointer-events: none; }
 .pocket-hint { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: 0; right: 0; z-index: 1; text-align: center; font-size: 0.78rem; opacity: 0.72; }
 .pocket-content { position: relative; z-index: 1; width: min(92vw, 430px); max-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-#pocket-art { width: min(58vw, 260px); aspect-ratio: 1; object-fit: cover; border: 1px solid rgba(255,255,255,0.22); box-shadow: 0 18px 45px rgba(0,0,0,0.45); }
-#pocket-title { width: 100%; max-height: 3.2em; overflow: hidden; overflow-wrap: anywhere; }
+#pocket-clock-container { transform: scale(var(--pocket-item-scale, 1)); transform-origin: center; }
+#pocket-art { width: calc(min(58vw, 260px) * var(--pocket-item-scale, 1)); aspect-ratio: 1; object-fit: cover; border: 1px solid rgba(255,255,255,0.22); box-shadow: 0 18px 45px rgba(0,0,0,0.45); }
+#pocket-title { width: 100%; max-height: 3.2em; overflow: hidden; overflow-wrap: anywhere; font-size: calc(1.2rem * var(--pocket-item-scale, 1)) !important; }
+#pocket-progress-area, #pocket-controls, #pocket-unlock-btn { transform: scale(var(--pocket-item-scale, 1)); transform-origin: center; }
 .pocket-controls { display: flex; align-items: center; justify-content: center; gap: 24px; margin-top: 22px; }
 .pocket-controls button, .pocket-unlock-btn { border: 1px solid rgba(255,255,255,0.28); color: #fff; background: rgba(255,255,255,0.08); cursor: pointer; }
 .pocket-controls button { width: 52px; height: 52px; font-size: 1.15rem; }
@@ -83,7 +85,7 @@ button { border-radius: 0; }
 #pocket-overlay.layout-editing .pocket-content,
 #pocket-overlay.pocket-layout-custom .pocket-content { position: absolute; inset: 0; width: 100%; max-width: none; max-height: none; display: block; }
 #pocket-overlay.layout-editing .pocket-layout-item,
-#pocket-overlay.pocket-layout-custom .pocket-layout-item { position: absolute; margin: 0 !important; transform: translate(-50%, -50%); }
+#pocket-overlay.pocket-layout-custom .pocket-layout-item { position: absolute; margin: 0 !important; transform: translate(-50%, -50%) scale(var(--pocket-item-scale, 1)); }
 #pocket-overlay.layout-editing .pocket-layout-item { outline: 2px dashed var(--accent-color); outline-offset: 5px; cursor: move; touch-action: none; }
 #pocket-overlay .pocket-layout-hidden { display: none !important; }
 #pocket-overlay.layout-editing .pocket-layout-hidden { display: block !important; opacity: 0.35; }
@@ -214,7 +216,7 @@ body.is-pc.show-clock #widget-clock {
     display: flex !important; flex-direction: column; align-items: center; justify-content: center;
     min-height: 150px; padding: 14px; flex: 0 0 auto;
 }
-body.window-mode.show-clock #widget-clock.wm-panel { display: flex !important; }
+body.window-mode.show-clock #widget-clock.wm-panel:not(.window-minimized):not(.window-closed) { display: flex !important; }
 .clock-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; width: 100%; height: 100%; }
 #clock-date { font-size: 0.82rem; opacity: 0.72; }
 #clock-time { font-size: 2.1rem; font-variant-numeric: tabular-nums; }
@@ -247,6 +249,21 @@ body.is-mobile .controls-main { gap: clamp(8px, 3vw, 14px); flex-wrap: nowrap; }
 body.is-mobile .controls-main button { padding: 8px; flex: 0 0 auto; }
 body.is-mobile .control-tool-btn { width: 34px; height: 34px; }
 
+body.window-mode #widget-controls .player-controls-inner {
+    display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 10px; width: 100%;
+}
+body.window-mode #widget-controls .widget-info-row { width: 100%; min-width: 0; }
+body.window-mode #widget-controls .widget-controls {
+    min-height: 74px; padding-inline: 0; display: flex; flex-direction: column; gap: 8px; justify-content: center;
+}
+body.window-mode #widget-controls .widget-controls .controls-main {
+    width: 100%; justify-content: center; gap: clamp(8px, 4vw, 18px); flex-wrap: nowrap;
+}
+body.window-mode #widget-controls .control-tools {
+    position: static; transform: none; width: 100%; justify-content: center; flex-wrap: wrap;
+}
+body.window-mode #widget-controls .control-tool-btn { width: 34px; height: 34px; }
+
 /* 音楽モード: Safariが再生を停止しないよう、埋め込みは極小の描画状態で保持 */
 body.music-mode #widget-player {
     display: block !important; position: fixed !important; left: 0 !important; top: 0 !important;
@@ -262,7 +279,7 @@ body.music-mode .widget-art {
 body.music-mode .widget-info-container { width: min(100%, 560px); }
 body.music-mode .widget-info { text-align: center; }
 body.is-mobile.music-mode #widget-controls { min-height: min(54dvh, 480px); overflow: hidden; }
-body.is-mobile.music-mode .widget-art { width: min(46vw, 210px); }
+body.is-mobile.music-mode .widget-art { width: min(46vw, 210px); margin-inline: auto; align-self: center; }
 body.is-mobile.music-mode .player-controls-inner { display: flex; flex-direction: column; align-items: center; justify-content: center; }
 body.is-mobile.music-mode #right-pane { flex: 1; }
 
@@ -355,6 +372,8 @@ body.window-mode .window-titlebar {
 .window-resize-handle::after { content: ""; position: absolute; right: 4px; bottom: 4px; width: 10px; height: 10px; border-right: 2px solid rgba(255,255,255,0.65); border-bottom: 2px solid rgba(255,255,255,0.65); }
 body.window-mode .wm-panel.window-minimized,
 body.window-mode .wm-panel.window-closed { display: none !important; }
+body.window-mode #widget-clock.wm-panel.window-minimized,
+body.window-mode #widget-clock.wm-panel.window-closed { display: none !important; }
 body.window-mode .wm-panel.window-maximized { border-width: 0; }
 body.window-mode #window-taskbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 8000; height: calc(44px + env(safe-area-inset-bottom));
@@ -374,8 +393,8 @@ body.window-mode #widget-player { min-width: min(300px, calc(100vw - 24px)); }
 /* マーキーアニメーション */
 .marquee-wrapper { overflow: hidden; white-space: nowrap; position: relative; width: 100%; }
 .marquee-content { display: inline-block; will-change: transform; }
-.is-marquee { animation: scroll-left-alternate 8s linear infinite; }
-@keyframes scroll-left-alternate { 0%, 15% { transform: translateX(0); } 45%, 55% { transform: translateX(calc(var(--parent-width) - 100%)); } 85%, 100% { transform: translateX(0); } }
+.is-marquee { padding-left: 100%; animation: scroll-left-once 14s linear infinite; }
+@keyframes scroll-left-once { 0%, 8% { transform: translateX(0); } 100% { transform: translateX(calc(-100% - 24px)); } }
 
 /* 設定モーダル */
 .settings-window { width: 500px; max-width: calc(100vw - 24px); max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding: 30px; display: flex; flex-direction: column; gap: 15px; border-radius: 0; overflow: hidden; }
