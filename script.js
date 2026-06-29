@@ -4,12 +4,13 @@ const defaultSettings = {
     performanceMode: false, dataSaverMode: false,
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff', blurBaseColor: '#000000',
     pocketAlwaysOn: false, pocketSwipeUnlock: true, pocketUseBackground: false, pocketBgDim: 35,
+    pocketBgManual: false, pocketBgX: 50, pocketBgY: 50, pocketBgScale: 100,
     pocketShowClock: true, pocketShowArt: true, pocketShowTitle: true, pocketShowProgress: true, pocketShowControls: true, pocketShowUnlock: true,
-    pocketLayout: {}, forcePcLayout: false,
+    pocketLayout: {}, pocketLayoutScale: {}, forcePcLayout: false,
     musicMode: false, autoScrollActiveTrack: true,
     windowMode: false, windowPositions: {}, windowStates: {}, windowColorsLinked: true,
     windowPanelColor: '#000000', windowPanelAlpha: 55, windowTitleColor: '#1f4f8f', windowTitleAlpha: 100,
-    defaultSortOrder: 'custom', useFirebase: false
+    defaultSortOrder: 'custom', useFirebase: false, resumeLastPlayback: true
 };
 let appSettings = { ...defaultSettings };
 
@@ -43,6 +44,7 @@ let lastTrackPointerType = 'mouse';
 let currentRenderedCount = 0;
 const RENDER_CHUNK_SIZE = 50;
 let currentRenderSongs =[];
+let lastPlaybackStateSavedAt = 0;
 
 // 編集モード管理
 let isEditMode = false;
@@ -188,7 +190,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         selectFolder(e.target.value);
     });
 
-    setupPlayerControls(); setupSettingsModal(); window.addEventListener('message', handleNicoMessage); setupPocketMode(); setupPocketLayoutDrag(); setupClockUI(); setupTrackListReturnGesture();
+    setupPlayerControls(); setupSettingsModal(); window.addEventListener('message', handleNicoMessage); setupPocketMode(); setupPocketLayoutDrag(); setupClockUI(); setupTrackListReturnGesture(); setupControlsReturnGesture();
     setupEditMode();
     applyWindowMode(); 
 });
@@ -207,6 +209,32 @@ function loadSettings() {
     } catch (e) {}
 }
 function saveSettings() { localStorage.setItem('cms_player_settings_v23', JSON.stringify(appSettings)); }
+function savePlaybackState(extra = {}) {
+    if (!currentPlayingItem) return;
+    const now = Date.now();
+    if (!extra.force && now - lastPlaybackStateSavedAt < 5000) return;
+    lastPlaybackStateSavedAt = now;
+    localStorage.setItem('cms_player_last_playback_v1', JSON.stringify({
+        folderId: currentFolderId || '__all',
+        itemId: currentPlayingItem.id,
+        index: currentIndex,
+        currentTime: extra.currentTime ?? 0,
+        updatedAt: now
+    }));
+}
+function getSavedPlaybackState() {
+    try { return JSON.parse(localStorage.getItem('cms_player_last_playback_v1') || 'null'); } catch (_) { return null; }
+}
+function markPlaybackCompleted(item) {
+    if (!item?.id) return;
+    item.playCount = (Number(item.playCount) || 0) + 1;
+    item.safePlayCount = item.playCount;
+    item.lastPlayedAt = new Date().toISOString();
+    const queue = JSON.parse(localStorage.getItem('cms_player_playback_queue_v1') || '{}');
+    const prev = queue[item.id] || { playCountDelta: 0 };
+    queue[item.id] = { playCountDelta: (Number(prev.playCountDelta) || 0) + 1, lastPlayedAt: item.lastPlayedAt };
+    localStorage.setItem('cms_player_playback_queue_v1', JSON.stringify(queue));
+}
 
 function updateLayoutMode() {
     if (appSettings.windowMode) { document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile'); return; }
@@ -222,21 +250,34 @@ function setupMobileTrackListFocus() {
     const header = document.getElementById('mobile-list-fullscreen-header');
     const closeButton = document.getElementById('mobile-list-close-btn');
     let pointerStart = null;
+    let openedAt = 0;
+    let userScrolledList = false;
+    let closeTopTimer = null;
     const open = () => {
         if (!document.body.classList.contains('is-mobile')) return;
+        openedAt = Date.now();
         document.body.classList.add('mobile-list-focus'); header?.classList.remove('hidden');
     };
     const close = () => { document.body.classList.remove('mobile-list-focus'); header?.classList.add('hidden'); };
-    trackListEl.addEventListener('wheel', open, { passive: true });
+    trackListEl.addEventListener('wheel', () => { userScrolledList = true; open(); }, { passive: true });
     trackListEl.addEventListener('pointerdown', (e) => { pointerStart = { id: e.pointerId, x: e.clientX, y: e.clientY, type: e.pointerType }; }, { passive: true });
     trackListEl.addEventListener('pointermove', (e) => {
         if (!pointerStart || pointerStart.id !== e.pointerId) return;
         const distance = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
-        if (distance >= (pointerStart.type === 'mouse' ? 5 : 10)) open();
+        if (distance >= (pointerStart.type === 'mouse' ? 5 : 10)) { userScrolledList = true; open(); }
+    }, { passive: true });
+    trackListEl.addEventListener('scroll', () => {
+        if (!document.body.classList.contains('mobile-list-focus')) return;
+        if (!userScrolledList) return;
+        if (Date.now() - openedAt < 450) return;
+        if (Date.now() < (window.__cmsAutoTrackScrollUntil || 0)) return;
+        clearTimeout(closeTopTimer);
+        if (trackListEl.scrollTop <= 2) closeTopTimer = setTimeout(close, 120);
     }, { passive: true });
     const clearPointer = () => { pointerStart = null; };
     trackListEl.addEventListener('pointerup', clearPointer, { passive: true });
     trackListEl.addEventListener('pointercancel', clearPointer, { passive: true });
+    header?.addEventListener('pointerdown', (e) => { e.stopPropagation(); close(); });
     header?.addEventListener('click', (e) => { e.stopPropagation(); close(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('mobile-list-focus')) close(); });
 }
@@ -266,6 +307,30 @@ function setupTrackListReturnGesture() {
         start = null;
     }, { passive: true });
     trackListEl.addEventListener('dblclick', (e) => { e.preventDefault(); returnToCurrentTrack(); });
+}
+
+function setupControlsReturnGesture() {
+    const controls = document.getElementById('widget-controls');
+    if (!controls || controls.dataset.returnGestureReady === '1') return;
+    controls.dataset.returnGestureReady = '1';
+    let lastTapAt = 0; let start = null;
+    const isControlButton = (target) => Boolean(target?.closest?.('button, a, input, select, textarea, .progress-container, .control-tool-btn'));
+    controls.addEventListener('pointerdown', (e) => {
+        if (isControlButton(e.target)) return;
+        start = { id: e.pointerId, x: e.clientX, y: e.clientY, type: e.pointerType || 'mouse' };
+    }, { passive: true });
+    controls.addEventListener('pointerup', (e) => {
+        if (!start || start.id !== e.pointerId || isControlButton(e.target)) { start = null; return; }
+        if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 12) { start = null; return; }
+        const now = Date.now();
+        if (now - lastTapAt < 360) { returnToCurrentTrack(); lastTapAt = 0; }
+        else lastTapAt = now;
+        start = null;
+    }, { passive: true });
+    controls.addEventListener('dblclick', (e) => {
+        if (isControlButton(e.target)) return;
+        e.preventDefault(); returnToCurrentTrack();
+    });
 }
 
 const WINDOW_PANEL_IDS = ['widget-player', 'widget-controls', 'widget-clock', 'widget-folder-list-wrapper', 'widget-track-list-wrapper', 'library-nav-wrapper'];
@@ -472,6 +537,29 @@ function hexToRgbString(hex) {
     return `${parseInt(value.slice(0, 2), 16)}, ${parseInt(value.slice(2, 4), 16)}, ${parseInt(value.slice(4, 6), 16)}`;
 }
 
+function hexToRgb(hex) {
+    const normalized = String(hex || '#000000').replace('#', '');
+    const value = normalized.length === 3 ? normalized.split('').map(c => c + c).join('') : normalized.padEnd(6, '0').slice(0, 6);
+    return [0, 2, 4].map(i => Math.max(0, Math.min(255, parseInt(value.slice(i, i + 2), 16) || 0)));
+}
+
+function rgbToCss(rgb) { return `rgb(${rgb.map(v => Math.round(Math.max(0, Math.min(255, v)))).join(', ')})`; }
+
+function mixRgb(a, b, ratio) { return a.map((value, index) => value + (b[index] - value) * ratio); }
+
+function shadeRgb(rgb, amount) {
+    const target = amount >= 0 ? [255, 255, 255] : [0, 0, 0];
+    return mixRgb(rgb, target, Math.min(1, Math.abs(amount)));
+}
+
+function makeAdaptiveGradient(hex) {
+    const base = hexToRgb(hex);
+    const light = shadeRgb(base, 0.28);
+    const dark = shadeRgb(base, -0.48);
+    const accent = mixRgb(shadeRgb(base, 0.12), [0, 170, 255], 0.18);
+    return `radial-gradient(circle at 18% 12%, ${rgbToCss(light)} 0%, transparent 34%), radial-gradient(circle at 85% 18%, ${rgbToCss(accent)} 0%, transparent 32%), linear-gradient(135deg, ${rgbToCss(dark)} 0%, ${rgbToCss(base)} 52%, ${rgbToCss(shadeRgb(base, -0.34))} 100%)`;
+}
+
 function applyThemeSettings() {
     const layoutClass = document.body.classList.contains('is-mobile') ? 'is-mobile' : 'is-pc';
     document.body.className = `theme-${appSettings.theme} ${layoutClass}`;
@@ -489,15 +577,21 @@ function applyThemeSettings() {
     
     if (appSettings.customColorEnabled) { document.body.style.setProperty('--text-color', appSettings.customAccentColor); document.body.style.setProperty('--accent-color', appSettings.customAccentColor); document.body.style.setProperty('--border-color', appSettings.customBorderColor); } 
     else { document.body.style.removeProperty('--text-color'); document.body.style.removeProperty('--accent-color'); document.body.style.removeProperty('--border-color'); }
-    document.body.style.setProperty('--panel-rgb', hexToRgbString(appSettings.blurBaseColor || '#000000'));
-    document.body.style.setProperty('--bg-color', appSettings.blurBaseColor || '#000000');
+    const baseColor = appSettings.blurBaseColor || '#000000';
+    document.body.style.setProperty('--panel-rgb', hexToRgbString(baseColor));
+    document.body.style.setProperty('--bg-color', baseColor);
+    document.documentElement.style.setProperty('--bg-gradient', makeAdaptiveGradient(baseColor));
     
     const op = parseFloat(appSettings.bgOpacity); const panelAlpha = 0.12 + ((100 - op) / 100 * 0.68); document.documentElement.style.setProperty('--panel-alpha', panelAlpha); document.documentElement.style.setProperty('--panel-blur', appSettings.performanceMode ? '0px' : `${((100 - op) / 100 * 20)}px`);
     const linked = appSettings.windowColorsLinked !== false;
-    document.documentElement.style.setProperty('--window-panel-rgb', hexToRgbString(linked ? appSettings.blurBaseColor : appSettings.windowPanelColor));
-    document.documentElement.style.setProperty('--window-panel-alpha', linked ? panelAlpha : Math.max(0.1, Math.min(1, Number(appSettings.windowPanelAlpha) / 100)));
-    document.documentElement.style.setProperty('--window-title-rgb', hexToRgbString(linked ? appSettings.blurBaseColor : appSettings.windowTitleColor));
-    document.documentElement.style.setProperty('--window-title-alpha', linked ? Math.max(0.35, panelAlpha) : Math.max(0.1, Math.min(1, Number(appSettings.windowTitleAlpha) / 100)));
+    const windowPanelColor = appSettings.windowPanelColor || baseColor;
+    const windowPanelAlpha = Math.max(0.1, Math.min(1, Number(appSettings.windowPanelAlpha) / 100 || panelAlpha));
+    const windowTitleColor = linked ? windowPanelColor : (appSettings.windowTitleColor || windowPanelColor);
+    const windowTitleAlpha = linked ? Math.max(0.35, windowPanelAlpha) : Math.max(0.1, Math.min(1, Number(appSettings.windowTitleAlpha) / 100 || windowPanelAlpha));
+    document.documentElement.style.setProperty('--window-panel-rgb', hexToRgbString(windowPanelColor));
+    document.documentElement.style.setProperty('--window-panel-alpha', windowPanelAlpha);
+    document.documentElement.style.setProperty('--window-title-rgb', hexToRgbString(windowTitleColor));
+    document.documentElement.style.setProperty('--window-title-alpha', windowTitleAlpha);
     const pOverlay = document.getElementById('pocket-overlay'); if (appSettings.pocketAlwaysOn) pOverlay.classList.add('always-on'); else pOverlay.classList.remove('always-on');
     applyPocketAppearance();
 }
@@ -510,6 +604,11 @@ function applyPocketAppearance() {
     const overlay = document.getElementById('pocket-overlay'); if (!overlay) return;
     overlay.classList.toggle('use-background', Boolean(appSettings.pocketUseBackground));
     overlay.style.setProperty('--pocket-dim', String(Math.max(0, Math.min(90, Number(appSettings.pocketBgDim))) / 100));
+    const bgScale = Math.max(50, Math.min(250, Number(appSettings.pocketBgScale) || 100));
+    const bgX = Math.max(0, Math.min(100, Number(appSettings.pocketBgX) || 50));
+    const bgY = Math.max(0, Math.min(100, Number(appSettings.pocketBgY) || 50));
+    overlay.style.setProperty('--pocket-bg-position', appSettings.pocketBgManual ? `${bgX}% ${bgY}%` : appSettings.bgPosition);
+    overlay.style.setProperty('--pocket-bg-size', appSettings.pocketBgManual ? `${bgScale}% auto` : appSettings.bgSize);
     const visibility = { clock: appSettings.pocketShowClock, art: appSettings.pocketShowArt, title: appSettings.pocketShowTitle, progress: appSettings.pocketShowProgress, controls: appSettings.pocketShowControls, unlock: appSettings.pocketShowUnlock };
     const custom = appSettings.pocketLayout && Object.keys(appSettings.pocketLayout).length > 0;
     overlay.classList.toggle('pocket-layout-custom', custom && !overlay.classList.contains('layout-editing'));
@@ -518,6 +617,8 @@ function applyPocketAppearance() {
         el.classList.add('pocket-layout-item');
         const visible = visibility[key] !== false;
         el.classList.toggle('pocket-layout-hidden', !visible);
+        const scale = Math.max(50, Math.min(180, Number(appSettings.pocketLayoutScale?.[key]) || 100)) / 100;
+        el.style.setProperty('--pocket-item-scale', String(scale));
         const pos = appSettings.pocketLayout?.[key];
         if (pos && custom) { el.style.left = `${pos.x}%`; el.style.top = `${pos.y}%`; }
         else { el.style.removeProperty('left'); el.style.removeProperty('top'); }
@@ -576,6 +677,7 @@ function setupSettingsModal() {
         
         document.getElementById('set-performance-mode').checked = appSettings.performanceMode; document.getElementById('set-data-saver').checked = appSettings.dataSaverMode;
         document.getElementById('set-music-mode').checked = Boolean(appSettings.musicMode);
+        document.getElementById('set-resume-last-playback').checked = appSettings.resumeLastPlayback !== false;
         document.getElementById('set-show-thumbnails').checked = appSettings.showThumbnails;
         document.getElementById('set-show-clock').checked = Boolean(appSettings.showClock);
         document.getElementById('set-clock-type').value = appSettings.clockType || 'digital1';
@@ -588,7 +690,16 @@ function setupSettingsModal() {
         document.getElementById('set-window-panel-color').value = appSettings.windowPanelColor || '#000000'; document.getElementById('set-window-panel-alpha').value = appSettings.windowPanelAlpha ?? 55; document.getElementById('window-panel-alpha-val').textContent = appSettings.windowPanelAlpha ?? 55;
         document.getElementById('set-window-title-color').value = appSettings.windowTitleColor || '#1f4f8f'; document.getElementById('set-window-title-alpha').value = appSettings.windowTitleAlpha ?? 100; document.getElementById('window-title-alpha-val').textContent = appSettings.windowTitleAlpha ?? 100;
         document.getElementById('set-pocket-use-background').checked = Boolean(appSettings.pocketUseBackground); document.getElementById('set-pocket-bg-dim').value = appSettings.pocketBgDim ?? 35; document.getElementById('pocket-dim-val').textContent = appSettings.pocketBgDim ?? 35;
+        document.getElementById('set-pocket-bg-manual').checked = Boolean(appSettings.pocketBgManual);
+        document.getElementById('set-pocket-bg-x').value = appSettings.pocketBgX ?? 50; document.getElementById('pocket-bg-x-val').textContent = appSettings.pocketBgX ?? 50;
+        document.getElementById('set-pocket-bg-y').value = appSettings.pocketBgY ?? 50; document.getElementById('pocket-bg-y-val').textContent = appSettings.pocketBgY ?? 50;
+        document.getElementById('set-pocket-bg-scale').value = appSettings.pocketBgScale ?? 100; document.getElementById('pocket-bg-scale-val').textContent = appSettings.pocketBgScale ?? 100;
         document.getElementById('set-pocket-show-clock').checked = appSettings.pocketShowClock !== false; document.getElementById('set-pocket-show-art').checked = appSettings.pocketShowArt !== false; document.getElementById('set-pocket-show-title').checked = appSettings.pocketShowTitle !== false; document.getElementById('set-pocket-show-progress').checked = appSettings.pocketShowProgress !== false; document.getElementById('set-pocket-show-controls').checked = appSettings.pocketShowControls !== false; document.getElementById('set-pocket-show-unlock').checked = appSettings.pocketShowUnlock !== false;
+        ['clock', 'art', 'title', 'progress', 'controls', 'unlock'].forEach(key => {
+            const value = appSettings.pocketLayoutScale?.[key] ?? 100;
+            document.getElementById(`set-pocket-scale-${key}`).value = value;
+            document.getElementById(`pocket-scale-${key}-val`).textContent = value;
+        });
         modal.classList.remove('hidden');
     };
 
@@ -597,6 +708,12 @@ function setupSettingsModal() {
     document.getElementById('set-window-panel-alpha').oninput = (e) => document.getElementById('window-panel-alpha-val').textContent = e.target.value;
     document.getElementById('set-window-title-alpha').oninput = (e) => document.getElementById('window-title-alpha-val').textContent = e.target.value;
     document.getElementById('set-pocket-bg-dim').oninput = (e) => document.getElementById('pocket-dim-val').textContent = e.target.value;
+    document.getElementById('set-pocket-bg-x').oninput = (e) => document.getElementById('pocket-bg-x-val').textContent = e.target.value;
+    document.getElementById('set-pocket-bg-y').oninput = (e) => document.getElementById('pocket-bg-y-val').textContent = e.target.value;
+    document.getElementById('set-pocket-bg-scale').oninput = (e) => document.getElementById('pocket-bg-scale-val').textContent = e.target.value;
+    ['clock', 'art', 'title', 'progress', 'controls', 'unlock'].forEach(key => {
+        document.getElementById(`set-pocket-scale-${key}`).oninput = (e) => document.getElementById(`pocket-scale-${key}-val`).textContent = e.target.value;
+    });
 
     document.getElementById('btn-close-settings').onclick = () => modal.classList.add('hidden');
     document.getElementById('btn-reset-settings').onclick = () => { if (confirm('初期化しますか？')) { localStorage.removeItem('cms_player_settings_v23'); clearBgImageDB(); location.reload(); } };
@@ -604,16 +721,21 @@ function setupSettingsModal() {
     document.getElementById('btn-reset-window').onclick = () => { appSettings.windowPositions = {}; appSettings.windowStates = {}; alert('配置をリセットしました。Saveを押してください。'); };
     document.getElementById('btn-edit-pocket-layout').onclick = () => {
         appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value);
+        appSettings.pocketBgManual = document.getElementById('set-pocket-bg-manual').checked; appSettings.pocketBgX = Number(document.getElementById('set-pocket-bg-x').value); appSettings.pocketBgY = Number(document.getElementById('set-pocket-bg-y').value); appSettings.pocketBgScale = Number(document.getElementById('set-pocket-bg-scale').value);
         appSettings.pocketShowClock = document.getElementById('set-pocket-show-clock').checked; appSettings.pocketShowArt = document.getElementById('set-pocket-show-art').checked; appSettings.pocketShowTitle = document.getElementById('set-pocket-show-title').checked; appSettings.pocketShowProgress = document.getElementById('set-pocket-show-progress').checked; appSettings.pocketShowControls = document.getElementById('set-pocket-show-controls').checked; appSettings.pocketShowUnlock = document.getElementById('set-pocket-show-unlock').checked;
+        appSettings.pocketLayoutScale = appSettings.pocketLayoutScale || {};
+        ['clock', 'art', 'title', 'progress', 'controls', 'unlock'].forEach(key => { appSettings.pocketLayoutScale[key] = Number(document.getElementById(`set-pocket-scale-${key}`).value); });
         beginPocketLayoutEditor();
     };
     document.getElementById('btn-reset-pocket-layout').onclick = () => { appSettings.pocketLayout = {}; saveSettings(); applyPocketAppearance(); alert('ロック画面を標準配置へ戻しました。'); };
 
     document.getElementById('btn-save-settings').onclick = async () => {
         appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value; appSettings.bgSize = document.getElementById('set-bg-size').value; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
-        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
+        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         appSettings.windowColorsLinked = document.getElementById('set-window-colors-linked').checked; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = document.getElementById('set-window-title-color').value; appSettings.windowTitleAlpha = Number(document.getElementById('set-window-title-alpha').value);
-        appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value); appSettings.pocketShowClock = document.getElementById('set-pocket-show-clock').checked; appSettings.pocketShowArt = document.getElementById('set-pocket-show-art').checked; appSettings.pocketShowTitle = document.getElementById('set-pocket-show-title').checked; appSettings.pocketShowProgress = document.getElementById('set-pocket-show-progress').checked; appSettings.pocketShowControls = document.getElementById('set-pocket-show-controls').checked; appSettings.pocketShowUnlock = document.getElementById('set-pocket-show-unlock').checked;
+        appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value); appSettings.pocketBgManual = document.getElementById('set-pocket-bg-manual').checked; appSettings.pocketBgX = Number(document.getElementById('set-pocket-bg-x').value); appSettings.pocketBgY = Number(document.getElementById('set-pocket-bg-y').value); appSettings.pocketBgScale = Number(document.getElementById('set-pocket-bg-scale').value); appSettings.pocketShowClock = document.getElementById('set-pocket-show-clock').checked; appSettings.pocketShowArt = document.getElementById('set-pocket-show-art').checked; appSettings.pocketShowTitle = document.getElementById('set-pocket-show-title').checked; appSettings.pocketShowProgress = document.getElementById('set-pocket-show-progress').checked; appSettings.pocketShowControls = document.getElementById('set-pocket-show-controls').checked; appSettings.pocketShowUnlock = document.getElementById('set-pocket-show-unlock').checked;
+        appSettings.pocketLayoutScale = appSettings.pocketLayoutScale || {};
+        ['clock', 'art', 'title', 'progress', 'controls', 'unlock'].forEach(key => { appSettings.pocketLayoutScale[key] = Number(document.getElementById(`set-pocket-scale-${key}`).value); });
         
         const fInput = document.getElementById('set-bg-img'); 
         if (fInput.files.length > 0) { await saveBgImageToDB(fInput.files[0]); }
@@ -662,7 +784,27 @@ window.CmsWebPlayer = {
     getUseFirebase: () => Boolean(appSettings.useFirebase)
 };
 
-function startGame() { readyScreen.classList.add('hidden'); setupBackgroundPlayback(); startSilentAudio(); mainApp.classList.remove('hidden'); scheduleMarqueeUpdate(); if (currentFolderId) { const f = musicLibrary.find(f => f.id === currentFolderId); startPlaylist(f ? f.songs : (musicLibrary.find(f => f.id === '__all')?.songs ||[]), 0); } }
+function startGame() {
+    readyScreen.classList.add('hidden'); setupBackgroundPlayback(); startSilentAudio(); mainApp.classList.remove('hidden'); scheduleMarqueeUpdate();
+    if (currentFolderId) {
+        const saved = appSettings.resumeLastPlayback ? getSavedPlaybackState() : null;
+        const targetFolderId = saved?.folderId || currentFolderId;
+        const f = musicLibrary.find(f => f.id === targetFolderId) || musicLibrary.find(f => f.id === currentFolderId);
+        const songs = f ? f.songs : (musicLibrary.find(f => f.id === '__all')?.songs || []);
+        let index = 0;
+        if (saved?.itemId) {
+            const savedIndex = songs.findIndex(song => song.id === saved.itemId);
+            if (savedIndex >= 0) index = savedIndex;
+            if (f?.id && f.id !== currentFolderId) selectFolder(f.id);
+        }
+        startPlaylist(songs, index);
+        if (saved?.currentTime && saved.currentTime > 3) {
+            setTimeout(() => {
+                if (currentPlayingItem?.site === 'youtube' && ytPlayer?.seekTo) ytPlayer.seekTo(saved.currentTime, true);
+            }, 1800);
+        }
+    }
+}
 
 function buildLibrary() {
     let fMap = {}; let fOrder =[]; 
@@ -785,6 +927,7 @@ function scrollActiveTrackInList(activeEl) {
     const listRect = trackListEl.getBoundingClientRect(); const itemRect = activeEl.getBoundingClientRect();
     const desired = trackListEl.scrollTop + (itemRect.top - listRect.top) - (trackListEl.clientHeight - itemRect.height) / 2;
     const max = Math.max(0, trackListEl.scrollHeight - trackListEl.clientHeight);
+    window.__cmsAutoTrackScrollUntil = Date.now() + 900;
     trackListEl.scrollTo({ top: Math.min(max, Math.max(0, desired)), behavior: 'smooth' });
 }
 
@@ -904,8 +1047,8 @@ function stopProgressTimer() { clearInterval(progressInterval); }
 function updateProgress() {
     if (!isPlaying) return; let cur = 0; let dur = 0;
     if (currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') { cur = ytPlayer.getCurrentTime(); dur = ytPlayer.getDuration(); } 
-    else if (currentPlayingItem.site === 'niconico') { nicoCurrentTime += 1; cur = nicoCurrentTime; dur = nicoDuration; if (dur > 0 && cur >= dur + 2 && !nicoEndedFlag) { nicoEndedFlag = true; stopProgressTimer(); playNextVideo(); return; } } else return;
-    if (dur > 0) { const pct = (cur / dur) * 100; document.getElementById('progress-bar').style.width = `${pct}%`; document.getElementById('pocket-progress-bar').style.width = `${pct}%`; document.getElementById('time-current').textContent = formatTime(cur); document.getElementById('time-duration').textContent = formatTime(dur); document.getElementById('pocket-time-current').textContent = formatTime(cur); document.getElementById('pocket-time-duration').textContent = formatTime(dur); }
+    else if (currentPlayingItem.site === 'niconico') { nicoCurrentTime += 1; cur = nicoCurrentTime; dur = nicoDuration; if (dur > 0 && cur >= dur + 2 && !nicoEndedFlag) { nicoEndedFlag = true; markPlaybackCompleted(currentPlayingItem); stopProgressTimer(); playNextVideo(); return; } } else return;
+    if (dur > 0) { const pct = (cur / dur) * 100; document.getElementById('progress-bar').style.width = `${pct}%`; document.getElementById('pocket-progress-bar').style.width = `${pct}%`; document.getElementById('time-current').textContent = formatTime(cur); document.getElementById('time-duration').textContent = formatTime(dur); document.getElementById('pocket-time-current').textContent = formatTime(cur); document.getElementById('pocket-time-duration').textContent = formatTime(dur); savePlaybackState({ currentTime: cur }); }
 }
 function formatTime(s) { if (!s || isNaN(s)) return "0:00"; const m = Math.floor(s / 60); const sc = Math.floor(s % 60); return `${m}:${sc.toString().padStart(2, '0')}`; }
 function handleProgressClick(e) { if (!currentPlayingItem || !ytPlayer || currentPlayingItem.site !== 'youtube' || typeof ytPlayer.getDuration !== 'function') return; const r = e.target.getBoundingClientRect(); const pos = (e.clientX - r.left) / r.width; const dur = ytPlayer.getDuration(); if (dur > 0) { ytPlayer.seekTo(dur * pos, true); updateProgress(); } }
@@ -922,11 +1065,12 @@ function createYouTubePlayer(vId) {
         ytPlayer = new YT.Player('yt-player-mount', { height: '100%', width: '100%', videoId: vId, playerVars: { 'playsinline': 1, 'autoplay': 1, 'rel': 0 }, events: { 'onReady': (e) => { if(appSettings.dataSaverMode && typeof e.target.setPlaybackQuality === 'function') e.target.setPlaybackQuality('tiny'); isPlaying = true; try { e.target.playVideo(); } catch (_) {} updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); schedulePlaybackRecovery(); }, 'onStateChange': onPlayerStateChange, 'onError': () => { setTimeout(playNextVideo, 5000); } } });
     } else setTimeout(() => createYouTubePlayer(vId), 1000);
 }
-function onPlayerStateChange(e) { if (e.data === YT.PlayerState.PLAYING) { isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); } else if (e.data === YT.PlayerState.PAUSED) { isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); } else if (e.data === YT.PlayerState.ENDED) { stopProgressTimer(); document.getElementById('progress-bar').style.width = '0%'; playNextVideo(); } }
+function onPlayerStateChange(e) { if (e.data === YT.PlayerState.PLAYING) { isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); } else if (e.data === YT.PlayerState.PAUSED) { isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); } else if (e.data === YT.PlayerState.ENDED) { markPlaybackCompleted(currentPlayingItem); stopProgressTimer(); document.getElementById('progress-bar').style.width = '0%'; playNextVideo(); } }
 
 function loadVideo(idx) {
     if (idx < 0 || idx >= currentPlaylist.length) return;
     currentIndex = idx; isTransitioning = false; currentPlayingItem = currentPlaylist[idx]; isPlaying = true; nicoDuration = 0; nicoCurrentTime = 0; nicoEndedFlag = false;
+    savePlaybackState({ force: true, currentTime: 0 });
     updatePlayerUI(currentPlayingItem); updateActiveTrackUI();
     document.getElementById('progress-bar').style.width = '0%'; document.getElementById('pocket-progress-bar').style.width = '0%'; document.getElementById('time-current').textContent = '0:00'; document.getElementById('time-duration').textContent = '0:00'; stopProgressTimer();
     const c = document.getElementById('player-container');
@@ -948,7 +1092,7 @@ function handleNicoMessage(e) {
     const ev = e.data.eventName; const d = e.data.data;
     if (ev === 'loadComplete') { const i = document.getElementById('nico-player'); if (i && i.contentWindow) { setTimeout(() => { i.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: "play" }, 'https://embed.nicovideo.jp'); applyVolume(); startProgressTimer(); startSilentAudio(); schedulePlaybackRecovery(); }, 150); } } 
     else if (ev === 'playerMetadataChange') { if (d && d.duration) nicoDuration = d.duration / 1000; } else if (ev === 'playerPlayTimeChange') { if (d && d.playTime) nicoCurrentTime = d.playTime / 1000; } 
-    else if (ev === 'playerStatusChange') { const s = d.playerStatus; if (s === 4 && !nicoEndedFlag) { nicoEndedFlag = true; playNextVideo(); } else if (s === 2) { isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); } else if (s === 3) { isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); } } 
+    else if (ev === 'playerStatusChange') { const s = d.playerStatus; if (s === 4 && !nicoEndedFlag) { nicoEndedFlag = true; markPlaybackCompleted(currentPlayingItem); playNextVideo(); } else if (s === 2) { isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); } else if (s === 3) { isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); } } 
     else if (ev === 'error') setTimeout(() => playNextVideo(), 5000);
 }
 
