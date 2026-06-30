@@ -13,12 +13,43 @@ body.theme-toyota {
 }
 
 body.theme-nerv {
-    --bg-color: #000; --panel-rgb: 0, 0, 0; --border-color: #ff3300; --accent-color: #ff9d00;
-    --text-color: #ff9d00; --sub-text-color: rgba(255, 157, 0, 0.7);
-    --panel-shadow: 0 0 10px rgba(255, 51, 0, 0.3); --border-radius: 0px;
-    --font-family: "Hiragino Mincho ProN", "Hiragino Mincho Pro", "Yu Mincho", "MS PMincho", serif;
+    --bg-color: #030303; --panel-rgb: 3, 3, 3; --border-color: #e60012; --accent-color: #ff9d00;
+    --text-color: #ff9d00; --sub-text-color: rgba(255, 157, 0, 0.72);
+    --panel-shadow: 0 0 0 1px rgba(230,0,18,.35), 0 0 22px rgba(230,0,18,.24); --border-radius: 0px;
+    --font-family: "Share Tech Mono", "Roboto Condensed", "Meiryo", sans-serif;
+    --bg-gradient:
+        linear-gradient(120deg, rgba(230,0,18,.12), transparent 24%, rgba(255,157,0,.08) 55%, transparent 72%),
+        radial-gradient(circle at top left, rgba(230,0,18,.28), transparent 30%),
+        #030303;
 }
-body.theme-nerv * { font-weight: bold; letter-spacing: 1px; }
+body.theme-nerv * { font-weight: bold; letter-spacing: .05em; }
+body.theme-nerv::before {
+    content: "EMERGENCY  SYSTEM CHECK  MAGI-LINK";
+    position: fixed; left: 12px; right: 12px; top: 8px; z-index: 1; pointer-events: none;
+    color: rgba(230,0,18,.46); font: 10px/1 "Share Tech Mono", monospace; text-align: right;
+}
+body.theme-nerv::after {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .20;
+    background-image:
+        linear-gradient(30deg, transparent 28px, rgba(230,0,18,.35) 29px, transparent 31px),
+        linear-gradient(150deg, transparent 28px, rgba(255,157,0,.22) 29px, transparent 31px);
+    background-size: 72px 42px;
+}
+body.theme-nerv .panel-glass,
+body.theme-nerv .w-t-item,
+body.theme-nerv .w-f-item,
+body.theme-nerv .theme-btn,
+body.theme-nerv .widget-search {
+    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+    position: relative;
+}
+body.theme-nerv .panel-glass::before {
+    content: "NERV-CMS"; position: absolute; top: 4px; right: 8px; color: rgba(230,0,18,.42); font: 9px/1 "Share Tech Mono", monospace; pointer-events: none;
+}
+body.theme-nerv .w-t-item.active,
+body.theme-nerv .w-f-item.active {
+    background: #e60012 !important; color: #fff !important; border-left-color: #ff9d00;
+}
 
 html { font-size: var(--base-font-size); }
 html, body {
@@ -87,6 +118,9 @@ button { border-radius: 0; }
 #pocket-overlay.layout-editing .pocket-layout-item,
 #pocket-overlay.pocket-layout-custom .pocket-layout-item { position: absolute; margin: 0 !important; transform: translate(-50%, -50%) scale(var(--pocket-item-scale, 1)); }
 #pocket-overlay.layout-editing .pocket-layout-item { outline: 2px dashed var(--accent-color); outline-offset: 5px; cursor: move; touch-action: none; }
+.pocket-resize-handle { display: none; position: absolute; right: -14px; bottom: -14px; width: 24px; height: 24px; border: 2px solid var(--accent-color); background: rgba(0,0,0,.45); z-index: 4; cursor: nwse-resize; touch-action: none; }
+.pocket-resize-handle::after { content:""; position:absolute; right:4px; bottom:4px; width:8px; height:8px; border-right:2px solid #fff; border-bottom:2px solid #fff; }
+#pocket-overlay.layout-editing .pocket-resize-handle { display: block; }
 #pocket-overlay .pocket-layout-hidden { display: none !important; }
 #pocket-overlay.layout-editing .pocket-layout-hidden { display: block !important; opacity: 0.35; }
 #pocket-overlay.touch-holding .pocket-hint { color: var(--accent-color); animation: pulse-icon 0.6s infinite; }
@@ -300,8 +334,8 @@ select.widget-search option { background-color: var(--bg-color); color: var(--te
 .w-t-item.active { background: rgba(255,255,255,0.15); border-left: 3px solid var(--text-color); color: var(--text-color); }
 .w-t-item.active .track-title-text { color: var(--text-color); }
 
-body.theme-nerv .w-f-item.active, body.theme-nerv .w-t-item.active { background: var(--text-color); color: #000 !important; border-left: none; }
-body.theme-nerv .w-t-item.active .track-title-text, body.theme-nerv .w-t-item.active .track-artist-text { color: #000; }
+body.theme-nerv .w-f-item.active, body.theme-nerv .w-t-item.active { background: #e60012; color: #fff !important; border-left: 3px solid #ff9d00; }
+body.theme-nerv .w-t-item.active .track-title-text, body.theme-nerv .w-t-item.active .track-artist-text { color: #fff; }
 
 .w-t-idx { width: 25px; text-align: right; margin-right: 12px; opacity: 0.6; font-size: 0.85rem; flex-shrink: 0;}
 .w-t-playing-icon { display: flex; justify-content: center; align-items: center; width: 25px; margin-right: 12px; color: var(--text-color); animation: pulse-icon 1.5s infinite; flex-shrink: 0;}
@@ -419,6 +453,11 @@ input[type="color"] { appearance: none; -webkit-appearance: none; background-col
 .pocket-layout-buttons { display: flex; gap: 8px; }
 .pocket-layout-buttons button { flex: 1; min-height: 40px; }
 .setting-help { display: block; margin-top: 7px; font-size: 0.72rem; opacity: 0.78; }
+.setting-row:has(#set-pocket-bg-manual),
+.window-color-grid:has(#set-pocket-bg-x),
+.window-color-grid:has(#set-pocket-scale-clock) { display: none !important; }
+.bg-position-editing-hint { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 13000; padding: 10px 16px; color: #fff; background: rgba(0,0,0,.72); border: 1px solid var(--border-color); }
+body.bg-position-editing { cursor: grab; }
 @media (max-width: 600px), (max-height: 620px) {
     #settings-modal { align-items: stretch; padding: max(6px, env(safe-area-inset-top)) 6px max(6px, env(safe-area-inset-bottom)); }
     .settings-window { width: 100%; max-width: 100%; max-height: 100%; padding: 14px; gap: 8px; }
