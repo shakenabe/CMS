@@ -356,6 +356,14 @@ function setupMobileTrackListFocus() {
         document.body.classList.add('mobile-list-focus'); header?.classList.remove('hidden');
     };
     const close = () => { document.body.classList.remove('mobile-list-focus'); header?.classList.add('hidden'); };
+    const closeIfAtTop = () => {
+        if (!document.body.classList.contains('mobile-list-focus')) return;
+        if (!userScrolledList) return;
+        if (Date.now() - openedAt < 450) return;
+        if (Date.now() < (window.__cmsAutoTrackScrollUntil || 0)) return;
+        clearTimeout(closeTopTimer);
+        if (trackListEl.scrollTop <= 2) closeTopTimer = setTimeout(close, 120);
+    };
     trackListEl.addEventListener('wheel', () => { userScrolledList = true; open(); }, { passive: true });
     trackListEl.addEventListener('pointerdown', (e) => { pointerStart = { id: e.pointerId, x: e.clientX, y: e.clientY, type: e.pointerType }; }, { passive: true });
     trackListEl.addEventListener('pointermove', (e) => {
@@ -368,10 +376,9 @@ function setupMobileTrackListFocus() {
         if (!userScrolledList) return;
         if (Date.now() - openedAt < 450) return;
         if (Date.now() < (window.__cmsAutoTrackScrollUntil || 0)) return;
-        clearTimeout(closeTopTimer);
-        if (trackListEl.scrollTop <= 2) closeTopTimer = setTimeout(close, 120);
+        closeIfAtTop();
     }, { passive: true });
-    const clearPointer = () => { pointerStart = null; };
+    const clearPointer = () => { pointerStart = null; closeIfAtTop(); };
     trackListEl.addEventListener('pointerup', clearPointer, { passive: true });
     trackListEl.addEventListener('pointercancel', clearPointer, { passive: true });
     header?.addEventListener('pointerdown', (e) => { e.stopPropagation(); close(); });
@@ -701,11 +708,8 @@ function applyPocketAppearance() {
     const overlay = document.getElementById('pocket-overlay'); if (!overlay) return;
     overlay.classList.toggle('use-background', Boolean(appSettings.pocketUseBackground));
     overlay.style.setProperty('--pocket-dim', String(Math.max(0, Math.min(90, Number(appSettings.pocketBgDim))) / 100));
-    const bgScale = Math.max(50, Math.min(250, Number(appSettings.pocketBgScale) || 100));
-    const bgX = Math.max(0, Math.min(100, Number(appSettings.pocketBgX) || 50));
-    const bgY = Math.max(0, Math.min(100, Number(appSettings.pocketBgY) || 50));
-    overlay.style.setProperty('--pocket-bg-position', appSettings.pocketBgManual ? `${bgX}% ${bgY}%` : appSettings.bgPosition);
-    overlay.style.setProperty('--pocket-bg-size', appSettings.pocketBgManual ? `${bgScale}% auto` : appSettings.bgSize);
+    overlay.style.setProperty('--pocket-bg-position', appSettings.bgPosition);
+    overlay.style.setProperty('--pocket-bg-size', appSettings.bgSize);
     const visibility = { clock: appSettings.pocketShowClock, art: appSettings.pocketShowArt, title: appSettings.pocketShowTitle, progress: appSettings.pocketShowProgress, controls: appSettings.pocketShowControls, unlock: appSettings.pocketShowUnlock };
     const custom = appSettings.pocketLayout && Object.keys(appSettings.pocketLayout).length > 0;
     overlay.classList.toggle('pocket-layout-custom', custom && !overlay.classList.contains('layout-editing'));
@@ -740,8 +744,37 @@ function setupPocketLayoutDrag() {
     Object.entries(POCKET_LAYOUT_ELEMENTS).forEach(([key, id]) => {
         const el = document.getElementById(id); if (!el || el.dataset.layoutDragReady === '1') return;
         el.dataset.layoutDragReady = '1';
+        if (!el.querySelector(':scope > .pocket-resize-handle')) {
+            const handle = document.createElement('span');
+            handle.className = 'pocket-resize-handle';
+            handle.dataset.resizeKey = key;
+            el.appendChild(handle);
+            handle.addEventListener('pointerdown', (e) => {
+                if (!overlay.classList.contains('layout-editing')) return;
+                e.preventDefault(); e.stopPropagation();
+                try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+                const startX = e.clientX;
+                const startScale = Number(appSettings.pocketLayoutScale?.[key] || 100);
+                const resize = (ev) => {
+                    const next = Math.max(50, Math.min(220, Math.round(startScale + (ev.clientX - startX) / 2)));
+                    appSettings.pocketLayoutScale = appSettings.pocketLayoutScale || {};
+                    appSettings.pocketLayoutScale[key] = next;
+                    el.style.setProperty('--pocket-item-scale', String(next / 100));
+                };
+                const endResize = () => {
+                    handle.removeEventListener('pointermove', resize);
+                    handle.removeEventListener('pointerup', endResize);
+                    handle.removeEventListener('pointercancel', endResize);
+                    saveSettings();
+                };
+                handle.addEventListener('pointermove', resize);
+                handle.addEventListener('pointerup', endResize);
+                handle.addEventListener('pointercancel', endResize);
+            });
+        }
         el.addEventListener('pointerdown', (e) => {
             if (!overlay.classList.contains('layout-editing')) return;
+            if (e.target?.classList?.contains('pocket-resize-handle')) return;
             e.preventDefault(); e.stopPropagation();
             try { el.setPointerCapture(e.pointerId); } catch (_) {}
             const move = (ev) => {
@@ -758,6 +791,62 @@ function setupPocketLayoutDrag() {
     document.getElementById('pocket-layout-done').addEventListener('click', (e) => {
         e.stopPropagation(); overlay.classList.remove('layout-editing'); overlay.classList.add('hidden'); document.body.classList.remove('pocket-active'); e.currentTarget.classList.add('hidden'); saveSettings(); applyPocketAppearance();
     });
+}
+
+function beginBackgroundPositionEditor() {
+    const modal = document.getElementById('settings-modal');
+    modal?.classList.add('hidden');
+    document.body.classList.add('bg-position-editing');
+    let hint = document.getElementById('bgPositionEditingHint');
+    if (!hint) {
+        hint = document.createElement('button');
+        hint.id = 'bgPositionEditingHint';
+        hint.className = 'bg-position-editing-hint';
+        hint.textContent = '背景をドラッグして調整 / 完了';
+        document.body.appendChild(hint);
+    }
+    let dragging = false;
+    let start = null;
+    const parsePosition = () => {
+        const match = String(appSettings.bgPosition || '50% 50%').match(/(-?\d+(?:\.\d+)?)%\s+(-?\d+(?:\.\d+)?)%/);
+        if (match) return { x: Number(match[1]), y: Number(match[2]) };
+        if (appSettings.bgPosition === 'top') return { x: 50, y: 0 };
+        if (appSettings.bgPosition === 'bottom') return { x: 50, y: 100 };
+        return { x: 50, y: 50 };
+    };
+    let base = parsePosition();
+    const finish = () => {
+        document.body.classList.remove('bg-position-editing');
+        window.removeEventListener('pointerdown', down, true);
+        window.removeEventListener('pointermove', move, true);
+        window.removeEventListener('pointerup', up, true);
+        window.removeEventListener('pointercancel', up, true);
+        hint.remove();
+        saveSettings();
+        applyThemeSettings();
+        applyPocketAppearance();
+    };
+    const down = (e) => {
+        if (e.target === hint) return;
+        dragging = true;
+        start = { x: e.clientX, y: e.clientY, base: parsePosition() };
+        try { document.body.setPointerCapture?.(e.pointerId); } catch (_) {}
+        e.preventDefault();
+    };
+    const move = (e) => {
+        if (!dragging || !start) return;
+        const nextX = Math.max(0, Math.min(100, start.base.x + ((e.clientX - start.x) / window.innerWidth) * 100));
+        const nextY = Math.max(0, Math.min(100, start.base.y + ((e.clientY - start.y) / window.innerHeight) * 100));
+        appSettings.bgPosition = `${nextX.toFixed(1)}% ${nextY.toFixed(1)}%`;
+        document.documentElement.style.setProperty('--bg-position', appSettings.bgPosition);
+        applyPocketAppearance();
+    };
+    const up = () => { dragging = false; base = parsePosition(); start = null; };
+    hint.onclick = (e) => { e.stopPropagation(); finish(); };
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
 }
 
 function setupSettingsModal() {
@@ -815,6 +904,8 @@ function setupSettingsModal() {
     document.getElementById('btn-close-settings').onclick = () => modal.classList.add('hidden');
     document.getElementById('btn-reset-settings').onclick = () => { if (confirm('初期化しますか？')) { localStorage.removeItem('cms_player_settings_v23'); clearBgImageDB(); location.reload(); } };
     document.getElementById('btn-clear-bg').onclick = () => { clearBgImageDB(); alert('背景をクリアしました。Saveを押してください。'); };
+    const bgEditBtn = document.getElementById('btn-edit-bg-position');
+    if (bgEditBtn) bgEditBtn.onclick = () => beginBackgroundPositionEditor();
     document.getElementById('btn-reset-window').onclick = () => { appSettings.windowPositions = {}; appSettings.windowStates = {}; alert('配置をリセットしました。Saveを押してください。'); };
     document.getElementById('btn-edit-pocket-layout').onclick = () => {
         appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value);
@@ -827,7 +918,7 @@ function setupSettingsModal() {
     document.getElementById('btn-reset-pocket-layout').onclick = () => { appSettings.pocketLayout = {}; saveSettings(); applyPocketAppearance(); alert('ロック画面を標準配置へ戻しました。'); };
 
     document.getElementById('btn-save-settings').onclick = async () => {
-        appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value; appSettings.bgSize = document.getElementById('set-bg-size').value; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
+        appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
         appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         appSettings.windowColorsLinked = document.getElementById('set-window-colors-linked').checked; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = document.getElementById('set-window-title-color').value; appSettings.windowTitleAlpha = Number(document.getElementById('set-window-title-alpha').value);
         appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value); appSettings.pocketBgManual = document.getElementById('set-pocket-bg-manual').checked; appSettings.pocketBgX = Number(document.getElementById('set-pocket-bg-x').value); appSettings.pocketBgY = Number(document.getElementById('set-pocket-bg-y').value); appSettings.pocketBgScale = Number(document.getElementById('set-pocket-bg-scale').value); appSettings.pocketShowClock = document.getElementById('set-pocket-show-clock').checked; appSettings.pocketShowArt = document.getElementById('set-pocket-show-art').checked; appSettings.pocketShowTitle = document.getElementById('set-pocket-show-title').checked; appSettings.pocketShowProgress = document.getElementById('set-pocket-show-progress').checked; appSettings.pocketShowControls = document.getElementById('set-pocket-show-controls').checked; appSettings.pocketShowUnlock = document.getElementById('set-pocket-show-unlock').checked;
