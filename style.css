@@ -118,8 +118,8 @@ button { border-radius: 0; }
 #pocket-overlay.layout-editing .pocket-layout-item,
 #pocket-overlay.pocket-layout-custom .pocket-layout-item { position: absolute; margin: 0 !important; transform: translate(-50%, -50%) scale(var(--pocket-item-scale, 1)); }
 #pocket-overlay.layout-editing .pocket-layout-item { outline: 2px dashed var(--accent-color); outline-offset: 5px; cursor: move; touch-action: none; }
-.pocket-resize-handle { display: none; position: absolute; right: -14px; bottom: -14px; width: 24px; height: 24px; border: 2px solid var(--accent-color); background: rgba(0,0,0,.45); z-index: 4; cursor: nwse-resize; touch-action: none; }
-.pocket-resize-handle::after { content:""; position:absolute; right:4px; bottom:4px; width:8px; height:8px; border-right:2px solid #fff; border-bottom:2px solid #fff; }
+.pocket-resize-handle { display: none; position: absolute; right: -18px; top: 15%; width: 28px; height: 70%; min-height: 34px; border: 2px solid var(--accent-color); border-left: 0; background: rgba(0,0,0,.45); z-index: 4; cursor: ew-resize; touch-action: none; }
+.pocket-resize-handle::after { content:""; position:absolute; right:7px; top:50%; width:8px; height:32px; border-right:2px solid #fff; border-left:2px solid rgba(255,255,255,.55); transform: translateY(-50%); }
 #pocket-overlay.layout-editing .pocket-resize-handle { display: block; }
 #pocket-overlay .pocket-layout-hidden { display: none !important; }
 #pocket-overlay.layout-editing .pocket-layout-hidden { display: block !important; opacity: 0.35; }
@@ -456,8 +456,10 @@ input[type="color"] { appearance: none; -webkit-appearance: none; background-col
 .setting-row:has(#set-pocket-bg-manual),
 .window-color-grid:has(#set-pocket-bg-x),
 .window-color-grid:has(#set-pocket-scale-clock) { display: none !important; }
+.bg-position-editing-layer { position: fixed; inset: 0; z-index: 12990; background-color: var(--bg-color); background-image: var(--bg-image, none), var(--bg-gradient); background-position: var(--bg-position), center; background-size: var(--bg-size), cover; background-repeat: no-repeat; cursor: grab; touch-action: none; }
+.bg-position-editing-layer::before { content: ""; position: absolute; inset: 0; background: rgba(0,0,0,.22); pointer-events: none; }
 .bg-position-editing-hint { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 13000; padding: 10px 16px; color: #fff; background: rgba(0,0,0,.72); border: 1px solid var(--border-color); }
-body.bg-position-editing { cursor: grab; }
+body.bg-position-editing { cursor: grab; overflow: hidden; }
 @media (max-width: 600px), (max-height: 620px) {
     #settings-modal { align-items: stretch; padding: max(6px, env(safe-area-inset-top)) 6px max(6px, env(safe-area-inset-bottom)); }
     .settings-window { width: 100%; max-width: 100%; max-height: 100%; padding: 14px; gap: 8px; }
