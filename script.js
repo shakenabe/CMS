@@ -356,13 +356,22 @@ function setupMobileTrackListFocus() {
         document.body.classList.add('mobile-list-focus'); header?.classList.remove('hidden');
     };
     const close = () => { document.body.classList.remove('mobile-list-focus'); header?.classList.add('hidden'); };
+    const isListBackAtStart = () => {
+        if (!trackListEl) return false;
+        if (trackListEl.scrollTop <= 8) return true;
+        const firstTrack = trackListEl.querySelector('.w-t-item');
+        if (!firstTrack) return trackListEl.scrollTop <= 16;
+        const listRect = trackListEl.getBoundingClientRect();
+        const firstRect = firstTrack.getBoundingClientRect();
+        return firstRect.top >= listRect.top - 6 && firstRect.top <= listRect.top + 44;
+    };
     const closeIfAtTop = () => {
         if (!document.body.classList.contains('mobile-list-focus')) return;
         if (!userScrolledList) return;
         if (Date.now() - openedAt < 450) return;
         if (Date.now() < (window.__cmsAutoTrackScrollUntil || 0)) return;
         clearTimeout(closeTopTimer);
-        if (trackListEl.scrollTop <= 2) closeTopTimer = setTimeout(close, 120);
+        if (isListBackAtStart()) closeTopTimer = setTimeout(() => { if (isListBackAtStart()) close(); }, 120);
     };
     trackListEl.addEventListener('wheel', () => { userScrolledList = true; open(); }, { passive: true });
     trackListEl.addEventListener('pointerdown', (e) => { pointerStart = { id: e.pointerId, x: e.clientX, y: e.clientY, type: e.pointerType }; }, { passive: true });
@@ -687,15 +696,12 @@ function applyThemeSettings() {
     document.documentElement.style.setProperty('--bg-gradient', makeAdaptiveGradient(baseColor));
     
     const op = parseFloat(appSettings.bgOpacity); const panelAlpha = 0.12 + ((100 - op) / 100 * 0.68); document.documentElement.style.setProperty('--panel-alpha', panelAlpha); document.documentElement.style.setProperty('--panel-blur', appSettings.performanceMode ? '0px' : `${((100 - op) / 100 * 20)}px`);
-    const linked = appSettings.windowColorsLinked !== false;
     const windowPanelColor = appSettings.windowPanelColor || baseColor;
     const windowPanelAlpha = Math.max(0.1, Math.min(1, Number(appSettings.windowPanelAlpha) / 100 || panelAlpha));
-    const windowTitleColor = linked ? windowPanelColor : (appSettings.windowTitleColor || windowPanelColor);
-    const windowTitleAlpha = linked ? Math.max(0.35, windowPanelAlpha) : Math.max(0.1, Math.min(1, Number(appSettings.windowTitleAlpha) / 100 || windowPanelAlpha));
     document.documentElement.style.setProperty('--window-panel-rgb', hexToRgbString(windowPanelColor));
     document.documentElement.style.setProperty('--window-panel-alpha', windowPanelAlpha);
-    document.documentElement.style.setProperty('--window-title-rgb', hexToRgbString(windowTitleColor));
-    document.documentElement.style.setProperty('--window-title-alpha', windowTitleAlpha);
+    document.documentElement.style.setProperty('--window-title-rgb', hexToRgbString(windowPanelColor));
+    document.documentElement.style.setProperty('--window-title-alpha', Math.max(0.35, windowPanelAlpha));
     const pOverlay = document.getElementById('pocket-overlay'); if (appSettings.pocketAlwaysOn) pOverlay.classList.add('always-on'); else pOverlay.classList.remove('always-on');
     applyPocketAppearance();
 }
@@ -797,6 +803,13 @@ function beginBackgroundPositionEditor() {
     const modal = document.getElementById('settings-modal');
     modal?.classList.add('hidden');
     document.body.classList.add('bg-position-editing');
+    let layer = document.getElementById('bgPositionEditingLayer');
+    if (!layer) {
+        layer = document.createElement('div');
+        layer.id = 'bgPositionEditingLayer';
+        layer.className = 'bg-position-editing-layer';
+        document.body.appendChild(layer);
+    }
     let hint = document.getElementById('bgPositionEditingHint');
     if (!hint) {
         hint = document.createElement('button');
@@ -821,6 +834,7 @@ function beginBackgroundPositionEditor() {
         window.removeEventListener('pointermove', move, true);
         window.removeEventListener('pointerup', up, true);
         window.removeEventListener('pointercancel', up, true);
+        layer.remove();
         hint.remove();
         saveSettings();
         applyThemeSettings();
@@ -839,6 +853,7 @@ function beginBackgroundPositionEditor() {
         const nextY = Math.max(0, Math.min(100, start.base.y + ((e.clientY - start.y) / window.innerHeight) * 100));
         appSettings.bgPosition = `${nextX.toFixed(1)}% ${nextY.toFixed(1)}%`;
         document.documentElement.style.setProperty('--bg-position', appSettings.bgPosition);
+        layer.style.setProperty('--bg-position', appSettings.bgPosition);
         applyPocketAppearance();
     };
     const up = () => { dragging = false; base = parsePosition(); start = null; };
@@ -872,9 +887,11 @@ function setupSettingsModal() {
         document.getElementById('set-force-pc-layout').checked = appSettings.forcePcLayout; document.getElementById('set-window-mode').checked = appSettings.windowMode;
         document.getElementById('set-use-firebase').checked = Boolean(appSettings.useFirebase);
         document.getElementById('set-use-custom-color').checked = appSettings.customColorEnabled; document.getElementById('set-accent-color').value = appSettings.customAccentColor; document.getElementById('set-border-color').value = appSettings.customBorderColor; document.getElementById('set-blur-base-color').value = appSettings.blurBaseColor || '#000000';
-        document.getElementById('set-window-colors-linked').checked = appSettings.windowColorsLinked !== false;
+        const windowColorsLinkedEl = document.getElementById('set-window-colors-linked'); if (windowColorsLinkedEl) windowColorsLinkedEl.checked = true;
         document.getElementById('set-window-panel-color').value = appSettings.windowPanelColor || '#000000'; document.getElementById('set-window-panel-alpha').value = appSettings.windowPanelAlpha ?? 55; document.getElementById('window-panel-alpha-val').textContent = appSettings.windowPanelAlpha ?? 55;
-        document.getElementById('set-window-title-color').value = appSettings.windowTitleColor || '#1f4f8f'; document.getElementById('set-window-title-alpha').value = appSettings.windowTitleAlpha ?? 100; document.getElementById('window-title-alpha-val').textContent = appSettings.windowTitleAlpha ?? 100;
+        const windowTitleColorEl = document.getElementById('set-window-title-color'); if (windowTitleColorEl) windowTitleColorEl.value = appSettings.windowPanelColor || '#000000';
+        const windowTitleAlphaEl = document.getElementById('set-window-title-alpha'); if (windowTitleAlphaEl) windowTitleAlphaEl.value = appSettings.windowPanelAlpha ?? 55;
+        const windowTitleAlphaVal = document.getElementById('window-title-alpha-val'); if (windowTitleAlphaVal) windowTitleAlphaVal.textContent = appSettings.windowPanelAlpha ?? 55;
         document.getElementById('set-pocket-use-background').checked = Boolean(appSettings.pocketUseBackground); document.getElementById('set-pocket-bg-dim').value = appSettings.pocketBgDim ?? 35; document.getElementById('pocket-dim-val').textContent = appSettings.pocketBgDim ?? 35;
         document.getElementById('set-pocket-bg-manual').checked = Boolean(appSettings.pocketBgManual);
         document.getElementById('set-pocket-bg-x').value = appSettings.pocketBgX ?? 50; document.getElementById('pocket-bg-x-val').textContent = appSettings.pocketBgX ?? 50;
@@ -892,7 +909,8 @@ function setupSettingsModal() {
     document.getElementById('set-font-size').oninput = (e) => document.getElementById('font-val').textContent = e.target.value; document.getElementById('set-pc-left-width').oninput = (e) => document.getElementById('pc-width-val').textContent = e.target.value;
     document.getElementById('set-opacity').oninput = (e) => document.getElementById('op-val').textContent = e.target.value; document.getElementById('set-nico-boost').oninput = (e) => document.getElementById('boost-val').textContent = parseFloat(e.target.value).toFixed(1);
     document.getElementById('set-window-panel-alpha').oninput = (e) => document.getElementById('window-panel-alpha-val').textContent = e.target.value;
-    document.getElementById('set-window-title-alpha').oninput = (e) => document.getElementById('window-title-alpha-val').textContent = e.target.value;
+    const windowTitleAlphaInput = document.getElementById('set-window-title-alpha');
+    if (windowTitleAlphaInput) windowTitleAlphaInput.oninput = (e) => { const val = document.getElementById('window-title-alpha-val'); if (val) val.textContent = e.target.value; };
     document.getElementById('set-pocket-bg-dim').oninput = (e) => document.getElementById('pocket-dim-val').textContent = e.target.value;
     document.getElementById('set-pocket-bg-x').oninput = (e) => document.getElementById('pocket-bg-x-val').textContent = e.target.value;
     document.getElementById('set-pocket-bg-y').oninput = (e) => document.getElementById('pocket-bg-y-val').textContent = e.target.value;
@@ -920,7 +938,7 @@ function setupSettingsModal() {
     document.getElementById('btn-save-settings').onclick = async () => {
         appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
         appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
-        appSettings.windowColorsLinked = document.getElementById('set-window-colors-linked').checked; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = document.getElementById('set-window-title-color').value; appSettings.windowTitleAlpha = Number(document.getElementById('set-window-title-alpha').value);
+        appSettings.windowColorsLinked = true; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = appSettings.windowPanelColor; appSettings.windowTitleAlpha = appSettings.windowPanelAlpha;
         appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value); appSettings.pocketBgManual = document.getElementById('set-pocket-bg-manual').checked; appSettings.pocketBgX = Number(document.getElementById('set-pocket-bg-x').value); appSettings.pocketBgY = Number(document.getElementById('set-pocket-bg-y').value); appSettings.pocketBgScale = Number(document.getElementById('set-pocket-bg-scale').value); appSettings.pocketShowClock = document.getElementById('set-pocket-show-clock').checked; appSettings.pocketShowArt = document.getElementById('set-pocket-show-art').checked; appSettings.pocketShowTitle = document.getElementById('set-pocket-show-title').checked; appSettings.pocketShowProgress = document.getElementById('set-pocket-show-progress').checked; appSettings.pocketShowControls = document.getElementById('set-pocket-show-controls').checked; appSettings.pocketShowUnlock = document.getElementById('set-pocket-show-unlock').checked;
         appSettings.pocketLayoutScale = appSettings.pocketLayoutScale || {};
         ['clock', 'art', 'title', 'progress', 'controls', 'unlock'].forEach(key => { appSettings.pocketLayoutScale[key] = Number(document.getElementById(`set-pocket-scale-${key}`).value); });
@@ -1240,7 +1258,12 @@ function stopProgressTimer() { clearInterval(progressInterval); }
 function updateProgress() {
     if (!isPlaying) return; let cur = 0; let dur = 0;
     if (currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') { cur = ytPlayer.getCurrentTime(); dur = ytPlayer.getDuration(); } 
-    else if (currentPlayingItem.site === 'niconico') { nicoCurrentTime += 1; cur = nicoCurrentTime; dur = nicoDuration; if (dur > 0 && cur >= dur + 2 && !nicoEndedFlag) { nicoEndedFlag = true; markPlaybackCompleted(currentPlayingItem); stopProgressTimer(); playNextVideo(); return; } } else return;
+    else if (currentPlayingItem.site === 'niconico') {
+        nicoCurrentTime += 1; cur = nicoCurrentTime;
+        const savedDuration = Number(currentPlayingItem.duration) || 0;
+        dur = savedDuration > 10 ? savedDuration : nicoDuration;
+        if (dur > 0 && cur >= dur + 1.2 && !nicoEndedFlag) { nicoEndedFlag = true; markPlaybackCompleted(currentPlayingItem); stopProgressTimer(); playNextVideo(); return; }
+    } else return;
     if (dur > 0) { const pct = (cur / dur) * 100; document.getElementById('progress-bar').style.width = `${pct}%`; document.getElementById('pocket-progress-bar').style.width = `${pct}%`; document.getElementById('time-current').textContent = formatTime(cur); document.getElementById('time-duration').textContent = formatTime(dur); document.getElementById('pocket-time-current').textContent = formatTime(cur); document.getElementById('pocket-time-duration').textContent = formatTime(dur); savePlaybackState({ currentTime: cur }); }
 }
 function formatTime(s) { if (!s || isNaN(s)) return "0:00"; const m = Math.floor(s / 60); const sc = Math.floor(s % 60); return `${m}:${sc.toString().padStart(2, '0')}`; }
