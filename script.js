@@ -483,17 +483,17 @@ function getDefaultWindowRect(id, index) {
     const wideDefaults = {
         'widget-player': { top: 16, left: 16, width: 450, height: 300 },
         'widget-controls': { top: 332, left: 16, width: 450, height: 210 },
-        'widget-clock': { top: 558, left: 16, width: 450, height: 160 },
+        'widget-clock': { top: 558, left: 16, width: 230, height: 120 },
         'widget-folder-list-wrapper': { top: 16, left: 482, width: 250, height: 526 },
         'widget-track-list-wrapper': { top: 16, left: 748, width: 410, height: 526 },
         'library-nav-wrapper': { top: 558, left: 482, width: 676, height: 130 }
     };
     if (window.innerWidth >= 1200) return windowRectToCss(wideDefaults[id] || { top: 30, left: 30, width: 360, height: 240 });
     const availableHeight = Math.max(180, window.innerHeight - 56);
-    const width = Math.min(560, Math.max(260, window.innerWidth - 32));
-    const height = Math.min(id === 'library-nav-wrapper' ? 180 : 430, Math.max(150, availableHeight - 32));
+    const width = id === 'widget-clock' ? Math.min(260, Math.max(170, window.innerWidth - 32)) : Math.min(560, Math.max(260, window.innerWidth - 32));
+    const height = id === 'widget-clock' ? 118 : Math.min(id === 'library-nav-wrapper' ? 180 : 430, Math.max(150, availableHeight - 32));
     const offset = 12 + index * 24;
-    return windowRectToCss(clampWindowRect({ top: offset, left: offset, width, height }));
+    return windowRectToCss(clampWindowRect({ top: offset, left: offset, width, height }, id));
 }
 
 function windowRectToCss(rect) {
@@ -508,12 +508,18 @@ function cssWindowRect(rect, fallback) {
     };
 }
 
-function clampWindowRect(rect) {
+function getWindowMinSize(id) {
+    if (id === 'widget-clock') return { width: 150, height: 82 };
+    return { width: 240, height: 120 };
+}
+
+function clampWindowRect(rect, id = '') {
     const taskbarHeight = 48;
-    const maxWidth = Math.max(220, window.innerWidth - 8);
-    const maxHeight = Math.max(140, window.innerHeight - taskbarHeight - 8);
-    const width = Math.min(maxWidth, Math.max(Math.min(240, maxWidth), rect.width));
-    const height = Math.min(maxHeight, Math.max(Math.min(120, maxHeight), rect.height));
+    const minSize = getWindowMinSize(id);
+    const maxWidth = Math.max(minSize.width, window.innerWidth - 8);
+    const maxHeight = Math.max(minSize.height, window.innerHeight - taskbarHeight - 8);
+    const width = Math.min(maxWidth, Math.max(Math.min(minSize.width, maxWidth), rect.width));
+    const height = Math.min(maxHeight, Math.max(Math.min(minSize.height, maxHeight), rect.height));
     return {
         width, height,
         left: Math.min(Math.max(4, rect.left), Math.max(4, window.innerWidth - width - 4)),
@@ -523,6 +529,7 @@ function clampWindowRect(rect) {
 
 function setupWindowPanel(el) {
     el.classList.add('wm-panel');
+    if (el.id === 'widget-clock') setupClockWindowPanel(el);
     if (el.dataset.windowReady === '1') return;
     el.dataset.windowReady = '1';
     const titlebar = document.createElement('div');
@@ -548,7 +555,7 @@ function setupWindowPointerDrag(el, handle) {
         const start = el.getBoundingClientRect(); const startX = e.clientX; const startY = e.clientY;
         try { handle.setPointerCapture(e.pointerId); } catch (_) {}
         const move = (ev) => {
-            const next = clampWindowRect({ top: start.top + ev.clientY - startY, left: start.left + ev.clientX - startX, width: start.width, height: start.height });
+            const next = clampWindowRect({ top: start.top + ev.clientY - startY, left: start.left + ev.clientX - startX, width: start.width, height: start.height }, el.id);
             el.style.top = `${next.top}px`; el.style.left = `${next.left}px`;
         };
         const end = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end); saveWindowPanelRect(el); };
@@ -563,7 +570,7 @@ function setupWindowPointerResize(el, handle) {
         const start = el.getBoundingClientRect(); const startX = e.clientX; const startY = e.clientY;
         try { handle.setPointerCapture(e.pointerId); } catch (_) {}
         const move = (ev) => {
-            const next = clampWindowRect({ top: start.top, left: start.left, width: start.width + ev.clientX - startX, height: start.height + ev.clientY - startY });
+            const next = clampWindowRect({ top: start.top, left: start.left, width: start.width + ev.clientX - startX, height: start.height + ev.clientY - startY }, el.id);
             el.style.width = `${next.width}px`; el.style.height = `${next.height}px`;
         };
         const end = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end); saveWindowPanelRect(el); };
@@ -573,7 +580,7 @@ function setupWindowPointerResize(el, handle) {
 
 function saveWindowPanelRect(el) {
     if (!appSettings.windowMode || appSettings.windowStates[el.id]?.mode !== 'normal') return;
-    const rect = clampWindowRect(el.getBoundingClientRect());
+    const rect = clampWindowRect(el.getBoundingClientRect(), el.id);
     appSettings.windowPositions[el.id] = windowRectToCss(rect); saveSettings();
 }
 
@@ -596,11 +603,27 @@ function applyWindowPanelState(el) {
         el.style.top = '0px'; el.style.left = '0px'; el.style.width = `${window.innerWidth}px`; el.style.height = `${Math.max(140, window.innerHeight - 44)}px`;
     } else {
         const fallback = cssWindowRect(getDefaultWindowRect(el.id, WINDOW_PANEL_IDS.indexOf(el.id)), { top: 10, left: 10, width: 360, height: 240 });
-        const rect = clampWindowRect(cssWindowRect(appSettings.windowPositions[el.id], fallback));
+        const rect = clampWindowRect(cssWindowRect(appSettings.windowPositions[el.id], fallback), el.id);
         appSettings.windowPositions[el.id] = windowRectToCss(rect);
         Object.assign(el.style, appSettings.windowPositions[el.id]);
     }
     if (state.mode === 'normal' || state.mode === 'maximized') focusWindowPanel(el);
+}
+
+function setupClockWindowPanel(el) {
+    el.classList.add('clock-window-panel');
+    if (el.dataset.clockWindowReady === '1') return;
+    el.dataset.clockWindowReady = '1';
+    const update = () => {
+        const rect = el.getBoundingClientRect();
+        el.classList.toggle('clock-compact', rect.width < 210 || rect.height < 112);
+        el.classList.toggle('clock-mini', rect.width < 172 || rect.height < 96);
+    };
+    if ('ResizeObserver' in window) {
+        const observer = new ResizeObserver(update);
+        observer.observe(el);
+    }
+    setTimeout(update, 0);
 }
 
 function clampAllWindowPanels() {
@@ -997,7 +1020,10 @@ window.CmsWebPlayer = {
             importScreen.classList.add('hidden');
             readyScreen.classList.add('hidden');
             mainApp.classList.remove('hidden');
+            setupBackgroundPlayback();
+            startSilentAudio();
             scheduleMarqueeUpdate();
+            setTimeout(() => startPlaybackFromCurrentLibrary(), 0);
         } else {
             importScreen.classList.add('hidden');
             readyScreen.classList.remove('hidden');
@@ -1007,21 +1033,28 @@ window.CmsWebPlayer = {
     getUseFirebase: () => Boolean(appSettings.useFirebase)
 };
 
+function startPlaybackFromCurrentLibrary() {
+    if (!musicLibrary.length || currentPlayingItem) return false;
+    const saved = appSettings.resumeLastPlayback ? getSavedPlaybackState() : null;
+    restoreViewStateFromSession(saved);
+    if (saved) { buildLibrary(); renderFolders(); }
+    const restored = resolveSavedPlaybackWithFallback(saved);
+    const f = restored?.folder
+        || musicLibrary.find(folder => folder.id === currentFolderId)
+        || musicLibrary.find(folder => folder.id === '__all')
+        || musicLibrary[0];
+    if (!f?.songs?.length) return false;
+    const index = restored ? restored.index : 0;
+    if (f.id && f.id !== currentFolderId) selectFolder(f.id, { preserveScroll: true, skipSave: true });
+    startPlaylist(f.songs, Math.min(Math.max(index, 0), f.songs.length - 1));
+    if (saved?.currentTime) saveCurrentSession({ force: true, currentTime: Number(saved.currentTime) || 0 });
+    seekSavedPlaybackTime(saved);
+    return true;
+}
+
 function startGame() {
     readyScreen.classList.add('hidden'); setupBackgroundPlayback(); startSilentAudio(); mainApp.classList.remove('hidden'); scheduleMarqueeUpdate();
-    if (currentFolderId) {
-        const saved = appSettings.resumeLastPlayback ? getSavedPlaybackState() : null;
-        restoreViewStateFromSession(saved);
-        if (saved) { buildLibrary(); renderFolders(); }
-        const restored = resolveSavedPlaybackWithFallback(saved);
-        const f = restored?.folder || musicLibrary.find(f => f.id === currentFolderId) || musicLibrary.find(f => f.id === '__all');
-        const songs = f ? f.songs : [];
-        const index = restored ? restored.index : 0;
-        if (f?.id && f.id !== currentFolderId) selectFolder(f.id, { preserveScroll: true, skipSave: true });
-        startPlaylist(songs, index);
-        if (saved?.currentTime) saveCurrentSession({ force: true, currentTime: Number(saved.currentTime) || 0 });
-        seekSavedPlaybackTime(saved);
-    }
+    startPlaybackFromCurrentLibrary();
 }
 
 function buildLibrary() {
