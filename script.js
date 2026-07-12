@@ -358,12 +358,12 @@ function setupMobileTrackListFocus() {
     const close = () => { document.body.classList.remove('mobile-list-focus'); header?.classList.add('hidden'); };
     const isListBackAtStart = () => {
         if (!trackListEl) return false;
-        if (trackListEl.scrollTop <= 8) return true;
+        if (trackListEl.scrollTop <= 72) return true;
         const firstTrack = trackListEl.querySelector('.w-t-item');
-        if (!firstTrack) return trackListEl.scrollTop <= 16;
+        if (!firstTrack) return trackListEl.scrollTop <= 96;
         const listRect = trackListEl.getBoundingClientRect();
         const firstRect = firstTrack.getBoundingClientRect();
-        return firstRect.top >= listRect.top - 6 && firstRect.top <= listRect.top + 44;
+        return firstRect.top >= listRect.top - 12 && firstRect.top <= listRect.top + 96;
     };
     const closeIfAtTop = () => {
         if (!document.body.classList.contains('mobile-list-focus')) return;
@@ -990,10 +990,18 @@ function processImportData(data) {
 }
 
 window.CmsWebPlayer = {
-    applyLibrary(data, source = 'cloud') {
+    applyLibrary(data, source = 'cloud', options = {}) {
+        const wasMainVisible = !mainApp.classList.contains('hidden');
         processImportData(data);
-        importScreen.classList.add('hidden');
-        readyScreen.classList.remove('hidden');
+        if (options.silent || wasMainVisible) {
+            importScreen.classList.add('hidden');
+            readyScreen.classList.add('hidden');
+            mainApp.classList.remove('hidden');
+            scheduleMarqueeUpdate();
+        } else {
+            importScreen.classList.add('hidden');
+            readyScreen.classList.remove('hidden');
+        }
         return { count: allItems.length, source };
     },
     getUseFirebase: () => Boolean(appSettings.useFirebase)
@@ -1149,6 +1157,8 @@ function toggleEditMode() {
             if (confirm("変更内容をJSONファイルとして保存（ダウンロード）しますか？")) {
                 downloadJSON();
             }
+            saveEditedLibraryTargets({ cloud: appSettings.useFirebase && confirm("編集結果をFirebaseにも保存しますか？") })
+                .catch(error => console.error('[web-edit] save failed', error));
             isEditMode = false; selectedItems.clear();
             document.body.classList.remove('edit-mode');
             document.getElementById('edit-action-bar').classList.add('hidden');
@@ -1165,7 +1175,18 @@ function toggleEditMode() {
 }
 
 function downloadJSON() {
-    const exportData = {
+    const exportData = createLibraryExportPayload();
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
+    const dlAnchorElem = document.createElement('a');
+    dlAnchorElem.setAttribute("href", dataStr);
+    dlAnchorElem.setAttribute("download", "cms_playlist_edited.json");
+    document.body.appendChild(dlAnchorElem);
+    dlAnchorElem.click();
+    document.body.removeChild(dlAnchorElem);
+}
+
+function createLibraryExportPayload() {
+    return {
         schemaVersion: 4,
         version: '4.0',
         exportedAt: new Date().toISOString(),
@@ -1177,13 +1198,15 @@ function downloadJSON() {
         settings: {},
         webSettings: { ...appSettings }
     };
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportData, null, 2));
-    const dlAnchorElem = document.createElement('a');
-    dlAnchorElem.setAttribute("href", dataStr);
-    dlAnchorElem.setAttribute("download", "cms_playlist_edited.json");
-    document.body.appendChild(dlAnchorElem);
-    dlAnchorElem.click();
-    document.body.removeChild(dlAnchorElem);
+}
+
+async function saveEditedLibraryTargets({ cloud = false } = {}) {
+    const payload = createLibraryExportPayload();
+    window.CmsWebFirebase?.cacheImportedData(payload);
+    if (cloud && window.CmsWebFirebase?.saveLibrary) {
+        await window.CmsWebFirebase.saveLibrary(payload);
+    }
+    return payload;
 }
 
 function setupEditMode() {
