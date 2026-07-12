@@ -1,10 +1,10 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';
 import {
-  getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut
+  getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
 import {
   collection, doc, documentId, getDoc, getDocs, getFirestore, limit,
-  orderBy, query, startAfter, Timestamp, where
+  orderBy, query, serverTimestamp, startAfter, Timestamp, where, writeBatch
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-lite.js';
 
 const CMS_SAFE_PATCH_VERSION = '2026062704';
@@ -43,6 +43,11 @@ const PAGE_SIZE = 400;
 const CACHE_DB = 'cms_web_library_v4';
 let currentUser = null;
 let syncInFlight = null;
+
+function shouldUseRedirectAuth() {
+  const ua = navigator.userAgent || '';
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
 
 function openCache() {
   return new Promise((resolve, reject) => {
@@ -183,6 +188,80 @@ async function fetchChanges(uid, sinceMillis) {
   return changes;
 }
 
+function cleanFirestoreValue(value) {
+  return JSON.parse(JSON.stringify(value ?? null));
+}
+
+function stripRuntimeFields(item) {
+  const { originalIndex, safeDate, safePlayCount, updatedAt, deleted, deletedAt, ...rest } = item || {};
+  return rest;
+}
+
+async function commitBatch(batch, counter) {
+  if (counter.count <= 0) return;
+  await batch.commit();
+  counter.count = 0;
+  counter.batch = writeBatch(firestore);
+}
+
+async function saveLibrarySnapshot(data = {}) {
+  if (!currentUser) throw new Error('Googleログインが必要です');
+  const uid = currentUser.uid;
+  const mediaItems = (Array.isArray(data) ? data : (data.mediaItems || []))
+    .filter(item => item?.id && item.site !== 'system')
+    .map(stripRuntimeFields);
+  const localIds = new Set(mediaItems.map(item => item.id));
+  const existingSnapshot = await getDocs(query(collection(firestore, 'users', uid, 'mediaItems'), orderBy(documentId())));
+  const counter = { batch: writeBatch(firestore), count: 0 };
+  let tombstoned = 0;
+  const queueSet = (ref, value) => {
+    counter.batch.set(ref, value, { merge: true });
+    counter.count += 1;
+  };
+
+  for (const item of mediaItems) {
+    queueSet(userDoc(uid, 'mediaItems', item.id), {
+      ...cleanFirestoreValue(item),
+      deleted: false,
+      updatedAt: serverTimestamp()
+    });
+    if (counter.count >= 420) await commitBatch(counter.batch, counter);
+  }
+
+  for (const remoteDoc of existingSnapshot.docs) {
+    if (localIds.has(remoteDoc.id)) continue;
+    tombstoned += 1;
+    queueSet(userDoc(uid, 'mediaItems', remoteDoc.id), {
+      deleted: true,
+      deletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    if (counter.count >= 420) await commitBatch(counter.batch, counter);
+  }
+
+  queueSet(userDoc(uid, 'folderSettings', 'main'), {
+    data: cleanFirestoreValue(data.folderSettings || []),
+    updatedAt: serverTimestamp()
+  });
+  queueSet(userDoc(uid, 'settings', 'webPlayer'), {
+    data: cleanFirestoreValue(data.webSettings || {}),
+    updatedAt: serverTimestamp()
+  });
+  queueSet(userDoc(uid, 'sync', 'meta'), {
+    lastChangedAt: serverTimestamp(),
+    webUpdatedAt: serverTimestamp()
+  });
+  await commitBatch(counter.batch, counter);
+  await replaceCache({ mediaItems, folderSettings: data.folderSettings || [], webSettings: data.webSettings || {} }, {
+    source: 'web-edit',
+    remoteMetaAt: Date.now(),
+    lastPullAt: Date.now(),
+    lastSyncAt: Date.now()
+  });
+  updateStatus(`Firebase: 保存完了（${mediaItems.length}件）`);
+  return { status: 'success', saved: mediaItems.length, tombstoned };
+}
+
 function updateStatus(message) {
   for (const id of ['cloud-status-start', 'cloud-status-settings']) {
     const element = document.getElementById(id);
@@ -190,11 +269,11 @@ function updateStatus(message) {
   }
 }
 
-function showLibrary(data, source) {
-  if (data.mediaItems?.length) window.CmsWebPlayer?.applyLibrary(data, source);
+function showLibrary(data, source, options = {}) {
+  if (data.mediaItems?.length) window.CmsWebPlayer?.applyLibrary(data, source, options);
 }
 
-async function syncCloud({ force = false } = {}) {
+async function syncCloud({ force = false, silent = false } = {}) {
   if (!currentUser) throw new Error('Googleログインが必要です');
   if (syncInFlight) return syncInFlight;
   syncInFlight = (async () => {
@@ -203,7 +282,7 @@ async function syncCloud({ force = false } = {}) {
     const metaSnapshot = await getDoc(userDoc(currentUser.uid, 'sync', 'meta'));
     const remoteMetaAt = metaSnapshot.data()?.lastChangedAt?.toMillis?.() || 0;
     if (!force && cache.initialized && remoteMetaAt && remoteMetaAt <= (cache.remoteMetaAt || 0)) {
-      showLibrary(cache, 'cache');
+      showLibrary(cache, 'cache', { silent: true });
       updateStatus(`Firebase: 最新（${cache.mediaItems.length}件）`);
       return cache;
     }
@@ -224,7 +303,7 @@ async function syncCloud({ force = false } = {}) {
       }, { remoteMetaAt, lastPullAt: newest, lastSyncAt: Date.now() });
     }
     const updated = await readCache();
-    showLibrary(updated, 'firebase');
+    showLibrary(updated, 'firebase', { silent });
     updateStatus(`Firebase: 読込完了（${updated.mediaItems.length}件・読取専用）`);
     return updated;
   })();
@@ -235,6 +314,10 @@ async function syncCloud({ force = false } = {}) {
 
 async function login() {
   try {
+    if (shouldUseRedirectAuth()) {
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
     console.info('[auth] login success', {
@@ -242,8 +325,12 @@ async function login() {
       email: user.email,
       displayName: user.displayName
     });
-    return await syncCloud({ force: false });
+    return await syncCloud({ force: false, silent: false });
   } catch (error) {
+    if (error?.code === 'auth/cancelled-popup-request' || error?.code === 'auth/popup-blocked' || error?.code === 'auth/popup-closed-by-user') {
+      await signInWithRedirect(auth, provider);
+      return null;
+    }
     console.error('[auth] login failed', error);
     updateStatus(`Firebaseエラー: ${error.code || error.message}`);
     throw error;
@@ -252,7 +339,8 @@ async function login() {
 
 window.CmsWebFirebase = {
   login,
-  sync: () => syncCloud({ force: true }),
+  sync: (options = {}) => syncCloud({ force: true, silent: false, ...options }),
+  saveLibrary: saveLibrarySnapshot,
   logout: () => signOut(auth),
   cacheImportedData: data => replaceCache({
     mediaItems: Array.isArray(data) ? data : (data.mediaItems || []),
@@ -267,11 +355,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   bind('btn-cloud-login', login);
   bind('btn-cloud-login-settings', login);
-  bind('btn-load-firebase', () => syncCloud({ force: true }));
+  bind('btn-load-firebase', () => syncCloud({ force: true, silent: false }));
   bind('btn-cloud-signout', () => signOut(auth));
   try {
     const cache = await readCache();
-    showLibrary(cache, 'cache');
+    showLibrary(cache, 'cache', { silent: true });
     if (cache.mediaItems?.length) updateStatus(`ローカルキャッシュ: ${cache.mediaItems.length}件`);
   } catch (_) {}
 });
@@ -280,9 +368,15 @@ onAuthStateChanged(auth, async user => {
   currentUser = user;
   if (!user) { updateStatus('Firebase: 未接続（JSONのみでも利用できます）'); return; }
   updateStatus(`Firebase: ${user.email || 'ログイン済み'}（読取専用）`);
-  if (window.CmsWebPlayer?.getUseFirebase()) await syncCloud({ force: false }).catch(() => {});
+  if (window.CmsWebPlayer?.getUseFirebase()) await syncCloud({ force: false, silent: true }).catch(() => {});
 });
 
 setInterval(() => {
-  if (currentUser && window.CmsWebPlayer?.getUseFirebase()) void syncCloud({ force: false });
+  if (currentUser && window.CmsWebPlayer?.getUseFirebase()) void syncCloud({ force: false, silent: true });
 }, 10 * 60 * 1000);
+
+getRedirectResult(auth).catch(error => {
+  if (!error) return;
+  console.error('[auth] redirect result failed', error);
+  updateStatus(`Firebaseエラー: ${error.code || error.message}`);
+});
