@@ -40,6 +40,7 @@ let windowZCounter = 200;
 let pendingTouchTrackTimer = null;
 let suppressNextTouchTrackClick = false;
 let lastTrackPointerType = 'mouse';
+let userTrackScrollHoldUntil = 0;
 
 let currentRenderedCount = 0;
 const RENDER_CHUNK_SIZE = 50;
@@ -58,6 +59,15 @@ const readyScreen = document.getElementById('ready-screen');
 const mainApp = document.getElementById('main-app');
 const folderListEl = document.getElementById('widget-folder-list');
 const trackListEl = document.getElementById('widget-track-list');
+
+function markUserTrackScrollHold(duration = 1800) {
+    if (Date.now() < (window.__cmsAutoTrackScrollUntil || 0)) return;
+    userTrackScrollHoldUntil = Date.now() + duration;
+}
+
+function canAutoScrollActiveTrack() {
+    return appSettings.autoScrollActiveTrack !== false && Date.now() >= userTrackScrollHoldUntil;
+}
 
 // 無音オーディオ
 let silentAudio = null;
@@ -167,6 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // リスト追加読込
     trackListEl.addEventListener('scroll', () => { 
+        markUserTrackScrollHold();
         if (trackListEl.scrollTop + trackListEl.clientHeight >= trackListEl.scrollHeight - 100) loadMoreTracks(); 
     });
     setupMobileTrackListFocus();
@@ -373,12 +384,12 @@ function setupMobileTrackListFocus() {
         clearTimeout(closeTopTimer);
         if (isListBackAtStart()) closeTopTimer = setTimeout(() => { if (isListBackAtStart()) close(); }, 120);
     };
-    trackListEl.addEventListener('wheel', () => { userScrolledList = true; open(); }, { passive: true });
+    trackListEl.addEventListener('wheel', () => { markUserTrackScrollHold(); userScrolledList = true; open(); }, { passive: true });
     trackListEl.addEventListener('pointerdown', (e) => { pointerStart = { id: e.pointerId, x: e.clientX, y: e.clientY, type: e.pointerType }; }, { passive: true });
     trackListEl.addEventListener('pointermove', (e) => {
         if (!pointerStart || pointerStart.id !== e.pointerId) return;
         const distance = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
-        if (distance >= (pointerStart.type === 'mouse' ? 5 : 10)) { userScrolledList = true; open(); }
+        if (distance >= (pointerStart.type === 'mouse' ? 5 : 10)) { markUserTrackScrollHold(); userScrolledList = true; open(); }
     }, { passive: true });
     trackListEl.addEventListener('scroll', () => {
         if (!document.body.classList.contains('mobile-list-focus')) return;
@@ -401,7 +412,7 @@ function returnToCurrentTrack() {
     if (index < 0) return;
     while (index >= currentRenderedCount && currentRenderedCount < currentRenderSongs.length) loadMoreTracks();
     const activeEl = trackListEl.children[index];
-    if (activeEl) scrollActiveTrackInList(activeEl);
+    if (activeEl) scrollActiveTrackInList(activeEl, { force: true });
 }
 
 function setupTrackListReturnGesture() {
@@ -1121,7 +1132,7 @@ function selectFolder(id, options = {}) {
 
 function escapeHTML(str) { return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
 
-function renderTracks(songs) { trackListEl.innerHTML = ''; trackListEl.scrollTop = 0; currentRenderSongs = songs; currentRenderedCount = 0; if (songs.length === 0) { trackListEl.innerHTML = '<div style="padding:20px; text-align:center;">動画がありません</div>'; return; } loadMoreTracks(); }
+function renderTracks(songs) { trackListEl.innerHTML = ''; window.__cmsAutoTrackScrollUntil = Date.now() + 300; trackListEl.scrollTop = 0; currentRenderSongs = songs; currentRenderedCount = 0; if (songs.length === 0) { trackListEl.innerHTML = '<div style="padding:20px; text-align:center;">動画がありません</div>'; return; } loadMoreTracks(); }
 
 function loadMoreTracks() {
     if (currentRenderedCount >= currentRenderSongs.length) return;
@@ -1170,12 +1181,15 @@ function updateActiveTrackUI() {
     if (activeEl) {
         activeEl.classList.add('active'); activeEl.querySelector('.w-t-idx').classList.add('hidden'); activeEl.querySelector('.w-t-playing-icon').classList.remove('hidden');
         
-        if (appSettings.autoScrollActiveTrack !== false) setTimeout(() => scrollActiveTrackInList(activeEl), 100);
+        if (canAutoScrollActiveTrack()) setTimeout(() => {
+            if (canAutoScrollActiveTrack()) scrollActiveTrackInList(activeEl);
+        }, 100);
     }
 }
 
-function scrollActiveTrackInList(activeEl) {
+function scrollActiveTrackInList(activeEl, { force = false } = {}) {
     if (!activeEl || !trackListEl.clientHeight) return;
+    if (!force && !canAutoScrollActiveTrack()) return;
     const listRect = trackListEl.getBoundingClientRect(); const itemRect = activeEl.getBoundingClientRect();
     const desired = trackListEl.scrollTop + (itemRect.top - listRect.top) - (trackListEl.clientHeight - itemRect.height) / 2;
     const max = Math.max(0, trackListEl.scrollHeight - trackListEl.clientHeight);
