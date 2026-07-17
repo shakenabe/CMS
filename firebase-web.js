@@ -3,7 +3,7 @@ import {
   getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
 import {
-  collection, doc, documentId, getDoc, getDocs, getFirestore, limit,
+  collection, doc, documentId, getDoc, getDocs, getFirestore, increment, limit,
   orderBy, query, serverTimestamp, startAfter, Timestamp, where, writeBatch
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-lite.js';
 
@@ -41,8 +41,12 @@ const firestore = getFirestore(app);
 const provider = new GoogleAuthProvider();
 const PAGE_SIZE = 400;
 const CACHE_DB = 'cms_web_library_v4';
+const PLAYBACK_QUEUE_KEY = 'cms_player_playback_queue_v1';
+const PLAYBACK_FLUSH_DELAY_MS = 15000;
 let currentUser = null;
 let syncInFlight = null;
+let playbackFlushTimer = null;
+let playbackFlushInFlight = null;
 
 function shouldUseRedirectAuth() {
   const ua = navigator.userAgent || '';
@@ -131,6 +135,114 @@ async function applyDelta(changes, auxiliary, syncState) {
   }});
   await transactionDone(tx);
   db.close();
+}
+
+async function updateCachedPlayback(item) {
+  if (!item?.id) return;
+  const db = await openCache();
+  const tx = db.transaction('media', 'readwrite');
+  const media = tx.objectStore('media');
+  const cached = await requestValue(media.get(item.id));
+  if (cached) {
+    media.put({
+      ...cached,
+      playCount: Number(item.playCount) || 0,
+      safePlayCount: Number(item.playCount) || 0,
+      lastPlayedAt: item.lastPlayedAt || cached.lastPlayedAt || null
+    });
+  }
+  await transactionDone(tx);
+  db.close();
+}
+
+function readPlaybackQueue() {
+  try {
+    const value = JSON.parse(localStorage.getItem(PLAYBACK_QUEUE_KEY) || '{}');
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function writePlaybackQueue(queue) {
+  localStorage.setItem(PLAYBACK_QUEUE_KEY, JSON.stringify(queue || {}));
+}
+
+function canSyncPlaybackQueue() {
+  return Boolean(currentUser && window.CmsWebPlayer?.getUseFirebase?.());
+}
+
+function removeSentPlaybackEntries(sentEntries) {
+  const latest = readPlaybackQueue();
+  for (const sent of sentEntries) {
+    const current = latest[sent.id];
+    if (!current) continue;
+    const remaining = Math.max(0, (Number(current.playCountDelta) || 0) - sent.playCountDelta);
+    if (remaining > 0) latest[sent.id] = { ...current, playCountDelta: remaining };
+    else delete latest[sent.id];
+  }
+  writePlaybackQueue(latest);
+}
+
+async function flushPlaybackQueue({ silent = true } = {}) {
+  if (playbackFlushInFlight) return playbackFlushInFlight;
+  if (!canSyncPlaybackQueue()) return { status: 'skipped', reason: 'firebase-disabled' };
+  const snapshot = readPlaybackQueue();
+  const entries = Object.entries(snapshot)
+    .map(([id, value]) => ({
+      id,
+      playCountDelta: Math.max(0, Math.floor(Number(value?.playCountDelta) || 0)),
+      lastPlayedAt: value?.lastPlayedAt || null
+    }))
+    .filter(entry => entry.id && entry.playCountDelta > 0);
+  if (!entries.length) return { status: 'success', sent: 0 };
+
+  playbackFlushInFlight = (async () => {
+    const uid = currentUser.uid;
+    for (let offset = 0; offset < entries.length; offset += 400) {
+      const chunk = entries.slice(offset, offset + 400);
+      const batch = writeBatch(firestore);
+      for (const entry of chunk) {
+        batch.set(userDoc(uid, 'mediaItems', entry.id), {
+          playCount: increment(entry.playCountDelta),
+          lastPlayedAt: entry.lastPlayedAt,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      }
+      batch.set(userDoc(uid, 'sync', 'meta'), {
+        lastChangedAt: serverTimestamp(),
+        webPlaybackUpdatedAt: serverTimestamp()
+      }, { merge: true });
+      await batch.commit();
+      // Clear only the committed delta. New plays added during the request stay queued.
+      removeSentPlaybackEntries(chunk);
+    }
+    if (!silent) updateStatus(`Firebase: 再生回数を同期しました（${entries.length}件）`);
+    return { status: 'success', sent: entries.length };
+  })();
+
+  try {
+    return await playbackFlushInFlight;
+  } catch (error) {
+    if (!silent) updateStatus(`Firebase再生回数エラー: ${error.code || error.message}`);
+    throw error;
+  } finally {
+    playbackFlushInFlight = null;
+  }
+}
+
+function schedulePlaybackQueueFlush(delay = PLAYBACK_FLUSH_DELAY_MS) {
+  clearTimeout(playbackFlushTimer);
+  if (!canSyncPlaybackQueue()) return;
+  playbackFlushTimer = setTimeout(() => {
+    playbackFlushTimer = null;
+    flushPlaybackQueue({ silent: true }).catch(error => console.error('[firebase-playback] flush failed', error));
+  }, Math.max(0, delay));
+}
+
+function queuePlaybackUpdate(item) {
+  updateCachedPlayback(item).catch(error => console.error('[firebase-playback] cache update failed', error));
+  schedulePlaybackQueueFlush();
 }
 
 function userDoc(uid, group, id) {
@@ -278,6 +390,7 @@ async function syncCloud({ force = false, silent = false } = {}) {
   if (syncInFlight) return syncInFlight;
   syncInFlight = (async () => {
     updateStatus('Firebase: 更新確認中...');
+    await flushPlaybackQueue({ silent: true });
     const cache = await readCache();
     const metaSnapshot = await getDoc(userDoc(currentUser.uid, 'sync', 'meta'));
     const remoteMetaAt = metaSnapshot.data()?.lastChangedAt?.toMillis?.() || 0;
@@ -304,7 +417,7 @@ async function syncCloud({ force = false, silent = false } = {}) {
     }
     const updated = await readCache();
     showLibrary(updated, 'firebase', { silent });
-    updateStatus(`Firebase: 読込完了（${updated.mediaItems.length}件・読取専用）`);
+    updateStatus(`Firebase: 読込完了（${updated.mediaItems.length}件・再生回数同期可）`);
     return updated;
   })();
   try { return await syncInFlight; }
@@ -341,6 +454,8 @@ window.CmsWebFirebase = {
   login,
   sync: (options = {}) => syncCloud({ force: true, silent: false, ...options }),
   saveLibrary: saveLibrarySnapshot,
+  queuePlaybackUpdate,
+  flushPlaybackQueue,
   logout: () => signOut(auth),
   cacheImportedData: data => replaceCache({
     mediaItems: Array.isArray(data) ? data : (data.mediaItems || []),
@@ -367,13 +482,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 onAuthStateChanged(auth, async user => {
   currentUser = user;
   if (!user) { updateStatus('Firebase: 未接続（JSONのみでも利用できます）'); return; }
-  updateStatus(`Firebase: ${user.email || 'ログイン済み'}（読取専用）`);
+  updateStatus(`Firebase: ${user.email || 'ログイン済み'}（再生回数同期可）`);
+  schedulePlaybackQueueFlush(1000);
   if (window.CmsWebPlayer?.getUseFirebase()) await syncCloud({ force: false, silent: true }).catch(() => {});
 });
 
 setInterval(() => {
   if (currentUser && window.CmsWebPlayer?.getUseFirebase()) void syncCloud({ force: false, silent: true });
 }, 10 * 60 * 1000);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden' || !canSyncPlaybackQueue()) return;
+  clearTimeout(playbackFlushTimer);
+  playbackFlushTimer = null;
+  flushPlaybackQueue({ silent: true }).catch(error => console.error('[firebase-playback] background flush failed', error));
+});
 
 getRedirectResult(auth).catch(error => {
   if (!error) return;

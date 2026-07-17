@@ -342,6 +342,7 @@ function markPlaybackCompleted(item) {
     const prev = queue[item.id] || { playCountDelta: 0 };
     queue[item.id] = { playCountDelta: (Number(prev.playCountDelta) || 0) + 1, lastPlayedAt: item.lastPlayedAt };
     localStorage.setItem('cms_player_playback_queue_v1', JSON.stringify(queue));
+    window.CmsWebFirebase?.queuePlaybackUpdate?.(item);
 }
 
 function updateLayoutMode() {
@@ -357,48 +358,43 @@ function updateLayoutMode() {
 function setupMobileTrackListFocus() {
     const header = document.getElementById('mobile-list-fullscreen-header');
     const closeButton = document.getElementById('mobile-list-close-btn');
+    const pullDownCloseDistance = 32;
     let pointerStart = null;
-    let openedAt = 0;
-    let userScrolledList = false;
-    let closeTopTimer = null;
     const open = () => {
         if (!document.body.classList.contains('is-mobile')) return;
-        openedAt = Date.now();
         document.body.classList.add('mobile-list-focus'); header?.classList.remove('hidden');
     };
     const close = () => { document.body.classList.remove('mobile-list-focus'); header?.classList.add('hidden'); };
-    const isListBackAtStart = () => {
-        if (!trackListEl) return false;
-        if (trackListEl.scrollTop <= 72) return true;
-        const firstTrack = trackListEl.querySelector('.w-t-item');
-        if (!firstTrack) return trackListEl.scrollTop <= 96;
-        const listRect = trackListEl.getBoundingClientRect();
-        const firstRect = firstTrack.getBoundingClientRect();
-        return firstRect.top >= listRect.top - 12 && firstRect.top <= listRect.top + 96;
-    };
-    const closeIfAtTop = () => {
-        if (!document.body.classList.contains('mobile-list-focus')) return;
-        if (!userScrolledList) return;
-        if (Date.now() - openedAt < 450) return;
-        if (Date.now() < (window.__cmsAutoTrackScrollUntil || 0)) return;
-        clearTimeout(closeTopTimer);
-        if (isListBackAtStart()) closeTopTimer = setTimeout(() => { if (isListBackAtStart()) close(); }, 120);
-    };
-    trackListEl.addEventListener('wheel', () => { markUserTrackScrollHold(); userScrolledList = true; open(); }, { passive: true });
-    trackListEl.addEventListener('pointerdown', (e) => { pointerStart = { id: e.pointerId, x: e.clientX, y: e.clientY, type: e.pointerType }; }, { passive: true });
+    const isListAtStart = () => Boolean(trackListEl && trackListEl.scrollTop <= 4);
+    trackListEl.addEventListener('wheel', () => { markUserTrackScrollHold(); open(); }, { passive: true });
+    trackListEl.addEventListener('pointerdown', (e) => {
+        pointerStart = {
+            id: e.pointerId,
+            x: e.clientX,
+            y: e.clientY,
+            type: e.pointerType,
+            wasFocused: document.body.classList.contains('mobile-list-focus'),
+            startedAtTop: isListAtStart()
+        };
+    }, { passive: true });
     trackListEl.addEventListener('pointermove', (e) => {
         if (!pointerStart || pointerStart.id !== e.pointerId) return;
-        const distance = Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y);
-        if (distance >= (pointerStart.type === 'mouse' ? 5 : 10)) { markUserTrackScrollHold(); userScrolledList = true; open(); }
+        const deltaX = e.clientX - pointerStart.x;
+        const deltaY = e.clientY - pointerStart.y;
+        const distance = Math.hypot(deltaX, deltaY);
+        if (distance >= (pointerStart.type === 'mouse' ? 5 : 10)) { markUserTrackScrollHold(); open(); }
+        const isTouchPullDown = pointerStart.type !== 'mouse'
+            && pointerStart.wasFocused
+            && pointerStart.startedAtTop
+            && isListAtStart()
+            && deltaY >= pullDownCloseDistance
+            && deltaY > Math.abs(deltaX) * 1.15;
+        if (isTouchPullDown) {
+            close();
+            pointerStart = null;
+        }
     }, { passive: true });
-    trackListEl.addEventListener('scroll', () => {
-        if (!document.body.classList.contains('mobile-list-focus')) return;
-        if (!userScrolledList) return;
-        if (Date.now() - openedAt < 450) return;
-        if (Date.now() < (window.__cmsAutoTrackScrollUntil || 0)) return;
-        closeIfAtTop();
-    }, { passive: true });
-    const clearPointer = () => { pointerStart = null; closeIfAtTop(); };
+    const clearPointer = () => { pointerStart = null; };
     trackListEl.addEventListener('pointerup', clearPointer, { passive: true });
     trackListEl.addEventListener('pointercancel', clearPointer, { passive: true });
     header?.addEventListener('pointerdown', (e) => { e.stopPropagation(); close(); });
