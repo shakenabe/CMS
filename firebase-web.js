@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';
 import {
-  getAuth, GoogleAuthProvider, getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut
+  getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
 import {
   collection, doc, documentId, getDoc, getDocs, getFirestore, increment, limit,
@@ -39,6 +39,7 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const firestore = getFirestore(app);
 const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: 'select_account' });
 const PAGE_SIZE = 400;
 const CACHE_DB = 'cms_web_library_v4';
 const PLAYBACK_QUEUE_KEY = 'cms_player_playback_queue_v1';
@@ -47,11 +48,6 @@ let currentUser = null;
 let syncInFlight = null;
 let playbackFlushTimer = null;
 let playbackFlushInFlight = null;
-
-function shouldUseRedirectAuth() {
-  const ua = navigator.userAgent || '';
-  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-}
 
 function openCache() {
   return new Promise((resolve, reject) => {
@@ -427,10 +423,7 @@ async function syncCloud({ force = false, silent = false } = {}) {
 
 async function login() {
   try {
-    if (shouldUseRedirectAuth()) {
-      await signInWithRedirect(auth, provider);
-      return null;
-    }
+    updateStatus('Firebase: Googleログイン画面を開いています…');
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
     console.info('[auth] login success', {
@@ -440,12 +433,16 @@ async function login() {
     });
     return await syncCloud({ force: false, silent: false });
   } catch (error) {
-    if (error?.code === 'auth/cancelled-popup-request' || error?.code === 'auth/popup-blocked' || error?.code === 'auth/popup-closed-by-user') {
-      await signInWithRedirect(auth, provider);
-      return null;
+    if (error?.code === 'auth/popup-blocked') {
+      updateStatus('Firebase: ポップアップがブロックされました。Safariのポップアップを許可して、もう一度お試しください。');
+    } else if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
+      updateStatus('Firebase: Googleログインがキャンセルされました。');
+    } else if (error?.code === 'auth/web-storage-unsupported') {
+      updateStatus('Firebase: SafariのCookie/サイトデータが無効です。通常タブで開き、サイトデータを許可してください。');
+    } else {
+      updateStatus(`Firebaseエラー: ${error.code || error.message}`);
     }
     console.error('[auth] login failed', error);
-    updateStatus(`Firebaseエラー: ${error.code || error.message}`);
     throw error;
   }
 }
@@ -496,10 +493,4 @@ document.addEventListener('visibilitychange', () => {
   clearTimeout(playbackFlushTimer);
   playbackFlushTimer = null;
   flushPlaybackQueue({ silent: true }).catch(error => console.error('[firebase-playback] background flush failed', error));
-});
-
-getRedirectResult(auth).catch(error => {
-  if (!error) return;
-  console.error('[auth] redirect result failed', error);
-  updateStatus(`Firebaseエラー: ${error.code || error.message}`);
 });
