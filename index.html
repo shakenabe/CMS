@@ -6,7 +6,7 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2026072401">
+    <link rel="stylesheet" href="style.css?v=2026072402">
 </head>
 <body class="theme-modern is-pc">
 
@@ -136,7 +136,7 @@
                         <div class="controls-wrapper">
                             <label class="filter-option"><input type="checkbox" id="exclude-nico"> ニコ除外</label>
                             <select id="widget-sort-select" class="widget-search">
-                                <option value="custom">🔢 カスタム順</option><option value="newest">📅 新しい順</option><option value="oldest">📅 古い順</option><option value="playCount_desc">▶ 再生数順</option>
+                                <option value="custom">カスタム順</option><option value="newest">新しい順</option><option value="oldest">古い順</option><option value="playCount_desc">再生数順</option>
                             </select>
                             <input type="text" id="widget-search-box" class="widget-search" placeholder="Search...">
                         </div>
@@ -198,37 +198,37 @@
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
                         <label>デフォルトのソート順</label>
                         <select id="set-default-sort" class="widget-search">
-                            <option value="custom">🔢 カスタム順</option>
-                            <option value="newest">📅 新しい順</option>
-                            <option value="oldest">📅 古い順</option>
-                            <option value="playCount_desc">▶ 再生数順</option>
+                            <option value="custom">カスタム順</option>
+                            <option value="newest">新しい順</option>
+                            <option value="oldest">古い順</option>
+                            <option value="playCount_desc">再生数順</option>
                         </select>
                     </div>
 
                     <div class="setting-row" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color);">
-                        <label style="color: #ffaa00;"><input type="checkbox" id="set-data-saver"> 📉 データセーバー (低画質再生)</label>
+                        <label style="color: #ffaa00;"><input type="checkbox" id="set-data-saver"> <cms-icon name="data"></cms-icon>データセーバー (低画質再生)</label>
                         <span style="font-size:0.75rem; opacity:0.8;">※ニコニコ動画等、仕様上画質が自動調整される場合があります</span>
                     </div>
-                    <div class="setting-row"><label><input type="checkbox" id="set-performance-mode"> ⚡ 軽量化 (動作を軽くする)</label></div>
-                    <div class="setting-row"><label><input type="checkbox" id="set-music-mode"> 🎵 音楽モード (モバイルSpotify風UI)</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-performance-mode"> <cms-icon name="performance"></cms-icon>軽量化 (動作を軽くする)</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-music-mode"> <cms-icon name="music"></cms-icon>音楽モード (モバイルSpotify風UI)</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-resume-last-playback"> 前回のフォルダ・曲から再開する</label></div>
-                    <div class="setting-row"><label><input type="checkbox" id="set-show-thumbnails"> 🖼 サムネイルを表示</label></div>
-                    <div class="setting-row"><label><input type="checkbox" id="set-show-clock"> 🕒 時計を表示</label></div>
-                    <div class="setting-row"><label><input type="checkbox" id="set-simple-layout"> 💻 PC向け シンプルレイアウト</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-show-thumbnails"> <cms-icon name="image"></cms-icon>サムネイルを表示</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-show-clock"> <cms-icon name="clock"></cms-icon>時計を表示</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-simple-layout"> <cms-icon name="desktop"></cms-icon>PC向け シンプルレイアウト</label></div>
                 </div>
 
                 <!-- 詳細設定タブ -->
                <div id="tab-advanced" class="tab-content">
-                    <div class="setting-row"><label><input type="checkbox" id="set-pocket-always-on"> 📱 ポケットモードの情報を常時表示</label></div>
-                    <div class="setting-row"><label><input type="checkbox" id="set-pocket-swipe-unlock"> 📱 ポケットモード上スワイプ解除を有効</label></div>
-                    <div class="setting-row"><label><input type="checkbox" id="set-force-pc-layout"> 💻 モバイル版レイアウトを無効化 (常にPC表示)</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-pocket-always-on"> <cms-icon name="mobile"></cms-icon>ポケットモードの情報を常時表示</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-pocket-swipe-unlock"> <cms-icon name="mobile"></cms-icon>ポケットモード上スワイプ解除を有効</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-force-pc-layout"> <cms-icon name="desktop"></cms-icon>モバイル版レイアウトを無効化 (常にPC表示)</label></div>
                     <div class="setting-row">
-                        <label><input type="checkbox" id="set-window-mode"> 🪟 ウィンドウモード (パネル自由配置・サイズ変更)</label>
+                        <label><input type="checkbox" id="set-window-mode"> <cms-icon name="window"></cms-icon>ウィンドウモード (パネル自由配置・サイズ変更)</label>
                         <button id="btn-reset-window" class="theme-btn" style="padding: 5px; font-size:0.8rem; margin-top:5px; width:150px;">配置をリセット</button>
                     </div>
 
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
-                        <label><input type="checkbox" id="set-use-firebase"> ☁️ Firebaseから自動読込する（再生回数は差分同期）</label>
+                        <label><input type="checkbox" id="set-use-firebase"> <cms-icon name="cloud"></cms-icon>Firebaseから自動読込する（再生回数は差分同期）</label>
                         <div id="cloud-status-settings" class="cloud-status">Firebase: 未接続</div>
                         <div style="display:flex; gap:10px; margin-top:5px; flex-wrap:wrap;">
                             <button id="btn-cloud-login-settings" class="theme-btn cloud-action">Googleログイン</button>
@@ -344,7 +344,8 @@
         </div>
     </div>
 
-    <script type="module" src="firebase-web.js?v=2026072401"></script>
-    <script src="script.js?v=2026072401"></script>
+    <script src="cms-icons.js?v=2026072402"></script>
+    <script type="module" src="firebase-web.js?v=2026072402"></script>
+    <script src="script.js?v=2026072402"></script>
 </body>
 </html>

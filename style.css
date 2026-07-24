@@ -23,6 +23,66 @@ body.theme-nerv {
         #030303;
 }
 body.theme-nerv * { font-weight: bold; letter-spacing: .05em; }
+
+/* CMS Web custom glyphs: device-independent replacements for OS emoji. */
+cms-icon {
+    --cms-icon-size: 1.18em;
+    display: inline-flex;
+    width: var(--cms-icon-size);
+    height: var(--cms-icon-size);
+    flex: 0 0 var(--cms-icon-size);
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    margin-inline-end: .3em;
+    padding: .12em;
+    color: var(--text-color);
+    background: rgba(80, 175, 255, .14);
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    border: 1px solid color-mix(in srgb, currentColor 32%, transparent);
+    border-radius: 42% 58% 48% 52%;
+    vertical-align: -.16em;
+}
+cms-icon:only-child { margin-inline-end: 0; }
+cms-icon > svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+}
+body.theme-modern cms-icon {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, white 12%, transparent), 0 2px 8px rgba(0, 120, 255, .12);
+}
+body.theme-toyota cms-icon {
+    color: #48c7ff;
+    border-radius: 999px;
+    border-bottom-width: 2px;
+    background: rgba(0, 160, 223, .12);
+}
+body.theme-nerv cms-icon {
+    color: #ff9d00;
+    background: rgba(111, 45, 189, .28);
+    border-color: rgba(140, 255, 74, .52);
+    border-radius: 0;
+    clip-path: polygon(22% 0, 100% 0, 100% 78%, 78% 100%, 0 100%, 0 22%);
+}
+body.music-mode cms-icon {
+    color: #1ed760;
+    background: rgba(30, 215, 96, .12);
+    border-radius: 50%;
+}
+.cms-icon-plain {
+    padding: 0;
+    border: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+    clip-path: none !important;
+}
 body.theme-nerv::before {
     content: "EMERGENCY  SYSTEM CHECK  MAGI-LINK";
     position: fixed; left: 12px; right: 12px; top: 8px; z-index: 1; pointer-events: none;

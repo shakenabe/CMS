@@ -1082,19 +1082,19 @@ function buildLibrary() {
     const items = allItems.filter(i => { if (excludeNico && i.site === 'niconico') return false; if (currentSearchQuery) { const q = currentSearchQuery.toLowerCase(); return (i.title || "").toLowerCase().includes(q) || (i.tags ||[]).join(' ').toLowerCase().includes(q); } return true; });
     items.forEach(i => { const fs = i.folders && i.folders.length > 0 ? i.folders :[i.folder || 'Manual']; fs.forEach(f => { if (!fMap[f]) { fMap[f] =[]; fOrder.push(f); } fMap[f].push(i); }); });
     const fNames = Object.keys(fMap).sort((a, b) => { const sA = folderSettings.find(s => s.folderName === a); const sB = folderSettings.find(s => s.folderName === b); return (sA && typeof sA.order === 'number' ? sA.order : fOrder.indexOf(a) + 10000) - (sB && typeof sB.order === 'number' ? sB.order : fOrder.indexOf(b) + 10000); });
-    musicLibrary =[ { id: '__all', name: '📚 All', songs: sortSongs(items) }, ...fNames.map(n => ({ id: n, name: `📁 ${n}`, songs: sortSongs(fMap[n]) })) ];
+    musicLibrary = [{ id: '__all', name: 'All', songs: sortSongs(items) }, ...fNames.map(n => ({ id: n, name: n, songs: sortSongs(fMap[n]) }))];
 }
 function sortSongs(songs) { return[...songs].sort((a, b) => { const sf = (s) => s || ""; switch (currentSortOrder) { case 'title_asc': return sf(a.title).localeCompare(sf(b.title)); case 'title_desc': return sf(b.title).localeCompare(sf(a.title)); case 'newest': return b.safeDate - a.safeDate; case 'oldest': return a.safeDate - b.safeDate; case 'playCount_desc': return b.safePlayCount - a.safePlayCount; case 'custom': default: return a.originalIndex - b.originalIndex; } }); }
 
 function renderFolders() {
     folderListEl.innerHTML = ''; const mList = document.getElementById('mobile-folder-list-modal'); if (mList) mList.innerHTML = '';
     musicLibrary.forEach(f => {
-        const div = document.createElement('div'); div.className = 'w-f-item'; div.textContent = f.name; div.dataset.folderId = f.id; div.title = f.name; div.onclick = () => selectFolder(f.id); folderListEl.appendChild(div);
+        const div = document.createElement('div'); div.className = 'w-f-item'; div.replaceChildren(CmsIcons.create(f.id === '__all' ? 'library' : 'folder'), document.createTextNode(f.name)); div.dataset.folderId = f.id; div.title = f.name; div.onclick = () => selectFolder(f.id); folderListEl.appendChild(div);
         if (mList) { 
             const mDiv = document.createElement('div'); mDiv.className = 'm-f-item'; mDiv.dataset.folderId = f.id; 
             mDiv.innerHTML = `
                 ${f.id === currentFolderId ? '<i class="fas fa-check"></i>' : '<i class="fas fa-check" style="visibility:hidden;"></i>'}
-                <span>${f.name.replace('📁 ', '').replace('📚 ', '')}</span>
+                <span>${f.name}</span>
                 <i class="fas fa-music"></i>
             `; 
             mDiv.onclick = () => { selectFolder(f.id); document.getElementById('mobile-folder-modal').classList.add('hidden'); }; 
@@ -1121,7 +1121,7 @@ function selectFolder(id, options = {}) {
 
     const f = musicLibrary.find(f => f.id === id); 
     if (f) { 
-        const name = f.name.replace('📁 ', '').replace('📚 ', '');
+        const name = f.name;
         const folderTitle = document.getElementById('current-folder-title');
         const folderName = document.getElementById('current-folder-name');
         const folderCount = document.getElementById('current-folder-count');
@@ -1359,7 +1359,7 @@ function setupUrlAdd() {
     });
 }
 
-// 🌟 編集モードとダウンロード
+    // 編集モードとダウンロード
 function toggleEditMode() {
     if (isEditMode) {
         if (confirm("編集モードを終了しますか？")) {
@@ -1454,7 +1454,7 @@ function populateEditFolders() {
 
     musicLibrary.forEach(f => { 
         if(selEdit && f.id !== '__all') {
-            const opt1 = document.createElement('option'); opt1.value = f.id; opt1.textContent = f.name.replace('📁 ', ''); selEdit.appendChild(opt1); 
+            const opt1 = document.createElement('option'); opt1.value = f.id; opt1.textContent = f.name; selEdit.appendChild(opt1); 
         }
         if (selFilter) {
             const opt2 = document.createElement('option'); opt2.value = f.id; opt2.textContent = f.name; selFilter.appendChild(opt2);
