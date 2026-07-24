@@ -6,7 +6,7 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2026071302">
+    <link rel="stylesheet" href="style.css?v=2026072401">
 </head>
 <body class="theme-modern is-pc">
 
@@ -103,6 +103,7 @@
                                     <button id="widget-btn-next"><i class="fas fa-forward-step"></i></button>
                                 </div>
                                 <div class="control-tools">
+                                    <button id="btn-add-video-url" class="control-tool-btn" aria-label="URLから動画を追加"><i class="fas fa-plus"></i></button>
                                     <button id="btn-pocket-mode" class="control-tool-btn" aria-label="画面ロック"><i class="fas fa-lock"></i></button>
                                     <button id="btn-open-settings" class="settings-btn control-tool-btn" aria-label="設定"><i class="fas fa-cog"></i></button>
                                 </div>
@@ -160,6 +161,24 @@
     </div>
 
     <!-- 設定モーダル -->
+    <div id="add-video-modal" class="overlay-screen hidden" style="z-index: 10000;">
+        <div class="url-add-dialog panel-glass">
+            <h2><i class="fas fa-link"></i> URLから動画を追加</h2>
+            <p>動画URLを入力すると、タイトル・投稿者・サムネイルを取得してCMSへ追加します。</p>
+            <label>動画URL
+                <input id="add-video-url-input" class="widget-search" type="url" placeholder="https://www.youtube.com/watch?v=...">
+            </label>
+            <label>追加先フォルダ
+                <select id="add-video-folder-select" class="widget-search"></select>
+            </label>
+            <div id="add-video-status" class="url-add-status"></div>
+            <div class="url-add-actions">
+                <button id="btn-add-video-cancel" type="button">キャンセル</button>
+                <button id="btn-add-video-submit" type="button" class="theme-btn">情報取得＋追加</button>
+            </div>
+        </div>
+    </div>
+
     <div id="settings-modal" class="overlay-screen hidden" style="z-index: 9999;">
         <div class="panel-glass settings-window">
             <h2 class="theme-text" style="margin-top:0; padding-bottom:5px;"><i class="fas fa-cog"></i> System Settings</h2>
@@ -326,6 +345,6 @@
     </div>
 
     <script type="module" src="firebase-web.js?v=2026071701"></script>
-    <script src="script.js?v=2026071701"></script>
+    <script src="script.js?v=2026072401"></script>
 </body>
 </html>

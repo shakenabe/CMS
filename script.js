@@ -204,7 +204,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         selectFolder(e.target.value);
     });
 
-    setupPlayerControls(); setupSettingsModal(); window.addEventListener('message', handleNicoMessage); setupPocketMode(); setupPocketLayoutDrag(); setupClockUI(); setupTrackListReturnGesture(); setupControlsReturnGesture();
+    setupPlayerControls(); setupSettingsModal(); setupUrlAdd(); window.addEventListener('message', handleNicoMessage); setupPocketMode(); setupPocketLayoutDrag(); setupClockUI(); setupTrackListReturnGesture(); setupControlsReturnGesture();
     setupEditMode();
     applyWindowMode(); 
 });
@@ -658,6 +658,19 @@ function ensureWindowTaskbar() {
             });
             taskbar.appendChild(button);
         });
+        const addToolButton = (className, icon, label, targetId) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = className;
+            button.title = label;
+            button.setAttribute('aria-label', label);
+            button.innerHTML = `<i class="${icon}"></i><span class="window-tool-label"> ${label}</span>`;
+            button.addEventListener('click', () => document.getElementById(targetId)?.click());
+            taskbar.appendChild(button);
+        };
+        addToolButton('window-tool window-add', 'fas fa-plus', '動画追加', 'btn-add-video-url');
+        addToolButton('window-tool window-pocket', 'fas fa-lock', 'ロック', 'btn-pocket-mode');
+        addToolButton('window-tool window-settings', 'fas fa-cog', '設定', 'btn-open-settings');
         const exit = document.createElement('button'); exit.type = 'button'; exit.className = 'window-exit'; exit.innerHTML = '<i class="fas fa-right-from-bracket"></i> 終了';
         exit.addEventListener('click', () => { appSettings.windowMode = false; saveSettings(); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); });
         taskbar.appendChild(exit); document.body.appendChild(taskbar);
@@ -1191,6 +1204,159 @@ function scrollActiveTrackInList(activeEl, { force = false } = {}) {
     const max = Math.max(0, trackListEl.scrollHeight - trackListEl.clientHeight);
     window.__cmsAutoTrackScrollUntil = Date.now() + 900;
     trackListEl.scrollTo({ top: Math.min(max, Math.max(0, desired)), behavior: 'smooth' });
+}
+
+function identifySupportedVideoUrl(rawUrl) {
+    let url;
+    try { url = new URL(String(rawUrl || '').trim()); }
+    catch (_) { throw new Error('正しい動画URLを入力してください。'); }
+    const host = url.hostname.toLowerCase().replace(/^www\./, '');
+    if (host === 'youtu.be' || host.endsWith('youtube.com')) {
+        const pathParts = url.pathname.split('/').filter(Boolean);
+        const id = host === 'youtu.be'
+            ? pathParts[0]
+            : (url.searchParams.get('v') || (['shorts', 'live', 'embed'].includes(pathParts[0]) ? pathParts[1] : ''));
+        if (!id || !/^[A-Za-z0-9_-]{6,20}$/.test(id)) throw new Error('YouTube動画IDを確認できません。');
+        return {
+            site: 'youtube',
+            id,
+            canonicalUrl: `https://www.youtube.com/watch?v=${id}`,
+            thumbnail: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+            oEmbedUrl: `https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}&format=json`
+        };
+    }
+    if (host.endsWith('nicovideo.jp') || host === 'nico.ms') {
+        const match = `${url.pathname}${url.search}`.match(/(?:watch\/)?((?:sm|so|nm)\d+)/i);
+        if (!match) throw new Error('ニコニコ動画IDを確認できません。');
+        const id = match[1];
+        const canonicalUrl = `https://www.nicovideo.jp/watch/${id}`;
+        return {
+            site: 'niconico',
+            id,
+            canonicalUrl,
+            thumbnail: `https://tn.smilevideo.jp/smile?i=${id.replace(/\D/g, '')}`,
+            oEmbedUrl: `https://embed.nicovideo.jp/oembed?url=${encodeURIComponent(canonicalUrl)}&format=json`
+        };
+    }
+    throw new Error('YouTubeまたはニコニコの動画URLを入力してください。');
+}
+
+async function fetchVideoUrlMetadata(info) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+        const response = await fetch(info.oEmbedUrl, { signal: controller.signal, cache: 'no-store' });
+        if (!response.ok) throw new Error(`metadata HTTP ${response.status}`);
+        const data = await response.json();
+        return {
+            title: String(data.title || '').trim(),
+            channelName: String(data.author_name || '').trim(),
+            thumbnail: String(data.thumbnail_url || info.thumbnail).trim()
+        };
+    } catch (error) {
+        console.warn('[url-add] metadata fallback', error);
+        return { title: `${info.site === 'youtube' ? 'YouTube' : 'ニコニコ'} ${info.id}`, channelName: '', thumbnail: info.thumbnail };
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+function populateUrlAddFolders() {
+    const select = document.getElementById('add-video-folder-select');
+    if (!select) return;
+    const current = currentFolderId && currentFolderId !== '__all' ? currentFolderId : '';
+    const names = musicLibrary.filter(folder => folder.id !== '__all').map(folder => folder.id);
+    select.innerHTML = '';
+    [...new Set(names)].forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        select.appendChild(option);
+    });
+    const manual = document.createElement('option');
+    manual.value = '__new__';
+    manual.textContent = '＋ 新しいフォルダ...';
+    select.appendChild(manual);
+    if (current && names.includes(current)) select.value = current;
+    else if (names.length) select.value = names[0];
+}
+
+function setupUrlAdd() {
+    const modal = document.getElementById('add-video-modal');
+    const openButton = document.getElementById('btn-add-video-url');
+    const cancelButton = document.getElementById('btn-add-video-cancel');
+    const submitButton = document.getElementById('btn-add-video-submit');
+    const input = document.getElementById('add-video-url-input');
+    const status = document.getElementById('add-video-status');
+    if (!modal || !openButton || !submitButton || !input || !status) return;
+    const setStatus = (message, type = '') => {
+        status.textContent = message;
+        status.classList.remove('error', 'success');
+        if (type) status.classList.add(type);
+    };
+    const close = () => modal.classList.add('hidden');
+    openButton.onclick = () => {
+        populateUrlAddFolders();
+        input.value = '';
+        setStatus('');
+        modal.classList.remove('hidden');
+        setTimeout(() => input.focus(), 0);
+    };
+    cancelButton.onclick = close;
+    submitButton.onclick = async () => {
+        let folder = document.getElementById('add-video-folder-select')?.value || 'Manual';
+        if (folder === '__new__') {
+            folder = prompt('新しいフォルダ名を入力してください。')?.trim();
+            if (!folder) return;
+        }
+        submitButton.disabled = true;
+        setStatus('動画情報を取得しています...');
+        try {
+            const info = identifySupportedVideoUrl(input.value);
+            if (allItems.some(item => item.url === info.canonicalUrl || String(item.url || '').includes(info.id))) {
+                throw new Error('この動画はすでにCMSへ登録されています。');
+            }
+            const metadata = await fetchVideoUrlMetadata(info);
+            const now = new Date().toISOString();
+            const item = {
+                id: crypto.randomUUID(),
+                url: info.canonicalUrl,
+                title: metadata.title,
+                thumbnail: metadata.thumbnail,
+                channelName: metadata.channelName || 'Unknown',
+                uploader: metadata.channelName || 'Unknown',
+                site: info.site,
+                folder,
+                folders: [folder],
+                savedAt: now,
+                duration: 0,
+                playCount: 0,
+                originalIndex: allItems.length,
+                safeDate: Date.now(),
+                safePlayCount: 0
+            };
+            allItems.push(item);
+            if (!folderSettings.some(setting => setting.folderName === folder)) {
+                folderSettings.push({ folderName: folder, order: folderSettings.length });
+            }
+            buildLibrary();
+            renderFolders();
+            selectFolder(folder);
+            await saveEditedLibraryTargets({ cloud: false });
+            if (appSettings.useFirebase && window.CmsWebFirebase?.saveLibrary && confirm('追加した動画をFirebaseにも保存しますか？')) {
+                await saveEditedLibraryTargets({ cloud: true });
+            }
+            setStatus(`追加しました：${item.title}`, 'success');
+            setTimeout(close, 900);
+        } catch (error) {
+            setStatus(error.message || String(error), 'error');
+        } finally {
+            submitButton.disabled = false;
+        }
+    };
+    input.addEventListener('keydown', event => {
+        if (event.key === 'Enter') { event.preventDefault(); submitButton.click(); }
+    });
 }
 
 // 🌟 編集モードとダウンロード

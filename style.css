@@ -443,6 +443,17 @@ body.window-mode #window-taskbar {
 #window-taskbar button { height: 44px; min-width: 46px; padding: 0 12px; color: #fff; background: transparent; border: 0; border-bottom: 2px solid transparent; touch-action: manipulation; }
 #window-taskbar button:hover, #window-taskbar button.active { background: rgba(255,255,255,0.13); border-bottom-color: var(--accent-color); }
 #window-taskbar .window-exit { margin-left: auto; background: #8b1e1e; }
+
+.url-add-dialog { width: min(520px, calc(100vw - 32px)); padding: 24px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box; }
+.url-add-dialog h2 { margin: 0; }
+.url-add-dialog p { margin: 0; opacity: .78; font-size: .9rem; }
+.url-add-dialog label { display: flex; flex-direction: column; gap: 7px; font-weight: 700; }
+.url-add-dialog .widget-search { width: 100%; box-sizing: border-box; }
+.url-add-status { min-height: 22px; white-space: pre-wrap; font-size: .84rem; opacity: .9; }
+.url-add-status.error { color: #ff8d8d; }
+.url-add-status.success { color: #8ef0ad; }
+.url-add-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.url-add-actions button { min-width: 110px; padding: 9px 14px; border-radius: 20px; }
 body.window-mode input, body.window-mode button, body.window-mode select, body.window-mode .w-track-list, body.window-mode .w-folder-list, body.window-mode .progress-container { cursor: default; }
 body.window-mode #widget-player { min-width: min(300px, calc(100vw - 24px)); }
 @media (pointer: coarse) {
