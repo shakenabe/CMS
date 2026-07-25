@@ -59,6 +59,39 @@ const readyScreen = document.getElementById('ready-screen');
 const mainApp = document.getElementById('main-app');
 const folderListEl = document.getElementById('widget-folder-list');
 const trackListEl = document.getElementById('widget-track-list');
+let webSystemMonitorTimer = null;
+
+function updateWebSystemMonitor() {
+    const setText = (id, value) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = value;
+    };
+    const now = new Date();
+    setText('webMonitorTime', now.toLocaleTimeString('ja-JP', { hour12: false }));
+    setText('webMonitorDate', `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`);
+    setText('webMonitorLibrary', String(allItems.length).padStart(4, '0'));
+    setText('webMonitorFolders', String(Math.max(0, musicLibrary.length - 1)).padStart(3, '0'));
+
+    const playbackCell = document.getElementById('webMonitorPlaybackCell');
+    const playbackLabel = currentPlayingItem ? (isPlaying ? 'PLAYING' : 'PAUSED') : 'STANDBY';
+    setText('webMonitorPlayback', playbackLabel);
+    setText('webMonitorTrack', currentPlayingItem?.title || 'NO SESSION');
+    if (playbackCell) playbackCell.dataset.state = currentPlayingItem ? (isPlaying ? 'playing' : 'paused') : 'standby';
+
+    const online = navigator.onLine !== false;
+    const linkCell = document.getElementById('webMonitorLinkCell');
+    setText('webMonitorLink', online ? 'NORMAL' : 'OFFLINE');
+    setText('webMonitorMode', appSettings.useFirebase ? 'FIREBASE LINK' : 'LOCAL DB');
+    if (linkCell) linkCell.dataset.state = online ? 'normal' : 'alert';
+}
+
+function initializeWebSystemMonitor() {
+    if (webSystemMonitorTimer) clearInterval(webSystemMonitorTimer);
+    updateWebSystemMonitor();
+    webSystemMonitorTimer = setInterval(updateWebSystemMonitor, 1000);
+    window.addEventListener('online', updateWebSystemMonitor);
+    window.addEventListener('offline', updateWebSystemMonitor);
+}
 
 function markUserTrackScrollHold(duration = 1800) {
     if (Date.now() < (window.__cmsAutoTrackScrollUntil || 0)) return;
@@ -162,7 +195,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentSortOrder = appSettings.defaultSortOrder || 'custom';
     document.getElementById('widget-sort-select').value = currentSortOrder;
     
-    updateLayoutMode(); applyThemeSettings(); await loadBgImageFromDB();
+    updateLayoutMode(); applyThemeSettings(); initializeWebSystemMonitor(); await loadBgImageFromDB();
 
     loadYouTubeAPI();
 
@@ -1022,6 +1055,7 @@ function processImportData(data) {
     folderSettings = Array.isArray(data.folderSettings) ? data.folderSettings : [];
     if (allItems.length > 0) {
         buildLibrary(); renderFolders();
+        updateWebSystemMonitor();
         const restored = resolveSavedPlaybackWithFallback(saved);
         selectFolder(restored?.folder?.id || saved?.targetFolderId || saved?.folderId || musicLibrary[0]?.id || '__all', { preserveScroll: true, skipSave: true });
         if (restored) {
@@ -1083,6 +1117,7 @@ function buildLibrary() {
     items.forEach(i => { const fs = i.folders && i.folders.length > 0 ? i.folders :[i.folder || 'Manual']; fs.forEach(f => { if (!fMap[f]) { fMap[f] =[]; fOrder.push(f); } fMap[f].push(i); }); });
     const fNames = Object.keys(fMap).sort((a, b) => { const sA = folderSettings.find(s => s.folderName === a); const sB = folderSettings.find(s => s.folderName === b); return (sA && typeof sA.order === 'number' ? sA.order : fOrder.indexOf(a) + 10000) - (sB && typeof sB.order === 'number' ? sB.order : fOrder.indexOf(b) + 10000); });
     musicLibrary = [{ id: '__all', name: 'All', songs: sortSongs(items) }, ...fNames.map(n => ({ id: n, name: n, songs: sortSongs(fMap[n]) }))];
+    updateWebSystemMonitor();
 }
 function sortSongs(songs) { return[...songs].sort((a, b) => { const sf = (s) => s || ""; switch (currentSortOrder) { case 'title_asc': return sf(a.title).localeCompare(sf(b.title)); case 'title_desc': return sf(b.title).localeCompare(sf(a.title)); case 'newest': return b.safeDate - a.safeDate; case 'oldest': return a.safeDate - b.safeDate; case 'playCount_desc': return b.safePlayCount - a.safePlayCount; case 'custom': default: return a.originalIndex - b.originalIndex; } }); }
 
@@ -1564,6 +1599,7 @@ function updatePlayPauseIcon() {
     const mIcon = document.getElementById('m-header-play-icon'); if (mIcon) mIcon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
     const pocketIcon = document.getElementById('pocket-play-icon'); if (pocketIcon) pocketIcon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+    updateWebSystemMonitor();
 }
 
 function setupClockUI() {

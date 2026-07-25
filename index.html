@@ -6,7 +6,7 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2026072402">
+    <link rel="stylesheet" href="style.css?v=2026072501">
 </head>
 <body class="theme-modern is-pc">
 
@@ -62,6 +62,17 @@
     </div>
 
     <div id="main-app" class="hidden">
+        <section id="webSystemMonitor" class="web-system-monitor" aria-label="CMSシステムモニター">
+            <div class="web-monitor-ident">
+                <span>CMS CONTROL NETWORK</span>
+                <strong>MEDIA LINK SYSTEM</strong>
+            </div>
+            <div class="web-monitor-cell"><span>ACTIVE TIME</span><strong id="webMonitorTime">00:00:00</strong><small id="webMonitorDate">----.--.--</small></div>
+            <div class="web-monitor-cell"><span>LIBRARY</span><strong id="webMonitorLibrary">0000</strong><small>MEDIA ITEMS</small></div>
+            <div class="web-monitor-cell web-monitor-folders"><span>FOLDER MAP</span><strong id="webMonitorFolders">000</strong><small>SECTORS</small></div>
+            <div class="web-monitor-cell" id="webMonitorPlaybackCell" data-state="standby"><span>PLAYBACK</span><strong id="webMonitorPlayback">STANDBY</strong><small id="webMonitorTrack">NO SESSION</small></div>
+            <div class="web-monitor-alert" id="webMonitorLinkCell" data-state="normal"><span>LINK STATUS</span><strong id="webMonitorLink">NORMAL</strong><small id="webMonitorMode">LOCAL DB</small></div>
+        </section>
         <div class="widget-container" id="widget-container">
             <!-- 左ペイン: PC固定レイアウト用 -->
             <div id="left-pane" class="pc-column">
@@ -192,7 +203,7 @@
                 <div id="tab-basic" class="tab-content active">
                     <div class="setting-row">
                         <label>テーマ</label>
-                        <select id="set-theme" class="widget-search"><option value="modern">現代UI風 (Modern)</option><option value="nerv">エヴァ風 (NERV)</option><option value="toyota">トヨタナビ風 (Car Navi)</option></select>
+                        <select id="set-theme" class="widget-search"><option value="modern">パターン1</option><option value="nerv">パターン2</option><option value="toyota">パターン3</option><option value="niconico">パターン4</option></select>
                     </div>
                     
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
@@ -344,8 +355,8 @@
         </div>
     </div>
 
-    <script src="cms-icons.js?v=2026072402"></script>
-    <script type="module" src="firebase-web.js?v=2026072402"></script>
-    <script src="script.js?v=2026072402"></script>
+    <script src="cms-icons.js?v=2026072501"></script>
+    <script type="module" src="firebase-web.js?v=2026072501"></script>
+    <script src="script.js?v=2026072501"></script>
 </body>
 </html>
