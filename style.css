@@ -22,7 +22,7 @@ body.theme-nerv {
         radial-gradient(circle at 18% 12%, rgba(126,48,168,.72), transparent 34%),
         linear-gradient(145deg, #231036 0%, #110719 62%, #050307 100%);
 }
-body.theme-nerv * { font-weight: bold; letter-spacing: .05em; }
+body.theme-nerv * { letter-spacing: .01em; }
 
 /* CMS Web custom glyphs: device-independent replacements for OS emoji. */
 cms-icon {
