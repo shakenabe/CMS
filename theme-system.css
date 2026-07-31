@@ -63,7 +63,6 @@ body.theme-nerv {
     --bg-color: #d9eaf7;
     --bg-gradient: linear-gradient(180deg, rgba(255,255,255,.72), rgba(178,215,240,.5) 36%, rgba(110,157,195,.44));
     --panel-rgb: 249, 252, 255;
-    --panel-alpha: .86;
     --text-color: #19324a;
     --sub-text-color: #526b82;
     --accent-color: #147fc2;
@@ -93,7 +92,6 @@ body.theme-toyota {
     --bg-color: #050307;
     --bg-gradient: radial-gradient(circle at 18% 10%, rgba(83, 27, 105, .36), transparent 34%), linear-gradient(145deg, #16091e 0%, #07030a 64%, #020102 100%);
     --panel-rgb: 19, 8, 29;
-    --panel-alpha: .94;
     --text-color: #f6f1fa;
     --sub-text-color: #bdaac9;
     --accent-color: #9cff57;
@@ -127,7 +125,7 @@ body .url-add-dialog {
 }
 
 body:not(.performance-mode) .panel-glass {
-    background: linear-gradient(145deg, var(--theme-panel-highlight), transparent 44%), var(--theme-surface);
+    background: rgba(var(--panel-rgb), var(--panel-alpha));
 }
 
 body.performance-mode .panel-glass {
@@ -305,11 +303,6 @@ body ::-webkit-scrollbar-thumb {
 }
 
 /* Pattern 1: quiet, durable standard UI. */
-body.theme-modern #widget-controls,
-body.theme-modern #library-nav-wrapper {
-    background: linear-gradient(180deg, rgba(32, 52, 79, .9), rgba(16, 29, 48, .94));
-}
-
 body.theme-modern .controls-main .play-btn { border-radius: 50%; }
 body.theme-modern .control-tool-btn { border-radius: 8px; }
 body.theme-modern .w-f-item.active,
@@ -327,9 +320,7 @@ body.theme-nerv .theme-btn,
 body.theme-nerv .widget-search { clip-path: none; }
 body.theme-nerv .panel-glass::before { content: none; }
 body.theme-nerv .panel-glass {
-    background:
-        linear-gradient(180deg, rgba(255,255,255,.7), rgba(216,235,248,.74)),
-        rgba(var(--panel-rgb), var(--panel-alpha));
+    background: rgba(var(--panel-rgb), var(--panel-alpha));
     border-color: var(--theme-border);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.78), var(--theme-shadow);
 }
@@ -406,10 +397,7 @@ body.theme-toyota cms-icon {
 }
 body.theme-toyota .panel-glass {
     position: relative;
-    background:
-        linear-gradient(135deg, rgba(166,107,224,.15), transparent 46%),
-        linear-gradient(315deg, rgba(156,255,87,.045), transparent 42%),
-        var(--theme-surface);
+    background: rgba(var(--panel-rgb), var(--panel-alpha));
     border-color: var(--theme-border);
     clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
 }
@@ -521,6 +509,16 @@ body.theme-niconico .w-t-item.active { background: linear-gradient(90deg, rgba(2
 body.theme-niconico .theme-btn { color: #eee; background: linear-gradient(#3a3a3a, #202020); border-color: #555; }
 body.theme-niconico .theme-btn:hover { border-color: var(--theme-accent); }
 body.theme-niconico .widget-search { background: #0d0d0d; border-color: #666; }
+
+/* Keep the pre-theme-system transparency contract.
+   Normal panels follow the background-opacity slider, mobile panels remain
+   transparent, and window panels use their dedicated color/alpha controls. */
+body.is-mobile:not(.window-mode):not(.performance-mode) .panel-glass {
+    background: transparent;
+}
+body.window-mode:not(.performance-mode) .wm-panel {
+    background: rgba(var(--window-panel-rgb, var(--panel-rgb)), var(--window-panel-alpha, var(--panel-alpha)));
+}
 
 /* Existing layout promises. */
 body.window-mode #widget-controls .control-tools { display: none !important; }
