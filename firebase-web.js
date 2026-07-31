@@ -365,7 +365,7 @@ async function flushPlaybackQueue({ silent = true } = {}) {
         }, { merge: true });
       }
       batch.set(userDoc(uid, 'sync', 'meta'), {
-        lastChangedAt: serverTimestamp(),
+        playbackChangedAt: serverTimestamp(),
         webPlaybackUpdatedAt: serverTimestamp()
       }, { merge: true });
       await batch.commit();
@@ -384,6 +384,7 @@ async function flushPlaybackQueue({ silent = true } = {}) {
         }, { merge: true });
       }
       batch.set(userDoc(uid, 'sync', 'meta'), {
+        playbackChangedAt: serverTimestamp(),
         webPlaybackHistoryUpdatedAt: serverTimestamp()
       }, { merge: true });
       await batch.commit();
@@ -580,6 +581,7 @@ async function saveLibrarySnapshot(data = {}) {
   }
   queueSet(userDoc(uid, 'sync', 'meta'), {
     lastChangedAt: serverTimestamp(),
+    libraryChangedAt: serverTimestamp(),
     webUpdatedAt: serverTimestamp()
   });
   await commitBatch(counter.batch, counter);
