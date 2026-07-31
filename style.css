@@ -95,6 +95,7 @@ body.theme-nerv::after {
         linear-gradient(150deg, transparent 28px, rgba(255,138,0,.24) 29px, transparent 31px);
     background-size: 72px 42px;
 }
+body.theme-nerv #main-app { position: relative; z-index: 2; }
 body.theme-nerv .panel-glass,
 body.theme-nerv .w-t-item,
 body.theme-nerv .w-f-item,
@@ -115,6 +116,14 @@ body.theme-nerv.is-mobile #right-pane {
 }
 body.theme-nerv .panel-glass::before {
     content: "NERV-CMS"; position: absolute; top: 4px; right: 8px; color: rgba(230,0,18,.42); font: 9px/1 "Share Tech Mono", monospace; pointer-events: none;
+}
+/* 入れ子になったライブラリ部品までclip-pathを重ねると、一部GPUで
+   Folders / Tracks / Library Tools が消えるため内側だけ通常描画にする。 */
+body.theme-nerv #library-nav-wrapper,
+body.theme-nerv #widget-folder-list-wrapper,
+body.theme-nerv #widget-track-list-wrapper {
+    clip-path: none;
+    isolation: isolate;
 }
 html { font-size: var(--base-font-size); }
 html, body {
@@ -426,6 +435,7 @@ select.widget-search option { background-color: var(--bg-color); color: var(--te
 .w-f-item.active { background: rgba(255,255,255,0.2); font-weight: bold; border-left: 3px solid var(--text-color); color: var(--text-color); }
 
 .w-t-item { display: flex; align-items: center; padding: 12px 10px; cursor: pointer; transition: 0.2s; border-left: 3px solid transparent; color: var(--text-color); border-bottom: 1px solid rgba(255,255,255,0.05); border-radius: 0; }
+.cms-track-virtual-spacer { flex: 0 0 auto; width: 1px; min-height: 0; pointer-events: none; }
 .w-t-item:hover { background: rgba(255,255,255,0.1); }
 .w-t-item.active { background: rgba(255,255,255,0.15); border-left: 3px solid var(--text-color); color: var(--text-color); }
 .w-t-item.active .track-title-text { color: var(--text-color); }
@@ -488,6 +498,8 @@ body.window-mode .wm-panel {
     box-shadow: 0 12px 32px rgba(0,0,0,0.55); background: rgba(var(--window-panel-rgb, var(--panel-rgb)), var(--window-panel-alpha, var(--panel-alpha)));
     backdrop-filter: blur(var(--panel-blur)); -webkit-backdrop-filter: blur(var(--panel-blur)); border: 1px solid var(--border-color);
 }
+/* Pattern 2の装飾クリップは、独立ウィンドウ内の表示領域を欠けさせない。 */
+body.theme-nerv.window-mode .wm-panel { clip-path: none; }
 body.window-mode .wm-panel > :not(.window-titlebar):not(.window-resize-handle) { min-height: 0; }
 body.window-mode .wm-panel > .w-track-list,
 body.window-mode .wm-panel > .w-folder-list,
@@ -512,10 +524,17 @@ body.window-mode .wm-panel.window-maximized { border-width: 0; }
 body.window-mode #window-taskbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 8000; height: calc(44px + env(safe-area-inset-bottom));
     display: flex; align-items: flex-start; gap: 2px; padding-bottom: env(safe-area-inset-bottom); background: rgba(18,18,18,0.98); border-top: 1px solid rgba(255,255,255,0.15);
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
 }
-#window-taskbar button { height: 44px; min-width: 46px; padding: 0 12px; color: #fff; background: transparent; border: 0; border-bottom: 2px solid transparent; touch-action: manipulation; }
+#window-taskbar button { height: 44px; min-width: 42px; max-width: 150px; flex: 1 1 86px; padding: 0 10px; color: #fff; background: transparent; border: 0; border-bottom: 2px solid transparent; touch-action: manipulation; overflow: hidden; }
+#window-taskbar .window-task-label { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#window-taskbar .window-tool, #window-taskbar .window-exit { flex: 0 0 auto; }
 #window-taskbar button:hover, #window-taskbar button.active { background: rgba(255,255,255,0.13); border-bottom-color: var(--accent-color); }
 #window-taskbar .window-exit { margin-left: auto; background: #8b1e1e; }
+@media (max-width: 900px) {
+    #window-taskbar button[data-window-id] { flex-basis: 60px; padding-inline: 6px; }
+    body.theme-nerv #window-taskbar button[data-window-id] { letter-spacing: 0; }
+}
 
 .url-add-dialog { width: min(520px, calc(100vw - 32px)); padding: 24px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box; }
 .url-add-dialog h2 { margin: 0; }

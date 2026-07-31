@@ -16,6 +16,7 @@ let appSettings = { ...defaultSettings };
 
 let allItems = [];
 let folderSettings = [];
+let folderSettingsByName = new Map();
 let musicLibrary =[];
 let currentFolderId = null;
 let currentSortOrder = 'custom';
@@ -44,7 +45,14 @@ let userTrackScrollHoldUntil = 0;
 
 let currentRenderedCount = 0;
 const RENDER_CHUNK_SIZE = 50;
+const TRACK_VIRTUAL_THRESHOLD = 300;
+const TRACK_VIRTUAL_OVERSCAN = 30;
 let currentRenderSongs =[];
+let trackVirtualStart = -1;
+let trackVirtualEnd = -1;
+let trackVirtualRowHeight = 76;
+let trackVirtualFrame = 0;
+let searchRenderTimer = 0;
 let lastPlaybackStateSavedAt = 0;
 let suppressSessionSave = false;
 const CMS_PLAYER_SESSION_KEY = 'cms_player_last_playback_v2';
@@ -178,7 +186,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // リスト追加読込
     trackListEl.addEventListener('scroll', () => { 
         markUserTrackScrollHold();
-        if (trackListEl.scrollTop + trackListEl.clientHeight >= trackListEl.scrollHeight - 100) loadMoreTracks(); 
+        if (trackVirtualFrame) return;
+        trackVirtualFrame = requestAnimationFrame(() => {
+            trackVirtualFrame = 0;
+            renderTrackWindow();
+        });
     });
     setupMobileTrackListFocus();
 
@@ -406,8 +418,8 @@ function returnToCurrentTrack() {
     if (!currentPlayingItem || !currentRenderSongs?.length) return;
     const index = currentRenderSongs.findIndex(song => song === currentPlayingItem || (song.id && song.id === currentPlayingItem.id));
     if (index < 0) return;
-    while (index >= currentRenderedCount && currentRenderedCount < currentRenderSongs.length) loadMoreTracks();
-    const activeEl = trackListEl.children[index];
+    scrollTrackIndexIntoView(index, { force: true });
+    const activeEl = trackListEl.querySelector(`.w-t-item[data-index="${index}"]`);
     if (activeEl) scrollActiveTrackInList(activeEl, { force: true });
 }
 
@@ -644,7 +656,8 @@ function ensureWindowTaskbar() {
     if (!taskbar) {
         taskbar = document.createElement('div'); taskbar.id = 'window-taskbar'; taskbar.setAttribute('role', 'toolbar');
         WINDOW_PANEL_IDS.forEach(id => {
-            const button = document.createElement('button'); button.type = 'button'; button.dataset.windowId = id; button.textContent = WINDOW_PANEL_TITLES[id];
+            const button = document.createElement('button'); button.type = 'button'; button.dataset.windowId = id;
+            button.innerHTML = `<span class="window-task-label">${WINDOW_PANEL_TITLES[id]}</span>`;
             button.addEventListener('click', () => {
                 const el = document.getElementById(id); if (!el) return;
                 const mode = appSettings.windowStates[id]?.mode || 'normal';
@@ -1020,13 +1033,14 @@ function processImportData(data) {
         safePlayCount: item.playCount || 0
     }));
     folderSettings = Array.isArray(data.folderSettings) ? data.folderSettings : [];
+    folderSettingsByName = new Map(folderSettings.map(setting => [setting.folderName, setting]));
     if (allItems.length > 0) {
         buildLibrary(); renderFolders();
         const restored = resolveSavedPlaybackWithFallback(saved);
         selectFolder(restored?.folder?.id || saved?.targetFolderId || saved?.folderId || musicLibrary[0]?.id || '__all', { preserveScroll: true, skipSave: true });
         if (restored) {
-            while (restored.index >= currentRenderedCount && currentRenderedCount < currentRenderSongs.length) loadMoreTracks();
-            const activeEl = trackListEl.children[restored.index];
+            scrollTrackIndexIntoView(restored.index, { force: true });
+            const activeEl = trackListEl.querySelector(`.w-t-item[data-index="${restored.index}"]`);
             if (activeEl) setTimeout(() => scrollActiveTrackInList(activeEl), 120);
         }
     } else alert('データがありません');
@@ -1078,11 +1092,27 @@ function startGame() {
 }
 
 function buildLibrary() {
-    let fMap = {}; let fOrder =[]; 
+    const fMap = new Map(); const fOrderIndex = new Map();
+    folderSettingsByName = new Map(folderSettings.map(setting => [setting.folderName, setting]));
     const items = allItems.filter(i => { if (excludeNico && i.site === 'niconico') return false; if (currentSearchQuery) { const q = currentSearchQuery.toLowerCase(); return (i.title || "").toLowerCase().includes(q) || (i.tags ||[]).join(' ').toLowerCase().includes(q); } return true; });
-    items.forEach(i => { const fs = i.folders && i.folders.length > 0 ? i.folders :[i.folder || 'Manual']; fs.forEach(f => { if (!fMap[f]) { fMap[f] =[]; fOrder.push(f); } fMap[f].push(i); }); });
-    const fNames = Object.keys(fMap).sort((a, b) => { const sA = folderSettings.find(s => s.folderName === a); const sB = folderSettings.find(s => s.folderName === b); return (sA && typeof sA.order === 'number' ? sA.order : fOrder.indexOf(a) + 10000) - (sB && typeof sB.order === 'number' ? sB.order : fOrder.indexOf(b) + 10000); });
-    musicLibrary = [{ id: '__all', name: 'All', songs: sortSongs(items) }, ...fNames.map(n => ({ id: n, name: n, songs: sortSongs(fMap[n]) }))];
+    items.forEach(i => {
+        const fs = i.folders && i.folders.length > 0 ? i.folders : [i.folder || 'Manual'];
+        fs.forEach(f => {
+            if (!fMap.has(f)) {
+                fMap.set(f, []);
+                fOrderIndex.set(f, fOrderIndex.size);
+            }
+            fMap.get(f).push(i);
+        });
+    });
+    const fNames = [...fMap.keys()].sort((a, b) => {
+        const sA = folderSettingsByName.get(a);
+        const sB = folderSettingsByName.get(b);
+        const orderA = sA && typeof sA.order === 'number' ? sA.order : (fOrderIndex.get(a) ?? 0) + 10000;
+        const orderB = sB && typeof sB.order === 'number' ? sB.order : (fOrderIndex.get(b) ?? 0) + 10000;
+        return orderA - orderB;
+    });
+    musicLibrary = [{ id: '__all', name: 'All', songs: sortSongs(items) }, ...fNames.map(n => ({ id: n, name: n, songs: sortSongs(fMap.get(n)) }))];
 }
 function sortSongs(songs) { return[...songs].sort((a, b) => { const sf = (s) => s || ""; switch (currentSortOrder) { case 'title_asc': return sf(a.title).localeCompare(sf(b.title)); case 'title_desc': return sf(b.title).localeCompare(sf(a.title)); case 'newest': return b.safeDate - a.safeDate; case 'oldest': return a.safeDate - b.safeDate; case 'playCount_desc': return b.safePlayCount - a.safePlayCount; case 'custom': default: return a.originalIndex - b.originalIndex; } }); }
 
@@ -1141,12 +1171,45 @@ function selectFolder(id, options = {}) {
 
 function escapeHTML(str) { return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
 
-function renderTracks(songs) { trackListEl.innerHTML = ''; window.__cmsAutoTrackScrollUntil = Date.now() + 300; trackListEl.scrollTop = 0; currentRenderSongs = songs; currentRenderedCount = 0; if (songs.length === 0) { trackListEl.innerHTML = '<div style="padding:20px; text-align:center;">動画がありません</div>'; return; } loadMoreTracks(); }
+function renderTracks(songs) {
+    trackListEl.innerHTML = '';
+    window.__cmsAutoTrackScrollUntil = Date.now() + 300;
+    trackListEl.scrollTop = 0;
+    currentRenderSongs = songs;
+    currentRenderedCount = 0;
+    trackVirtualStart = -1;
+    trackVirtualEnd = -1;
+    if (songs.length === 0) {
+        trackListEl.innerHTML = '<div style="padding:20px; text-align:center;">動画がありません</div>';
+        return;
+    }
+    renderTrackWindow({ force: true });
+}
 
 function loadMoreTracks() {
-    if (currentRenderedCount >= currentRenderSongs.length) return;
-    const frag = document.createDocumentFragment(); const end = Math.min(currentRenderedCount + RENDER_CHUNK_SIZE, currentRenderSongs.length);
-    for (let i = currentRenderedCount; i < end; i++) {
+    renderTrackWindow({ force: true });
+}
+
+function renderTrackWindow({ force = false } = {}) {
+    if (!currentRenderSongs.length) return;
+    const virtual = currentRenderSongs.length > TRACK_VIRTUAL_THRESHOLD;
+    const viewportRows = Math.max(RENDER_CHUNK_SIZE, Math.ceil((trackListEl.clientHeight || 600) / trackVirtualRowHeight));
+    const start = virtual ? Math.max(0, Math.floor(trackListEl.scrollTop / trackVirtualRowHeight) - TRACK_VIRTUAL_OVERSCAN) : 0;
+    const end = virtual
+        ? Math.min(currentRenderSongs.length, start + viewportRows + TRACK_VIRTUAL_OVERSCAN * 2)
+        : currentRenderSongs.length;
+    if (!force && start === trackVirtualStart && end === trackVirtualEnd) return;
+    trackVirtualStart = start;
+    trackVirtualEnd = end;
+    currentRenderedCount = end;
+    const frag = document.createDocumentFragment();
+    if (virtual && start > 0) {
+        const topSpacer = document.createElement('div');
+        topSpacer.className = 'cms-track-virtual-spacer';
+        topSpacer.style.height = `${start * trackVirtualRowHeight}px`;
+        frag.appendChild(topSpacer);
+    }
+    for (let i = start; i < end; i++) {
         const s = currentRenderSongs[i]; const div = document.createElement('div'); div.className = 'w-t-item'; div.title = s.title; div.dataset.index = i;
         const isChecked = selectedItems.has(s.originalIndex);
         
@@ -1179,14 +1242,37 @@ function loadMoreTracks() {
         }; 
         frag.appendChild(div);
     }
-    trackListEl.appendChild(frag); currentRenderedCount = end; updateActiveTrackUI(); scheduleMarqueeUpdate();
+    if (virtual && end < currentRenderSongs.length) {
+        const bottomSpacer = document.createElement('div');
+        bottomSpacer.className = 'cms-track-virtual-spacer';
+        bottomSpacer.style.height = `${(currentRenderSongs.length - end) * trackVirtualRowHeight}px`;
+        frag.appendChild(bottomSpacer);
+    }
+    trackListEl.replaceChildren(frag);
+    const measured = trackListEl.querySelector('.w-t-item')?.getBoundingClientRect().height;
+    if (virtual && Number.isFinite(measured) && measured > 30) trackVirtualRowHeight = measured;
+    updateActiveTrackUI({ ensureVisible: false });
+    scheduleMarqueeUpdate();
 }
 
-function updateActiveTrackUI() {
+function scrollTrackIndexIntoView(index, { force = false } = {}) {
+    if (!Number.isFinite(index) || index < 0 || index >= currentRenderSongs.length) return;
+    window.__cmsAutoTrackScrollUntil = Date.now() + 300;
+    const targetTop = Math.max(0, index * trackVirtualRowHeight - Math.max(0, (trackListEl.clientHeight - trackVirtualRowHeight) / 2));
+    trackListEl.scrollTop = targetTop;
+    renderTrackWindow({ force: true });
+    const activeEl = trackListEl.querySelector(`.w-t-item[data-index="${index}"]`);
+    if (activeEl && force) scrollActiveTrackInList(activeEl, { force: true });
+}
+
+function updateActiveTrackUI({ ensureVisible = true } = {}) {
     if (!currentRenderSongs) return; const tIdx = currentRenderSongs.findIndex(s => s === currentPlayingItem); if (tIdx < 0) return;
-    if (tIdx >= currentRenderedCount) { while(tIdx >= currentRenderedCount && currentRenderedCount < currentRenderSongs.length) loadMoreTracks(); }
     document.querySelectorAll('.w-t-item').forEach(el => { el.classList.remove('active'); el.querySelector('.w-t-idx').classList.remove('hidden'); el.querySelector('.w-t-playing-icon').classList.add('hidden'); });
-    const activeEl = trackListEl.children[tIdx];
+    let activeEl = trackListEl.querySelector(`.w-t-item[data-index="${tIdx}"]`);
+    if (!activeEl && ensureVisible && canAutoScrollActiveTrack()) {
+        scrollTrackIndexIntoView(tIdx);
+        activeEl = trackListEl.querySelector(`.w-t-item[data-index="${tIdx}"]`);
+    }
     if (activeEl) {
         activeEl.classList.add('active'); activeEl.querySelector('.w-t-idx').classList.add('hidden'); activeEl.querySelector('.w-t-playing-icon').classList.remove('hidden');
         
@@ -1411,9 +1497,10 @@ function createLibraryExportPayload() {
 
 async function saveEditedLibraryTargets({ cloud = false } = {}) {
     const payload = createLibraryExportPayload();
-    window.CmsWebFirebase?.cacheImportedData(payload);
     if (cloud && window.CmsWebFirebase?.saveLibrary) {
         await window.CmsWebFirebase.saveLibrary(payload);
+    } else {
+        await window.CmsWebFirebase?.cacheImportedData(payload);
     }
     return payload;
 }
@@ -1464,7 +1551,16 @@ function populateEditFolders() {
     if(currentFolderId && selFilter) selFilter.value = currentFolderId;
 }
 
-function handleSearch(e) { currentSearchQuery = e.target.value; buildLibrary(); renderFolders(); selectFolder(currentFolderId || musicLibrary[0]?.id); saveCurrentSession({ force: true }); }
+function handleSearch(e) {
+    currentSearchQuery = e.target.value;
+    clearTimeout(searchRenderTimer);
+    searchRenderTimer = setTimeout(() => {
+        buildLibrary();
+        renderFolders();
+        selectFolder(currentFolderId || musicLibrary[0]?.id);
+        saveCurrentSession({ force: true });
+    }, 120);
+}
 function handleSortChange(e) { currentSortOrder = e.target.value; buildLibrary(); selectFolder(currentFolderId || musicLibrary[0]?.id); saveCurrentSession({ force: true }); }
 function handleNicoFilterChange(e) { excludeNico = e.target.checked; buildLibrary(); renderFolders(); selectFolder(currentFolderId || musicLibrary[0]?.id); saveCurrentSession({ force: true }); }
 

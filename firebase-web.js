@@ -51,10 +51,11 @@ let playbackFlushInFlight = null;
 
 function openCache() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(CACHE_DB, 1);
+    const request = indexedDB.open(CACHE_DB, 2);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains('media')) db.createObjectStore('media', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('cloudMedia')) db.createObjectStore('cloudMedia', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('state')) db.createObjectStore('state', { keyPath: 'key' });
     };
     request.onsuccess = () => resolve(request.result);
@@ -88,6 +89,17 @@ async function readCache() {
   return { mediaItems: mediaItems || [], ...(state?.value || {}) };
 }
 
+async function readCloudBaseline() {
+  const db = await openCache();
+  const tx = db.transaction(['cloudMedia', 'state'], 'readonly');
+  const mediaRequest = tx.objectStore('cloudMedia').getAll();
+  const stateRequest = tx.objectStore('state').get('cloudBaseline');
+  const [mediaItems, state] = await Promise.all([requestValue(mediaRequest), requestValue(stateRequest)]);
+  await transactionDone(tx);
+  db.close();
+  return { mediaItems: mediaItems || [], ...(state?.value || {}) };
+}
+
 async function replaceCache(data, syncState = {}) {
   const db = await openCache();
   const tx = db.transaction(['media', 'state'], 'readwrite');
@@ -98,6 +110,27 @@ async function replaceCache(data, syncState = {}) {
   }
   tx.objectStore('state').put({
     key: 'library',
+    value: {
+      folderSettings: data.folderSettings || [],
+      webSettings: data.webSettings || {},
+      initialized: true,
+      ...syncState
+    }
+  });
+  await transactionDone(tx);
+  db.close();
+}
+
+async function replaceCloudBaseline(data, syncState = {}) {
+  const db = await openCache();
+  const tx = db.transaction(['cloudMedia', 'state'], 'readwrite');
+  const media = tx.objectStore('cloudMedia');
+  media.clear();
+  for (const item of (data.mediaItems || [])) {
+    if (item?.id && item.site !== 'system' && !item.deleted) media.put(stripRuntimeFields(item));
+  }
+  tx.objectStore('state').put({
+    key: 'cloudBaseline',
     value: {
       folderSettings: data.folderSettings || [],
       webSettings: data.webSettings || {},
@@ -129,6 +162,58 @@ async function applyDelta(changes, auxiliary, syncState) {
     initialized: true,
     ...syncState
   }});
+  await transactionDone(tx);
+  db.close();
+}
+
+async function applyCloudBaselineDelta(changes, auxiliary, syncState) {
+  const db = await openCache();
+  const tx = db.transaction(['cloudMedia', 'state'], 'readwrite');
+  const media = tx.objectStore('cloudMedia');
+  for (const item of changes) {
+    if (!item?.id) continue;
+    if (item.deleted || item.site === 'system') media.delete(item.id);
+    else media.put(stripRuntimeFields(item));
+  }
+  const stateStore = tx.objectStore('state');
+  const current = await requestValue(stateStore.get('cloudBaseline'));
+  stateStore.put({
+    key: 'cloudBaseline',
+    value: {
+      ...(current?.value || {}),
+      ...auxiliary,
+      initialized: true,
+      ...syncState
+    }
+  });
+  await transactionDone(tx);
+  db.close();
+}
+
+async function applySavedLibraryDelta(changedItems, deletedIds, data, syncState) {
+  const db = await openCache();
+  const tx = db.transaction(['media', 'cloudMedia', 'state'], 'readwrite');
+  const localMedia = tx.objectStore('media');
+  const cloudMedia = tx.objectStore('cloudMedia');
+  for (const id of deletedIds) {
+    localMedia.delete(id);
+    cloudMedia.delete(id);
+  }
+  for (const item of changedItems) {
+    localMedia.put(item);
+    cloudMedia.put(item);
+  }
+  const stateStore = tx.objectStore('state');
+  const localState = await requestValue(stateStore.get('library'));
+  const cloudState = await requestValue(stateStore.get('cloudBaseline'));
+  const shared = {
+    folderSettings: data.folderSettings || [],
+    webSettings: data.webSettings || {},
+    initialized: true,
+    ...syncState
+  };
+  stateStore.put({ key: 'library', value: { ...(localState?.value || {}), ...shared } });
+  stateStore.put({ key: 'cloudBaseline', value: { ...(cloudState?.value || {}), ...shared } });
   await transactionDone(tx);
   db.close();
 }
@@ -300,6 +385,20 @@ function cleanFirestoreValue(value) {
   return JSON.parse(JSON.stringify(value ?? null));
 }
 
+function stableFirestoreValue(value) {
+  if (Array.isArray(value)) return value.map(stableFirestoreValue);
+  if (!value || typeof value !== 'object') return value;
+  return Object.keys(value).sort().reduce((result, key) => {
+    const next = value[key];
+    if (next !== undefined) result[key] = stableFirestoreValue(next);
+    return result;
+  }, {});
+}
+
+function firestoreFingerprint(value) {
+  return JSON.stringify(stableFirestoreValue(cleanFirestoreValue(value)));
+}
+
 function stripRuntimeFields(item) {
   const { originalIndex, safeDate, safePlayCount, updatedAt, deleted, deletedAt, ...rest } = item || {};
   return rest;
@@ -318,16 +417,43 @@ async function saveLibrarySnapshot(data = {}) {
   const mediaItems = (Array.isArray(data) ? data : (data.mediaItems || []))
     .filter(item => item?.id && item.site !== 'system')
     .map(stripRuntimeFields);
+  let baseline = await readCloudBaseline();
+  if (!baseline.initialized) {
+    updateStatus('Firebase: 初回のみ差分基準を作成中...');
+    const full = await fetchAll(uid);
+    const baselineState = {
+      remoteMetaAt: Date.now(),
+      lastPullAt: full.mediaCursor,
+      lastSyncAt: Date.now()
+    };
+    await replaceCloudBaseline(full, baselineState);
+    baseline = { ...full, ...baselineState, initialized: true };
+  }
+
   const localIds = new Set(mediaItems.map(item => item.id));
-  const existingSnapshot = await getDocs(query(collection(firestore, 'users', uid, 'mediaItems'), orderBy(documentId())));
+  const baselineById = new Map((baseline.mediaItems || []).map(item => [item.id, item]));
+  const changedItems = mediaItems.filter(item => {
+    const previous = baselineById.get(item.id);
+    return !previous || firestoreFingerprint(previous) !== firestoreFingerprint(item);
+  });
+  const deletedIds = (baseline.mediaItems || [])
+    .filter(item => item?.id && !localIds.has(item.id))
+    .map(item => item.id);
+  const folderSettingsChanged = firestoreFingerprint(baseline.folderSettings || []) !== firestoreFingerprint(data.folderSettings || []);
+  const webSettingsChanged = firestoreFingerprint(baseline.webSettings || {}) !== firestoreFingerprint(data.webSettings || {});
+
+  if (!changedItems.length && !deletedIds.length && !folderSettingsChanged && !webSettingsChanged) {
+    updateStatus(`Firebase: 変更なし（${mediaItems.length}件）`);
+    return { status: 'success', saved: 0, tombstoned: 0, unchanged: true };
+  }
+
   const counter = { batch: writeBatch(firestore), count: 0 };
-  let tombstoned = 0;
   const queueSet = (ref, value) => {
     counter.batch.set(ref, value, { merge: true });
     counter.count += 1;
   };
 
-  for (const item of mediaItems) {
+  for (const item of changedItems) {
     queueSet(userDoc(uid, 'mediaItems', item.id), {
       ...cleanFirestoreValue(item),
       deleted: false,
@@ -336,10 +462,8 @@ async function saveLibrarySnapshot(data = {}) {
     if (counter.count >= 420) await commitBatch(counter.batch, counter);
   }
 
-  for (const remoteDoc of existingSnapshot.docs) {
-    if (localIds.has(remoteDoc.id)) continue;
-    tombstoned += 1;
-    queueSet(userDoc(uid, 'mediaItems', remoteDoc.id), {
+  for (const id of deletedIds) {
+    queueSet(userDoc(uid, 'mediaItems', id), {
       deleted: true,
       deletedAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -347,27 +471,31 @@ async function saveLibrarySnapshot(data = {}) {
     if (counter.count >= 420) await commitBatch(counter.batch, counter);
   }
 
-  queueSet(userDoc(uid, 'folderSettings', 'main'), {
-    data: cleanFirestoreValue(data.folderSettings || []),
-    updatedAt: serverTimestamp()
-  });
-  queueSet(userDoc(uid, 'settings', 'webPlayer'), {
-    data: cleanFirestoreValue(data.webSettings || {}),
-    updatedAt: serverTimestamp()
-  });
+  if (folderSettingsChanged) {
+    queueSet(userDoc(uid, 'folderSettings', 'main'), {
+      data: cleanFirestoreValue(data.folderSettings || []),
+      updatedAt: serverTimestamp()
+    });
+  }
+  if (webSettingsChanged) {
+    queueSet(userDoc(uid, 'settings', 'webPlayer'), {
+      data: cleanFirestoreValue(data.webSettings || {}),
+      updatedAt: serverTimestamp()
+    });
+  }
   queueSet(userDoc(uid, 'sync', 'meta'), {
     lastChangedAt: serverTimestamp(),
     webUpdatedAt: serverTimestamp()
   });
   await commitBatch(counter.batch, counter);
-  await replaceCache({ mediaItems, folderSettings: data.folderSettings || [], webSettings: data.webSettings || {} }, {
+  await applySavedLibraryDelta(changedItems, deletedIds, data, {
     source: 'web-edit',
     remoteMetaAt: Date.now(),
     lastPullAt: Date.now(),
     lastSyncAt: Date.now()
   });
-  updateStatus(`Firebase: 保存完了（${mediaItems.length}件）`);
-  return { status: 'success', saved: mediaItems.length, tombstoned };
+  updateStatus(`Firebase: 差分保存完了（更新 ${changedItems.length}件・削除 ${deletedIds.length}件）`);
+  return { status: 'success', saved: changedItems.length, tombstoned: deletedIds.length };
 }
 
 function updateStatus(message) {
@@ -388,17 +516,22 @@ async function syncCloud({ force = false, silent = false } = {}) {
     updateStatus('Firebase: 更新確認中...');
     await flushPlaybackQueue({ silent: true });
     const cache = await readCache();
+    const cloudBaseline = await readCloudBaseline();
     const metaSnapshot = await getDoc(userDoc(currentUser.uid, 'sync', 'meta'));
     const remoteMetaAt = metaSnapshot.data()?.lastChangedAt?.toMillis?.() || 0;
-    if (!force && cache.initialized && remoteMetaAt && remoteMetaAt <= (cache.remoteMetaAt || 0)) {
+    if (!force && cache.initialized && cloudBaseline.initialized && remoteMetaAt && remoteMetaAt <= (cache.remoteMetaAt || 0)) {
       showLibrary(cache, 'cache', { silent: true });
       updateStatus(`Firebase: 最新（${cache.mediaItems.length}件）`);
       return cache;
     }
 
-    if (!cache.initialized) {
+    if (!cache.initialized || !cloudBaseline.initialized) {
       const full = await fetchAll(currentUser.uid);
-      await replaceCache(full, { remoteMetaAt, lastPullAt: full.mediaCursor, lastSyncAt: Date.now() });
+      const syncState = { remoteMetaAt, lastPullAt: full.mediaCursor, lastSyncAt: Date.now() };
+      await Promise.all([
+        replaceCache(full, syncState),
+        replaceCloudBaseline(full, syncState)
+      ]);
     } else {
       const [changes, folders, webSettings] = await Promise.all([
         fetchChanges(currentUser.uid, cache.lastPullAt || 0),
@@ -406,10 +539,15 @@ async function syncCloud({ force = false, silent = false } = {}) {
         getDoc(userDoc(currentUser.uid, 'settings', 'webPlayer'))
       ]);
       const newest = changes.reduce((max, item) => Math.max(max, item.updatedAt?.toMillis?.() || 0), cache.lastPullAt || 0);
-      await applyDelta(changes, {
+      const auxiliary = {
         folderSettings: folders.data()?.data || cache.folderSettings || [],
         webSettings: webSettings.data()?.data || cache.webSettings || {}
-      }, { remoteMetaAt, lastPullAt: newest, lastSyncAt: Date.now() });
+      };
+      const syncState = { remoteMetaAt, lastPullAt: newest, lastSyncAt: Date.now() };
+      await Promise.all([
+        applyDelta(changes, auxiliary, syncState),
+        applyCloudBaselineDelta(changes, auxiliary, syncState)
+      ]);
     }
     const updated = await readCache();
     showLibrary(updated, 'firebase', { silent });
