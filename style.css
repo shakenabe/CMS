@@ -289,7 +289,12 @@ body.is-mobile .w-track-list { flex: 1; overflow-y: auto; padding: 0 10px; paddi
 /* モバイルでリストを操作した時だけ、リスト領域を画面全体へ展開 */
 body.is-mobile.mobile-list-focus #right-pane {
     position: fixed !important; inset: 0 !important; z-index: 7000; width: 100vw; height: 100dvh;
-    background: var(--bg-color) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+    background-color: var(--bg-color) !important;
+    background-image: var(--bg-image, none), var(--bg-gradient) !important;
+    background-position: var(--bg-position), center !important;
+    background-size: var(--bg-size), cover !important;
+    background-repeat: no-repeat !important;
+    backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
 }
 body.is-mobile.mobile-list-focus #widget-library { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }
 body.is-mobile.mobile-list-focus #mobile-tools-wrapper,
