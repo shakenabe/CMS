@@ -677,7 +677,7 @@ function ensureWindowTaskbar() {
             button.className = className;
             button.title = label;
             button.setAttribute('aria-label', label);
-            button.innerHTML = `<i class="${icon}"></i><span class="window-tool-label"> ${label}</span>`;
+            button.innerHTML = `<i class="${icon}" aria-hidden="true"></i>`;
             button.addEventListener('click', () => document.getElementById(targetId)?.click());
             taskbar.appendChild(button);
         };

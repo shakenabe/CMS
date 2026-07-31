@@ -224,6 +224,7 @@ body.is-pc .widget-art { width: 80px; height: 80px; border-radius: var(--border-
 body.is-pc .widget-info { flex: 1; text-align: left; }
 
 body.is-pc #library-nav-wrapper { padding: 10px 15px; flex-shrink: 0; }
+body.is-pc #widget-library { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
 body.is-pc .library-lists-container { display: grid; grid-template-columns: 220px 1fr; gap: 15px; flex: 1; min-height: 0; }
 body.is-pc #widget-folder-list-wrapper, body.is-pc #widget-track-list-wrapper { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 body.is-pc .sidebar-header, body.is-pc .list-header { padding: 15px; font-weight: bold; border-bottom: 1px solid var(--border-color); flex-shrink: 0; display: flex; justify-content: space-between; align-items: center;}
@@ -383,8 +384,9 @@ body.is-pc .controls-main button { padding: 6px; }
 
 body.is-mobile .player-controls-inner { display: block; }
 body.is-mobile .widget-info-container { width: 100%; }
-body.is-mobile .widget-controls { padding-inline: 72px; flex-wrap: nowrap; }
-body.is-mobile .controls-main { gap: clamp(8px, 3vw, 14px); flex-wrap: nowrap; }
+body.is-mobile .widget-controls { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); padding-inline: 0; flex-wrap: nowrap; }
+body.is-mobile .controls-main { grid-column: 2; grid-row: 1; justify-self: center; gap: clamp(8px, 3vw, 14px); flex-wrap: nowrap; }
+body.is-mobile .control-tools { grid-column: 3; grid-row: 1; justify-self: end; justify-content: flex-end; }
 body.is-mobile .controls-main button { padding: 8px; flex: 0 0 auto; }
 body.is-mobile .control-tool-btn { width: 34px; height: 34px; }
 
@@ -399,7 +401,7 @@ body.window-mode #widget-controls .widget-controls .controls-main {
     width: 100%; justify-content: center; gap: clamp(8px, 4vw, 18px); flex-wrap: nowrap;
 }
 body.window-mode #widget-controls .control-tools {
-    position: static; transform: none; width: 100%; justify-content: center; flex-wrap: wrap;
+    display: none !important;
 }
 body.window-mode #widget-controls .control-tool-btn { width: 34px; height: 34px; }
 
@@ -490,6 +492,7 @@ body.window-mode #right-pane {
 body.window-mode #widget-library {
     position: static !important; width: 100%; height: 100%; background: transparent !important;
     border: 0 !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+    overflow: visible !important; contain: none !important;
 }
 .window-titlebar, #window-taskbar { display: none; }
 body.window-mode .wm-panel {
@@ -498,8 +501,9 @@ body.window-mode .wm-panel {
     box-shadow: 0 12px 32px rgba(0,0,0,0.55); background: rgba(var(--window-panel-rgb, var(--panel-rgb)), var(--window-panel-alpha, var(--panel-alpha)));
     backdrop-filter: blur(var(--panel-blur)); -webkit-backdrop-filter: blur(var(--panel-blur)); border: 1px solid var(--border-color);
 }
-/* Pattern 2の装飾クリップは、独立ウィンドウ内の表示領域を欠けさせない。 */
-body.theme-nerv.window-mode .wm-panel { clip-path: none; }
+/* Pattern 2の装飾クリップは、独立ウィンドウとその親の表示領域を欠けさせない。 */
+body.theme-nerv.window-mode #widget-library,
+body.theme-nerv.window-mode .wm-panel { clip-path: none !important; isolation: auto; }
 body.window-mode .wm-panel > :not(.window-titlebar):not(.window-resize-handle) { min-height: 0; }
 body.window-mode .wm-panel > .w-track-list,
 body.window-mode .wm-panel > .w-folder-list,
