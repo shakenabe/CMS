@@ -3,7 +3,7 @@ import {
   getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
 import {
-  collection, doc, documentId, getDoc, getDocs, getFirestore, increment, limit,
+  arrayUnion, collection, doc, documentId, getDoc, getDocs, getFirestore, increment, limit,
   orderBy, query, serverTimestamp, startAfter, Timestamp, where, writeBatch
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-lite.js';
 
@@ -43,7 +43,10 @@ provider.setCustomParameters({ prompt: 'select_account' });
 const PAGE_SIZE = 400;
 const CACHE_DB = 'cms_web_library_v4';
 const PLAYBACK_QUEUE_KEY = 'cms_player_playback_queue_v1';
-const PLAYBACK_FLUSH_DELAY_MS = 15000;
+const PLAYBACK_HISTORY_QUEUE_KEY = 'cms_player_playback_history_queue_v1';
+const PLAYBACK_FLUSH_DELAY_MS = 2 * 60 * 1000;
+const PLAYBACK_FLUSH_MAX_PENDING = 5;
+const PLAYBACK_HISTORY_MAX_LOCAL = 2000;
 let currentUser = null;
 let syncInFlight = null;
 let playbackFlushTimer = null;
@@ -249,6 +252,75 @@ function writePlaybackQueue(queue) {
   localStorage.setItem(PLAYBACK_QUEUE_KEY, JSON.stringify(queue || {}));
 }
 
+function readPlaybackHistoryQueue() {
+  try {
+    const value = JSON.parse(localStorage.getItem(PLAYBACK_HISTORY_QUEUE_KEY) || '[]');
+    return Array.isArray(value) ? value : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writePlaybackHistoryQueue(events) {
+  localStorage.setItem(
+    PLAYBACK_HISTORY_QUEUE_KEY,
+    JSON.stringify((Array.isArray(events) ? events : []).slice(-PLAYBACK_HISTORY_MAX_LOCAL))
+  );
+}
+
+function createPlaybackHistoryEvent(item) {
+  const playedAt = item?.lastPlayedAt || new Date().toISOString();
+  const eventId = globalThis.crypto?.randomUUID?.()
+    || `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  return {
+    eventId,
+    mediaId: String(item?.id || '').slice(0, 200),
+    title: String(item?.title || '').slice(0, 180),
+    url: String(item?.url || '').slice(0, 700),
+    site: String(item?.site || '').slice(0, 30),
+    folder: String(item?.folder || item?.folders?.[0] || '').slice(0, 120),
+    playedAt,
+    source: 'web'
+  };
+}
+
+function appendPlaybackHistory(item) {
+  if (!item?.id) return 0;
+  const events = readPlaybackHistoryQueue();
+  events.push(createPlaybackHistoryEvent(item));
+  writePlaybackHistoryQueue(events);
+  return Math.min(events.length, PLAYBACK_HISTORY_MAX_LOCAL);
+}
+
+function playbackHistoryBucketId(playedAt) {
+  const date = new Date(playedAt);
+  const validDate = Number.isFinite(date.getTime()) ? date : new Date();
+  return validDate.toISOString().slice(0, 13).replace(/[-T]/g, '');
+}
+
+function groupPlaybackHistoryByHour(events) {
+  const groups = new Map();
+  for (const event of events) {
+    if (!event?.eventId || !event?.mediaId) continue;
+    const bucketId = playbackHistoryBucketId(event.playedAt);
+    if (!groups.has(bucketId)) groups.set(bucketId, []);
+    groups.get(bucketId).push(event);
+  }
+  return [...groups.entries()].map(([bucketId, bucketEvents]) => ({ bucketId, events: bucketEvents }));
+}
+
+function removeSentPlaybackHistory(sentEvents) {
+  const sentIds = new Set(sentEvents.map(event => event.eventId));
+  if (!sentIds.size) return;
+  writePlaybackHistoryQueue(readPlaybackHistoryQueue().filter(event => !sentIds.has(event?.eventId)));
+}
+
+function pendingPlaybackCount() {
+  const playCountPending = Object.values(readPlaybackQueue())
+    .reduce((sum, value) => sum + Math.max(0, Math.floor(Number(value?.playCountDelta) || 0)), 0);
+  return Math.max(playCountPending, readPlaybackHistoryQueue().length);
+}
+
 function canSyncPlaybackQueue() {
   return Boolean(currentUser && window.CmsWebPlayer?.getUseFirebase?.());
 }
@@ -269,6 +341,7 @@ async function flushPlaybackQueue({ silent = true } = {}) {
   if (playbackFlushInFlight) return playbackFlushInFlight;
   if (!canSyncPlaybackQueue()) return { status: 'skipped', reason: 'firebase-disabled' };
   const snapshot = readPlaybackQueue();
+  const historySnapshot = readPlaybackHistoryQueue();
   const entries = Object.entries(snapshot)
     .map(([id, value]) => ({
       id,
@@ -276,7 +349,8 @@ async function flushPlaybackQueue({ silent = true } = {}) {
       lastPlayedAt: value?.lastPlayedAt || null
     }))
     .filter(entry => entry.id && entry.playCountDelta > 0);
-  if (!entries.length) return { status: 'success', sent: 0 };
+  const historyGroups = groupPlaybackHistoryByHour(historySnapshot);
+  if (!entries.length && !historyGroups.length) return { status: 'success', sent: 0, historySent: 0 };
 
   playbackFlushInFlight = (async () => {
     const uid = currentUser.uid;
@@ -298,8 +372,26 @@ async function flushPlaybackQueue({ silent = true } = {}) {
       // Clear only the committed delta. New plays added during the request stay queued.
       removeSentPlaybackEntries(chunk);
     }
+    for (let offset = 0; offset < historyGroups.length; offset += 400) {
+      const chunk = historyGroups.slice(offset, offset + 400);
+      const batch = writeBatch(firestore);
+      for (const group of chunk) {
+        batch.set(userDoc(uid, 'playbackHistory', group.bucketId), {
+          schemaVersion: 1,
+          bucketId: group.bucketId,
+          events: arrayUnion(...group.events),
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+      }
+      batch.set(userDoc(uid, 'sync', 'meta'), {
+        webPlaybackHistoryUpdatedAt: serverTimestamp()
+      }, { merge: true });
+      await batch.commit();
+      // eventId is stable, so a retry cannot duplicate an already appended history event.
+      removeSentPlaybackHistory(chunk.flatMap(group => group.events));
+    }
     if (!silent) updateStatus(`Firebase: 再生回数を同期しました（${entries.length}件）`);
-    return { status: 'success', sent: entries.length };
+    return { status: 'success', sent: entries.length, historySent: historySnapshot.length };
   })();
 
   try {
@@ -323,7 +415,10 @@ function schedulePlaybackQueueFlush(delay = PLAYBACK_FLUSH_DELAY_MS) {
 
 function queuePlaybackUpdate(item) {
   updateCachedPlayback(item).catch(error => console.error('[firebase-playback] cache update failed', error));
-  schedulePlaybackQueueFlush();
+  // Playback history is a cloud feature only while Firebase auto update is enabled.
+  if (!window.CmsWebPlayer?.getUseFirebase?.()) return;
+  appendPlaybackHistory(item);
+  schedulePlaybackQueueFlush(pendingPlaybackCount() >= PLAYBACK_FLUSH_MAX_PENDING ? 0 : PLAYBACK_FLUSH_DELAY_MS);
 }
 
 function userDoc(uid, group, id) {
