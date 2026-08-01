@@ -624,19 +624,22 @@ body.is-pc:not(.window-mode) .w-t-idx { opacity: 1; font-size: .96rem; font-weig
 body.is-pc:not(.window-mode) .list-header,
 body.is-pc:not(.window-mode) .sidebar-header { font-size: 1.08rem; font-weight: 750; }
 
-/* Keep the pre-theme-system transparency contract.
-   Normal panels follow the background-opacity slider, mobile panels remain
-   transparent, and window panels use their dedicated color/alpha controls. */
+/* Keep one background image per viewport. PC panels use their own alpha,
+   mobile uses one continuous alpha layer, and windows keep dedicated alpha. */
 body.is-mobile:not(.window-mode):not(.performance-mode) .panel-glass {
     background: transparent;
 }
-body.theme-nerv.is-mobile:not(.window-mode) #widget-controls,
-body.theme-nerv.is-mobile:not(.window-mode) #right-pane {
-    background-color: var(--bg-color) !important;
-    background-image: var(--bg-image, none), var(--bg-gradient) !important;
-    background-position: var(--bg-position), center !important;
-    background-size: var(--bg-size), cover !important;
-    background-repeat: no-repeat !important;
+body.is-mobile:not(.window-mode):not(.performance-mode) #main-app {
+    background-color: rgba(var(--panel-rgb), var(--panel-alpha));
+    background-image: none;
+}
+body.is-mobile:not(.window-mode):not(.performance-mode) #widget-controls,
+body.is-mobile:not(.window-mode):not(.performance-mode) #right-pane,
+body.is-mobile:not(.window-mode):not(.performance-mode) #widget-library,
+body.is-mobile:not(.window-mode):not(.performance-mode) .library-lists-container,
+body.is-mobile:not(.window-mode):not(.performance-mode) #widget-track-list-wrapper {
+    background-color: transparent !important;
+    background-image: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
@@ -649,13 +652,10 @@ body.window-mode #widget-controls .control-tools { display: none !important; }
 body.is-mobile:not(.window-mode) .widget-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; padding-inline: 0; }
 body.is-mobile:not(.window-mode) .controls-main { grid-column: 1 / -1; grid-row: 1; justify-self: center; }
 body.is-mobile:not(.window-mode) .control-tools { grid-column: 2; grid-row: 1; justify-self: end; align-self: center; width: auto; z-index: 2; }
-body.is-mobile.mobile-list-focus #right-pane,
-body.is-mobile.mobile-list-focus #mobile-list-fullscreen-header {
-    background-color: var(--bg-color) !important;
-    background-image: var(--bg-image, none), var(--bg-gradient) !important;
-    background-position: var(--bg-position), center !important;
-    background-size: var(--bg-size), cover !important;
-    background-repeat: no-repeat !important;
+body.is-mobile.mobile-list-focus:not(.performance-mode) #right-pane,
+body.is-mobile.mobile-list-focus:not(.performance-mode) #mobile-list-fullscreen-header {
+    background-color: transparent !important;
+    background-image: none !important;
 }
 
 @media (max-width: 720px) {
