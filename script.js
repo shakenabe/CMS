@@ -53,6 +53,8 @@ let trackVirtualEnd = -1;
 let trackVirtualRowHeight = 76;
 let trackVirtualFrame = 0;
 let searchRenderTimer = 0;
+let marqueeUpdateTimer = 0;
+let marqueeResizeObserver = null;
 let lastPlaybackStateSavedAt = 0;
 let suppressSessionSave = false;
 const CMS_PLAYER_SESSION_KEY = 'cms_player_last_playback_v2';
@@ -310,6 +312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     });
     setupMobileTrackListFocus();
+    setupMarqueeResizeObserver();
 
     document.getElementById('import-json').addEventListener('change', handleFileImport);
     document.getElementById('btn-user-start').addEventListener('click', startGame);
@@ -487,14 +490,35 @@ function updateLayoutMode() {
 function setupMobileTrackListFocus() {
     const header = document.getElementById('mobile-list-fullscreen-header');
     const closeButton = document.getElementById('mobile-list-close-btn');
-    const pullDownCloseDistance = 32;
+    const pullDownCloseDistance = 18;
+    const listTopTolerance = 12;
     let pointerStart = null;
+    let touchStart = null;
     const open = () => {
         if (!document.body.classList.contains('is-mobile')) return;
         document.body.classList.add('mobile-list-focus'); header?.classList.remove('hidden');
+        scheduleMarqueeUpdate();
     };
-    const close = () => { document.body.classList.remove('mobile-list-focus'); header?.classList.add('hidden'); };
-    const isListAtStart = () => Boolean(trackListEl && trackListEl.scrollTop <= 4);
+    const close = () => {
+        document.body.classList.remove('mobile-list-focus');
+        header?.classList.add('hidden');
+        scheduleMarqueeUpdate();
+    };
+    const isListAtStart = () => Boolean(trackListEl && trackListEl.scrollTop <= listTopTolerance);
+    const closeFromPull = () => {
+        if (!document.body.classList.contains('mobile-list-focus')) return;
+        clearTimeout(pendingTouchTrackTimer); pendingTouchTrackTimer = null;
+        suppressNextTouchTrackClick = true;
+        pointerStart = null;
+        touchStart = null;
+        close();
+    };
+    const isDownwardCloseGesture = (start, x, y) => {
+        if (!start?.wasFocused || !start.startedAtTop || !isListAtStart()) return false;
+        const deltaX = x - start.x;
+        const deltaY = y - start.y;
+        return deltaY >= pullDownCloseDistance && deltaY > Math.abs(deltaX) * 1.05;
+    };
     trackListEl.addEventListener('wheel', () => { markUserTrackScrollHold(); open(); }, { passive: true });
     trackListEl.addEventListener('pointerdown', (e) => {
         pointerStart = {
@@ -512,20 +536,29 @@ function setupMobileTrackListFocus() {
         const deltaY = e.clientY - pointerStart.y;
         const distance = Math.hypot(deltaX, deltaY);
         if (distance >= (pointerStart.type === 'mouse' ? 5 : 10)) { markUserTrackScrollHold(); open(); }
-        const isTouchPullDown = pointerStart.type !== 'mouse'
-            && pointerStart.wasFocused
-            && pointerStart.startedAtTop
-            && isListAtStart()
-            && deltaY >= pullDownCloseDistance
-            && deltaY > Math.abs(deltaX) * 1.15;
-        if (isTouchPullDown) {
-            close();
-            pointerStart = null;
-        }
+        if (pointerStart.type !== 'mouse' && isDownwardCloseGesture(pointerStart, e.clientX, e.clientY)) closeFromPull();
     }, { passive: true });
     const clearPointer = () => { pointerStart = null; };
     trackListEl.addEventListener('pointerup', clearPointer, { passive: true });
     trackListEl.addEventListener('pointercancel', clearPointer, { passive: true });
+    trackListEl.addEventListener('touchstart', (e) => {
+        if (e.touches.length !== 1) { touchStart = null; return; }
+        const touch = e.touches[0];
+        touchStart = {
+            x: touch.clientX,
+            y: touch.clientY,
+            wasFocused: document.body.classList.contains('mobile-list-focus'),
+            startedAtTop: isListAtStart()
+        };
+    }, { passive: true });
+    trackListEl.addEventListener('touchmove', (e) => {
+        if (!touchStart || e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        if (isDownwardCloseGesture(touchStart, touch.clientX, touch.clientY)) closeFromPull();
+    }, { passive: true });
+    const clearTouch = () => { touchStart = null; };
+    trackListEl.addEventListener('touchend', clearTouch, { passive: true });
+    trackListEl.addEventListener('touchcancel', clearTouch, { passive: true });
     header?.addEventListener('pointerdown', (e) => { e.stopPropagation(); close(); });
     header?.addEventListener('click', (e) => { e.stopPropagation(); close(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.body.classList.contains('mobile-list-focus')) close(); });
@@ -1124,10 +1157,37 @@ function setupSettingsModal() {
 }
 
 function updateMarquee() {
-    if (appSettings.performanceMode) { document.querySelectorAll('.marquee-content').forEach(c => c.classList.remove('is-marquee')); return; }
-    requestAnimationFrame(() => { document.querySelectorAll('.marquee-wrapper').forEach(w => { const c = w.querySelector('.marquee-content'); if (!c) return; if (c.scrollWidth > w.clientWidth + 2) { w.style.setProperty('--parent-width', `${w.clientWidth}px`); c.classList.add('is-marquee'); } else c.classList.remove('is-marquee'); }); });
+    const contents = document.querySelectorAll('.marquee-content');
+    contents.forEach(c => {
+        c.classList.remove('is-marquee');
+        c.style.removeProperty('--marquee-distance');
+        c.style.removeProperty('--marquee-duration');
+    });
+    if (appSettings.performanceMode) return;
+    requestAnimationFrame(() => {
+        document.querySelectorAll('.marquee-wrapper').forEach(w => {
+            const c = w.querySelector('.marquee-content');
+            if (!c || w.clientWidth <= 0) return;
+            const overflow = Math.ceil(c.scrollWidth - w.clientWidth);
+            if (overflow <= 2) return;
+            c.style.setProperty('--marquee-distance', `-${overflow + 16}px`);
+            c.style.setProperty('--marquee-duration', `${Math.min(24, Math.max(10, 8 + overflow / 36)).toFixed(2)}s`);
+            c.classList.add('is-marquee');
+        });
+    });
 }
-function scheduleMarqueeUpdate() { setTimeout(updateMarquee, 100); }
+function scheduleMarqueeUpdate() {
+    clearTimeout(marqueeUpdateTimer);
+    marqueeUpdateTimer = setTimeout(updateMarquee, 100);
+}
+function setupMarqueeResizeObserver() {
+    if (marqueeResizeObserver || typeof ResizeObserver !== 'function') return;
+    marqueeResizeObserver = new ResizeObserver(() => scheduleMarqueeUpdate());
+    ['widget-controls', 'widget-track-list-wrapper', 'right-pane'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) marqueeResizeObserver.observe(element);
+    });
+}
 
 function handleFileImport(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { const data = JSON.parse(ev.target.result); processImportData(data); window.CmsWebFirebase?.cacheImportedData(data); importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden'); } catch (err) { alert('JSON解析失敗'); } }; reader.readAsText(file); }
 function processImportData(data) {

@@ -630,6 +630,16 @@ body.is-pc:not(.window-mode) .sidebar-header { font-size: 1.08rem; font-weight: 
 body.is-mobile:not(.window-mode):not(.performance-mode) .panel-glass {
     background: transparent;
 }
+body.theme-nerv.is-mobile:not(.window-mode) #widget-controls,
+body.theme-nerv.is-mobile:not(.window-mode) #right-pane {
+    background-color: var(--bg-color) !important;
+    background-image: var(--bg-image, none), var(--bg-gradient) !important;
+    background-position: var(--bg-position), center !important;
+    background-size: var(--bg-size), cover !important;
+    background-repeat: no-repeat !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
 body.window-mode:not(.performance-mode) .wm-panel {
     background: rgba(var(--window-panel-rgb, var(--panel-rgb)), var(--window-panel-alpha, var(--panel-alpha)));
 }
