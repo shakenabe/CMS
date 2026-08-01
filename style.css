@@ -574,6 +574,14 @@ body.window-mode #widget-player { min-width: min(300px, calc(100vw - 24px)); }
     display: inline-block; width: max-content; min-width: max-content; max-width: none;
     overflow: visible; white-space: nowrap; -webkit-box-orient: initial; -webkit-line-clamp: unset;
 }
+body.performance-mode .marquee-wrapper > .track-title-text.marquee-content {
+    display: -webkit-box; width: auto; min-width: 0; max-width: 100%; overflow: hidden;
+    white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
+body.performance-mode .marquee-wrapper > .track-artist-text.marquee-content {
+    display: block; width: auto; min-width: 0; max-width: 100%; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis;
+}
 .is-marquee { will-change: transform; animation: scroll-left-once var(--marquee-duration, 14s) linear infinite; }
 @keyframes scroll-left-once {
     0%, 10% { transform: translateX(0); }
