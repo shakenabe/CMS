@@ -29,7 +29,14 @@ body {
     --card-gap: 10px;
     --header-height: 54px;
     --font-ui: var(--font-family);
+    --font-display: var(--font-family);
     --font-numeric: "Share Tech Mono", "Consolas", monospace;
+    --settings-bg: #0d1727;
+    --settings-surface: #17243a;
+    --settings-surface-alt: #20314b;
+    --settings-border: #3d5778;
+    --settings-text: #f6f9ff;
+    --settings-muted: #afbed1;
 }
 
 body.theme-modern {
@@ -44,6 +51,14 @@ body.theme-modern {
     --theme-text-muted: #a8b8cc;
     --theme-radius: 11px;
     --theme-shadow: 0 10px 26px rgba(1, 9, 22, .3);
+    --font-family: "Noto Sans JP", "Yu Gothic UI", "Segoe UI", Meiryo, sans-serif;
+    --font-display: "Yu Gothic UI Semibold", "Segoe UI Semibold", "Noto Sans JP", Meiryo, sans-serif;
+    --settings-bg: #0d1727;
+    --settings-surface: #17243a;
+    --settings-surface-alt: #20314b;
+    --settings-border: #3d5778;
+    --settings-text: #f6f9ff;
+    --settings-muted: #afbed1;
 }
 
 /* Pattern 2 keeps the historical `nerv` value, but presents a Windows desktop-app UI. */
@@ -59,7 +74,8 @@ body.theme-nerv {
     --theme-text-muted: #526b82;
     --theme-radius: 2px;
     --theme-shadow: 0 5px 16px rgba(30, 69, 102, .25);
-    --font-family: "Segoe UI", "Meiryo UI", Meiryo, sans-serif;
+    --font-family: "Segoe UI Variable Text", "Segoe UI", "Meiryo UI", Meiryo, sans-serif;
+    --font-display: "Segoe UI Variable Display", "Segoe UI Semibold", "Meiryo UI", Meiryo, sans-serif;
     --bg-color: #d9eaf7;
     --bg-gradient: linear-gradient(180deg, rgba(255,255,255,.72), rgba(178,215,240,.5) 36%, rgba(110,157,195,.44));
     --panel-rgb: 249, 252, 255;
@@ -70,6 +86,12 @@ body.theme-nerv {
     --panel-shadow: 0 5px 16px rgba(30, 69, 102, .25);
     --border-radius: 2px;
     --theme-panel-highlight: rgba(255,255,255,.62);
+    --settings-bg: #eef7fd;
+    --settings-surface: #ffffff;
+    --settings-surface-alt: #dcecf7;
+    --settings-border: #7597b5;
+    --settings-text: #19324a;
+    --settings-muted: #526b82;
 }
 
 /* Pattern 3 keeps the historical `toyota` value and becomes the control-system theme. */
@@ -88,7 +110,8 @@ body.theme-toyota {
     --theme-success: #9cff57;
     --theme-radius: 1px;
     --theme-shadow: 0 0 0 1px rgba(156, 255, 87, .09), 0 12px 30px rgba(0, 0, 0, .38);
-    --font-family: "Share Tech Mono", "Roboto Condensed", "Meiryo", sans-serif;
+    --font-family: "Bahnschrift SemiCondensed", "Roboto Condensed", "Yu Gothic UI", Meiryo, sans-serif;
+    --font-display: "Share Tech Mono", "Bahnschrift SemiCondensed", "Arial Narrow", "Yu Gothic UI", Meiryo, sans-serif;
     --bg-color: #050307;
     --bg-gradient: radial-gradient(circle at 18% 10%, rgba(83, 27, 105, .36), transparent 34%), linear-gradient(145deg, #16091e 0%, #07030a 64%, #020102 100%);
     --panel-rgb: 19, 8, 29;
@@ -98,6 +121,12 @@ body.theme-toyota {
     --border-color: #5f3b79;
     --border-radius: 1px;
     --panel-shadow: 0 0 0 1px rgba(255, 157, 40, .1), 0 12px 30px rgba(0, 0, 0, .38);
+    --settings-bg: #08040d;
+    --settings-surface: #13081d;
+    --settings-surface-alt: #231035;
+    --settings-border: #70457f;
+    --settings-text: #f6f1fa;
+    --settings-muted: #c4b1cf;
 }
 
 body.theme-niconico {
@@ -112,7 +141,32 @@ body.theme-niconico {
     --theme-text-muted: #aaa;
     --theme-radius: 1px;
     --theme-shadow: 2px 2px 0 rgba(0, 0, 0, .4);
+    --font-family: Tahoma, Verdana, Meiryo, "MS PGothic", sans-serif;
+    --font-display: "MS PGothic", Tahoma, Meiryo, sans-serif;
+    --settings-bg: #151515;
+    --settings-surface: #242424;
+    --settings-surface-alt: #303030;
+    --settings-border: #5b5b5b;
+    --settings-text: #f2f2f2;
+    --settings-muted: #b5b5b5;
 }
+
+body { font-family: var(--font-ui, var(--font-family)); }
+body button,
+body input,
+body select,
+body textarea { font-family: var(--font-family); }
+body .sidebar-header,
+body .list-header,
+body .settings-window h2,
+body .setting-group h3,
+body .window-title { font-family: var(--font-display); }
+body.theme-modern .track-title-text { letter-spacing: .005em; }
+body.theme-nerv .track-title-text { font-family: "Segoe UI Variable Text", "Segoe UI", "Meiryo UI", Meiryo, sans-serif; }
+body.theme-toyota .track-title-text,
+body.theme-toyota .w-t-idx,
+body.theme-toyota .time-text { font-family: "Bahnschrift SemiCondensed", "Arial Narrow", "Yu Gothic UI", Meiryo, sans-serif; }
+body.theme-niconico .track-title-text { font-family: Tahoma, Verdana, Meiryo, "MS PGothic", sans-serif; }
 
 /* Shared component language. */
 body .panel-glass,
@@ -213,6 +267,17 @@ body .w-t-item.active {
 body .w-t-item.active .track-title-text,
 body .w-t-item.active .track-artist-text {
     color: var(--theme-text);
+}
+
+body.custom-color-enabled .w-t-item,
+body.custom-color-enabled .w-t-item .track-title-text,
+body.custom-color-enabled .w-t-item .track-artist-text,
+body.custom-color-enabled .w-t-item .w-t-idx,
+body.custom-color-enabled .w-t-item .w-t-playing-icon,
+body.custom-color-enabled .w-t-item.active,
+body.custom-color-enabled .w-t-item.active .track-title-text,
+body.custom-color-enabled .w-t-item.active .track-artist-text {
+    color: var(--text-color) !important;
 }
 
 body .track-title-text {
@@ -362,15 +427,15 @@ body.theme-nerv.window-mode #window-taskbar {
     border-top-color: #7092b3;
 }
 
-/* Pattern 3: original near-future control system. */
+/* Pattern 3: original near-future command-system UI. */
 body.theme-toyota { letter-spacing: .018em; }
 body.theme-toyota::before {
-    content: "SYS-CMS-03   LINK: ACTIVE   CONDITION: GREEN";
+    content: "CMS COMMAND 03   LINK: ACTIVE   CONDITION: GREEN";
     position: fixed;
     top: 7px;
     right: 12px;
     z-index: 1;
-    color: rgba(156, 255, 87, .54);
+    color: rgba(156, 255, 87, .66);
     font: 9px/1 "Share Tech Mono", monospace;
     pointer-events: none;
 }
@@ -380,12 +445,13 @@ body.theme-toyota::after {
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    opacity: .18;
+    opacity: .24;
     background-image:
+        repeating-linear-gradient(0deg, transparent 0 5px, rgba(255,157,40,.035) 6px),
         linear-gradient(30deg, transparent 28px, rgba(156,255,87,.22) 29px, transparent 30px),
         linear-gradient(150deg, transparent 28px, rgba(166,107,224,.24) 29px, transparent 30px),
         linear-gradient(90deg, transparent 49.5%, rgba(255,157,40,.08) 50%, transparent 50.5%);
-    background-size: 72px 42px, 72px 42px, 180px 180px;
+    background-size: 100% 6px, 72px 42px, 72px 42px, 180px 180px;
 }
 body.theme-toyota #main-app { position: relative; z-index: 2; }
 body.theme-toyota cms-icon {
@@ -397,14 +463,28 @@ body.theme-toyota cms-icon {
 }
 body.theme-toyota .panel-glass {
     position: relative;
-    background: rgba(var(--panel-rgb), var(--panel-alpha));
-    border-color: var(--theme-border);
+    border-color: #6f3e7b;
     clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    box-shadow: inset 3px 0 0 rgba(255,157,40,.42), inset 0 1px 0 rgba(156,255,87,.12), var(--theme-shadow);
 }
+body.theme-toyota:not(.performance-mode) .panel-glass {
+    background:
+        linear-gradient(135deg, rgba(255,157,40,.07), transparent 24%),
+        rgba(var(--panel-rgb), var(--panel-alpha));
+}
+body.theme-toyota.performance-mode .panel-glass { background: var(--theme-surface); }
 body.theme-toyota #library-nav-wrapper,
 body.theme-toyota #widget-folder-list-wrapper,
 body.theme-toyota #widget-track-list-wrapper { clip-path: none; }
-body.theme-toyota.window-mode .wm-panel { clip-path: none; }
+body.theme-toyota.window-mode #widget-library,
+body.theme-toyota.window-mode .wm-panel {
+    clip-path: none !important;
+    isolation: auto;
+}
+body.theme-toyota.window-mode .wm-panel {
+    border-color: #a75a28;
+    box-shadow: inset 3px 0 0 rgba(255,157,40,.58), inset 0 0 0 1px rgba(156,255,87,.08), 0 14px 38px rgba(0,0,0,.72);
+}
 body.theme-toyota #widget-player::after,
 body.theme-toyota #widget-controls::after,
 body.theme-toyota #library-nav-wrapper::after,
@@ -429,13 +509,17 @@ body.theme-toyota .sidebar-header,
 body.theme-toyota .list-header,
 body.theme-toyota #library-nav-wrapper {
     color: #f8f1fc;
-    background: linear-gradient(90deg, rgba(48,17,61,.94), rgba(9,5,13,.98));
-    border-bottom-color: #5b365f;
+    background:
+        linear-gradient(90deg, rgba(255,157,40,.17), transparent 28%),
+        linear-gradient(90deg, rgba(48,17,61,.96), rgba(9,5,13,.99));
+    border-bottom-color: #8f4d26;
     border-left: 3px solid var(--theme-warning);
+    box-shadow: inset 0 -1px 0 rgba(156,255,87,.08);
 }
 body.theme-toyota .w-f-item,
 body.theme-toyota .w-t-item {
-    background-image: linear-gradient(135deg, rgba(166,107,224,.055), transparent 32%);
+    background-image: linear-gradient(135deg, rgba(166,107,224,.075), transparent 34%);
+    border-bottom-color: rgba(255,157,40,.18);
 }
 body.theme-toyota .w-f-item:hover,
 body.theme-toyota .w-t-item:hover { border-left-color: var(--theme-warning); }
@@ -463,8 +547,9 @@ body.theme-toyota .controls-main .play-btn {
 body.theme-toyota .control-tool-btn,
 body.theme-toyota .theme-btn {
     color: var(--theme-text);
-    background: linear-gradient(180deg, #311746, #170a23);
-    border-color: #684889;
+    background: linear-gradient(180deg, #351346, #13081d 62%, #08040d);
+    border-color: #8d4b27;
+    box-shadow: inset 0 1px 0 rgba(255,157,40,.18);
 }
 body.theme-toyota .control-tool-btn:hover,
 body.theme-toyota .theme-btn:hover { color: var(--theme-success); border-color: var(--theme-success); }
@@ -482,18 +567,49 @@ body.theme-toyota input[type="checkbox"]:checked::before { content: "ON"; color:
 body.theme-toyota input[type="checkbox"]:checked::after { content: none; }
 body.theme-toyota .url-add-status.error { color: var(--theme-danger); }
 body.theme-toyota .url-add-status.success { color: var(--theme-success); }
+body.theme-toyota .progress-container {
+    border-color: #8d4b27;
+    background: repeating-linear-gradient(90deg, #0a0610 0 14px, #160a20 14px 16px);
+}
+body.theme-toyota .progress-bar {
+    background: linear-gradient(90deg, #ff7b19, #ffd34c 72%, #9cff57);
+    box-shadow: 0 0 9px rgba(255,157,40,.38);
+}
+body.theme-toyota.window-mode .window-titlebar {
+    color: #fff3dd;
+    background:
+        linear-gradient(90deg, rgba(255,157,40,.24), transparent 34%),
+        linear-gradient(180deg, #32113f, #110719 72%, #08040d);
+    border-bottom-color: #c76b26;
+    box-shadow: inset 4px 0 0 #ff9d28, inset 0 -1px 0 rgba(156,255,87,.12);
+}
+body.theme-toyota.window-mode #window-taskbar {
+    color: #fff3dd;
+    background: linear-gradient(180deg, rgba(26,9,34,.99), rgba(5,3,7,.995));
+    border-top-color: #c76b26;
+    box-shadow: inset 0 2px 0 rgba(255,157,40,.14);
+}
+body.theme-toyota.window-mode #window-taskbar button.active {
+    color: var(--theme-success);
+    background: linear-gradient(180deg, rgba(87,42,123,.78), rgba(18,7,27,.96));
+    border-bottom-color: var(--theme-success);
+}
+body.theme-toyota #settings-modal .setting-group {
+    border-left-color: var(--theme-warning);
+    box-shadow: inset 3px 0 0 rgba(255,157,40,.24);
+}
 
 @keyframes cms-eva-grid-drift {
-    from { background-position: 0 0, 0 0, 0 0; }
-    to { background-position: 72px 42px, -72px 42px, 0 0; }
+    from { background-position: 0 0, 0 0, 0 0, 0 0; }
+    to { background-position: 0 18px, 72px 42px, -72px 42px, 0 0; }
 }
 @keyframes cms-eva-active-in {
     from { opacity: .45; box-shadow: inset 3px 0 0 var(--theme-accent); }
     to { opacity: 1; box-shadow: inset 3px 0 0 var(--theme-accent), inset 0 0 0 1px rgba(156,255,87,.24); }
 }
-body.theme-toyota:not(.performance-mode)::after { animation: cms-eva-grid-drift 24s linear infinite; }
+body.theme-toyota:not(.performance-mode)::after { animation: cms-eva-grid-drift 18s linear infinite; }
 body.theme-toyota:not(.performance-mode) .w-t-item.active { animation: cms-eva-active-in .34s ease-out 1; }
-body.theme-toyota.performance-mode::after { animation: none; opacity: .08; }
+body.theme-toyota.performance-mode::after { animation: none; opacity: .06; }
 
 /* Pattern 4: retain the compact video-culture appearance and reduce orange noise. */
 body.theme-niconico .panel-glass { border-color: #4a4a4a; box-shadow: 2px 2px 0 rgba(0,0,0,.38); }
@@ -624,14 +740,37 @@ body.is-pc:not(.window-mode) .w-t-idx { opacity: 1; font-size: .96rem; font-weig
 body.is-pc:not(.window-mode) .list-header,
 body.is-pc:not(.window-mode) .sidebar-header { font-size: 1.08rem; font-weight: 750; }
 
-/* Keep one background image per viewport. PC panels use their own alpha,
-   mobile uses one continuous alpha layer, and windows keep dedicated alpha. */
+/* Keep one background image per mobile surface. Normal playback starts at the
+   controls; focused library mode starts at the library and fully covers video. */
 body.is-mobile:not(.window-mode):not(.performance-mode) .panel-glass {
     background: transparent;
 }
-body.is-mobile:not(.window-mode):not(.performance-mode) #main-app {
-    background-color: rgba(var(--panel-rgb), var(--panel-alpha));
+body.is-mobile:not(.window-mode):not(.performance-mode) {
     background-image: none;
+}
+body.is-mobile:not(.window-mode):not(.performance-mode) #main-app {
+    position: relative;
+    isolation: isolate;
+    background: transparent;
+}
+body.is-mobile:not(.window-mode):not(.performance-mode) #main-app::before {
+    content: "";
+    position: fixed;
+    inset: var(--mobile-bg-start, 56.25vw) 0 0;
+    z-index: 0;
+    pointer-events: none;
+    background-color: var(--bg-color);
+    background-image:
+        linear-gradient(rgba(var(--panel-rgb), var(--panel-alpha)), rgba(var(--panel-rgb), var(--panel-alpha))),
+        var(--bg-image, none),
+        var(--bg-gradient);
+    background-position: center, var(--bg-position), center;
+    background-size: cover, var(--bg-size), cover;
+    background-repeat: no-repeat;
+}
+body.is-mobile:not(.window-mode):not(.performance-mode) #main-app > .widget-container {
+    position: relative;
+    z-index: 1;
 }
 body.is-mobile:not(.window-mode):not(.performance-mode) #widget-controls,
 body.is-mobile:not(.window-mode):not(.performance-mode) #right-pane,
@@ -643,6 +782,9 @@ body.is-mobile:not(.window-mode):not(.performance-mode) #widget-track-list-wrapp
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
+body.is-mobile.mobile-list-focus:not(.performance-mode) #main-app::before {
+    content: none;
+}
 body.window-mode:not(.performance-mode) .wm-panel {
     background: rgba(var(--window-panel-rgb, var(--panel-rgb)), var(--window-panel-alpha, var(--panel-alpha)));
 }
@@ -652,10 +794,63 @@ body.window-mode #widget-controls .control-tools { display: none !important; }
 body.is-mobile:not(.window-mode) .widget-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; padding-inline: 0; }
 body.is-mobile:not(.window-mode) .controls-main { grid-column: 1 / -1; grid-row: 1; justify-self: center; }
 body.is-mobile:not(.window-mode) .control-tools { grid-column: 2; grid-row: 1; justify-self: end; align-self: center; width: auto; z-index: 2; }
-body.is-mobile.mobile-list-focus:not(.performance-mode) #right-pane,
-body.is-mobile.mobile-list-focus:not(.performance-mode) #mobile-list-fullscreen-header {
-    background-color: transparent !important;
+body.is-mobile.mobile-list-focus:not(.performance-mode) #right-pane {
+    background-color: var(--bg-color) !important;
     background-image: none !important;
+}
+body.is-mobile.mobile-list-focus:not(.performance-mode) #widget-library {
+    background-color: var(--bg-color) !important;
+    background-image:
+        linear-gradient(rgba(var(--panel-rgb), var(--panel-alpha)), rgba(var(--panel-rgb), var(--panel-alpha))),
+        var(--bg-image, none),
+        var(--bg-gradient) !important;
+    background-position: center, var(--bg-position), center !important;
+    background-size: cover, var(--bg-size), cover !important;
+    background-repeat: no-repeat !important;
+}
+body.is-mobile.mobile-list-focus:not(.performance-mode) #mobile-list-fullscreen-header {
+    color: var(--theme-text);
+    background: color-mix(in srgb, var(--theme-surface) 91%, transparent) !important;
+    border-bottom-color: var(--theme-border);
+}
+
+/* Settings always use the theme surface, independently of playback opacity. */
+body #settings-modal .settings-window {
+    --theme-text: var(--settings-text);
+    --theme-text-muted: var(--settings-muted);
+    --theme-border: var(--settings-border);
+    --text-color: var(--settings-text);
+    --sub-text-color: var(--settings-muted);
+    --border-color: var(--settings-border);
+    color: var(--settings-text);
+    background: var(--settings-bg) !important;
+    border-color: var(--settings-border);
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+body #settings-modal .setting-group {
+    color: var(--settings-text);
+    background: var(--settings-surface);
+    border-color: var(--settings-border);
+}
+body #settings-modal .settings-actions {
+    background: var(--settings-surface-alt);
+    border-color: var(--settings-border);
+}
+body #settings-modal .tab-btn,
+body #settings-modal .setting-help { color: var(--settings-muted); }
+body #settings-modal .tab-btn.active,
+body #settings-modal .setting-row label,
+body #settings-modal .setting-group h3 { color: var(--settings-text); }
+body #settings-modal .widget-search,
+body #settings-modal select,
+body #settings-modal input[type="text"],
+body #settings-modal input[type="url"],
+body #settings-modal input[type="number"],
+body #settings-modal input[type="file"] {
+    color: var(--settings-text);
+    background: color-mix(in srgb, var(--settings-surface-alt) 78%, var(--settings-bg));
+    border-color: var(--settings-border);
 }
 
 @media (max-width: 720px) {

@@ -478,13 +478,26 @@ function markPlaybackCompleted(item) {
 }
 
 function updateLayoutMode() {
-    if (appSettings.windowMode) { document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile'); return; }
+    if (appSettings.windowMode) { document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile'); updateMobileBackgroundStart(); return; }
     if (window.innerWidth <= 900 && !appSettings.forcePcLayout) {
         document.body.classList.add('is-mobile'); document.body.classList.remove('is-pc');
     } else {
         document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile', 'mobile-list-focus');
         document.getElementById('mobile-list-fullscreen-header')?.classList.add('hidden');
     }
+    updateMobileBackgroundStart();
+}
+
+function updateMobileBackgroundStart() {
+    if (!document.body.classList.contains('is-mobile')) {
+        document.documentElement.style.removeProperty('--mobile-bg-start');
+        return;
+    }
+    requestAnimationFrame(() => {
+        const controls = document.getElementById('widget-controls');
+        if (!controls) return;
+        document.documentElement.style.setProperty('--mobile-bg-start', `${Math.max(0, Math.round(controls.getBoundingClientRect().top))}px`);
+    });
 }
 
 function setupMobileTrackListFocus() {
@@ -894,8 +907,20 @@ function applyThemeSettings() {
     document.documentElement.style.setProperty('--pc-left-width', `${appSettings.pcLeftWidth}px`);
     document.documentElement.style.setProperty('--bg-position', appSettings.bgPosition); document.documentElement.style.setProperty('--bg-size', appSettings.bgSize);
     
-    if (appSettings.customColorEnabled) { document.body.style.setProperty('--text-color', appSettings.customAccentColor); document.body.style.setProperty('--accent-color', appSettings.customAccentColor); document.body.style.setProperty('--border-color', appSettings.customBorderColor); } 
-    else { document.body.style.removeProperty('--text-color'); document.body.style.removeProperty('--accent-color'); document.body.style.removeProperty('--border-color'); }
+    document.body.classList.toggle('custom-color-enabled', Boolean(appSettings.customColorEnabled));
+    if (appSettings.customColorEnabled) {
+        document.body.style.setProperty('--text-color', appSettings.customAccentColor);
+        document.body.style.setProperty('--sub-text-color', `color-mix(in srgb, ${appSettings.customAccentColor} 70%, transparent)`);
+        document.body.style.setProperty('--accent-color', appSettings.customAccentColor);
+        document.body.style.setProperty('--border-color', appSettings.customBorderColor);
+        document.body.style.setProperty('--theme-text', appSettings.customAccentColor);
+        document.body.style.setProperty('--theme-text-muted', `color-mix(in srgb, ${appSettings.customAccentColor} 70%, transparent)`);
+        document.body.style.setProperty('--theme-accent', appSettings.customAccentColor);
+        document.body.style.setProperty('--theme-border', appSettings.customBorderColor);
+        document.body.style.setProperty('--theme-border-active', appSettings.customBorderColor);
+    } else {
+        ['--text-color', '--sub-text-color', '--accent-color', '--border-color', '--theme-text', '--theme-text-muted', '--theme-accent', '--theme-border', '--theme-border-active'].forEach(name => document.body.style.removeProperty(name));
+    }
     const baseColor = appSettings.blurBaseColor || '#000000';
     document.body.style.setProperty('--panel-rgb', hexToRgbString(baseColor));
     document.body.style.setProperty('--bg-color', baseColor);
@@ -908,6 +933,7 @@ function applyThemeSettings() {
     document.documentElement.style.setProperty('--window-panel-alpha', windowPanelAlpha);
     document.documentElement.style.setProperty('--window-title-rgb', hexToRgbString(windowPanelColor));
     document.documentElement.style.setProperty('--window-title-alpha', Math.max(0.35, windowPanelAlpha));
+    updateMobileBackgroundStart();
     const pOverlay = document.getElementById('pocket-overlay'); if (appSettings.pocketAlwaysOn) pOverlay.classList.add('always-on'); else pOverlay.classList.remove('always-on');
     applyPocketAppearance();
 }
