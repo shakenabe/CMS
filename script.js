@@ -1469,7 +1469,7 @@ function scrollTrackIndexIntoView(index, { force = false } = {}) {
 }
 
 function updateActiveTrackUI({ ensureVisible = true } = {}) {
-    if (!currentRenderSongs) return; const tIdx = currentRenderSongs.findIndex(s => s === currentPlayingItem); if (tIdx < 0) return;
+    if (!currentRenderSongs) return; const tIdx = currentRenderSongs.findIndex(s => isSameMediaItem(s, currentPlayingItem)); if (tIdx < 0) return;
     document.querySelectorAll('.w-t-item').forEach(el => { el.classList.remove('active'); el.querySelector('.w-t-idx').classList.remove('hidden'); el.querySelector('.w-t-playing-icon').classList.add('hidden'); });
     let activeEl = trackListEl.querySelector(`.w-t-item[data-index="${tIdx}"]`);
     if (!activeEl && ensureVisible && canAutoScrollActiveTrack()) {
