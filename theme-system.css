@@ -429,6 +429,20 @@ body.theme-nerv.window-mode #window-taskbar {
 
 /* Pattern 3: original near-future command-system UI. */
 body.theme-toyota { letter-spacing: .018em; }
+body.theme-toyota.is-pc:not(.has-custom-background) {
+    background-color: #080402;
+    background-image:
+        repeating-linear-gradient(0deg, rgba(255, 224, 105, .045) 0 1px, transparent 1px 6px),
+        linear-gradient(90deg, transparent 0 12%, rgba(255, 181, 45, .12) 12% 12.2%, transparent 12.2% 48%, rgba(255, 181, 45, .08) 48% 48.15%, transparent 48.15%),
+        radial-gradient(circle at 14% 9%, rgba(255, 190, 49, .25), transparent 29%),
+        linear-gradient(145deg, #241104 0%, #0b0502 58%, #020101 100%);
+    background-position: 0 0, 0 0, center, center;
+    background-size: 100% 6px, 100% 100%, cover, cover;
+    background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+    background-attachment: fixed;
+}
+body.theme-toyota.is-pc:not(.has-custom-background)::after { opacity: .48; }
+body.theme-toyota.is-pc.performance-mode:not(.has-custom-background)::after { opacity: .16; }
 body.theme-toyota::before {
     content: "CMS COMMAND 03   ABSOLUTE LINE: HOLD   CONDITION: GREEN";
     position: fixed;

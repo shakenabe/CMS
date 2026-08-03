@@ -57,6 +57,7 @@ let marqueeUpdateTimer = 0;
 let marqueeResizeObserver = null;
 let lastPlaybackStateSavedAt = 0;
 let suppressSessionSave = false;
+let hasCustomBackgroundImage = false;
 const CMS_PLAYER_SESSION_KEY = 'cms_player_last_playback_v2';
 const CMS_PLAYER_SESSION_LEGACY_KEY = 'cms_player_last_playback_v1';
 
@@ -229,6 +230,10 @@ function reconcilePlaybackDeadline(reason = 'reconcile', token = playbackWatchdo
 
 // IndexedDB (背景画像保存処理)
 const DB_NAME = 'cms_player_db_v3'; const STORE_NAME = 'bg_images';
+function setCustomBackgroundImageState(present) {
+    hasCustomBackgroundImage = Boolean(present);
+    document.body.classList.toggle('has-custom-background', hasCustomBackgroundImage);
+}
 function saveBgImageToDB(file) {
     return new Promise((resolve) => {
         const reader = new FileReader();
@@ -248,7 +253,7 @@ function saveBgImageToDB(file) {
                     try {
                         const tx = ev.target.result.transaction(STORE_NAME, 'readwrite');
                         tx.objectStore(STORE_NAME).put({ id: 'bg1', data: base64 });
-                        tx.oncomplete = () => { document.documentElement.style.setProperty('--bg-image', `url(${base64})`); resolve(); }; 
+                        tx.oncomplete = () => { document.documentElement.style.setProperty('--bg-image', `url(${base64})`); setCustomBackgroundImageState(true); resolve(); };
                         tx.onerror = () => resolve();
                     } catch (err) { resolve(); }
                 };
@@ -272,16 +277,23 @@ function loadBgImageFromDB() {
             try { 
                 const tx = ev.target.result.transaction(STORE_NAME, 'readonly');
                 const getReq = tx.objectStore(STORE_NAME).get('bg1'); 
-                getReq.onsuccess = () => { if (getReq.result) document.documentElement.style.setProperty('--bg-image', `url(${getReq.result.data})`); resolve(); }; 
-                getReq.onerror = () => resolve();
-            } catch(err) { resolve(); } 
+                getReq.onsuccess = () => {
+                    const data = getReq.result?.data;
+                    document.documentElement.style.setProperty('--bg-image', data ? `url(${data})` : 'none');
+                    setCustomBackgroundImageState(Boolean(data));
+                    resolve();
+                };
+                getReq.onerror = () => { setCustomBackgroundImageState(false); resolve(); };
+            } catch(err) { setCustomBackgroundImageState(false); resolve(); }
         }; 
-        req.onerror = () => resolve();
+        req.onerror = () => { setCustomBackgroundImageState(false); resolve(); };
     });
 }
 function clearBgImageDB() { 
+    document.documentElement.style.setProperty('--bg-image', 'none');
+    setCustomBackgroundImageState(false);
     const req = indexedDB.open(DB_NAME, 1); 
-    req.onsuccess = ev => { try { ev.target.result.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete('bg1'); document.documentElement.style.setProperty('--bg-image', 'none'); } catch(e){} }; 
+    req.onsuccess = ev => { try { ev.target.result.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).delete('bg1'); } catch(e){} };
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -895,6 +907,7 @@ function makeAdaptiveGradient(hex) {
 function applyThemeSettings() {
     const layoutClass = document.body.classList.contains('is-mobile') ? 'is-mobile' : 'is-pc';
     document.body.className = `theme-${appSettings.theme} ${layoutClass}`;
+    document.body.classList.toggle('has-custom-background', hasCustomBackgroundImage);
     if (appSettings.forcePcLayout || appSettings.windowMode) document.body.classList.add('is-pc');
     if (appSettings.windowMode) document.body.classList.add('window-mode');
     
