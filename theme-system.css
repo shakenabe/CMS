@@ -96,37 +96,37 @@ body.theme-nerv {
 
 /* Pattern 3 keeps the historical `toyota` value and becomes the control-system theme. */
 body.theme-toyota {
-    --theme-bg: #08040d;
-    --theme-surface: rgba(19, 8, 29, .94);
-    --theme-surface-alt: rgba(35, 14, 53, .94);
-    --theme-border: #53346f;
-    --theme-border-active: #ffd34c;
-    --theme-accent: #ff9d28;
-    --theme-accent-secondary: #a66be0;
-    --theme-text: #f6f1fa;
-    --theme-text-muted: #bdaac9;
+    --theme-bg: #100803;
+    --theme-surface: rgba(23, 11, 3, .96);
+    --theme-surface-alt: rgba(43, 22, 6, .96);
+    --theme-border: #89551d;
+    --theme-border-active: #ffe264;
+    --theme-accent: #ffb52d;
+    --theme-accent-secondary: #ffe264;
+    --theme-text: #ffe477;
+    --theme-text-muted: #d7a646;
     --theme-danger: #f0444f;
-    --theme-warning: #ff9d28;
+    --theme-warning: #ff8a24;
     --theme-success: #9cff57;
     --theme-radius: 1px;
-    --theme-shadow: 0 0 0 1px rgba(156, 255, 87, .09), 0 12px 30px rgba(0, 0, 0, .38);
+    --theme-shadow: 0 0 0 1px rgba(255, 211, 76, .12), 0 12px 30px rgba(0, 0, 0, .48);
     --font-family: "Bahnschrift SemiCondensed", "Roboto Condensed", "Yu Gothic UI", Meiryo, sans-serif;
     --font-display: "Share Tech Mono", "Bahnschrift SemiCondensed", "Arial Narrow", "Yu Gothic UI", Meiryo, sans-serif;
-    --bg-color: #050307;
-    --bg-gradient: radial-gradient(circle at 18% 10%, rgba(83, 27, 105, .36), transparent 34%), linear-gradient(145deg, #16091e 0%, #07030a 64%, #020102 100%);
-    --panel-rgb: 19, 8, 29;
-    --text-color: #f6f1fa;
-    --sub-text-color: #bdaac9;
-    --accent-color: #9cff57;
-    --border-color: #5f3b79;
+    --bg-color: #080402;
+    --bg-gradient: radial-gradient(circle at 14% 9%, rgba(255, 190, 49, .2), transparent 27%), repeating-linear-gradient(0deg, rgba(255, 216, 84, .025) 0 1px, transparent 1px 6px), linear-gradient(145deg, #1c0d03 0%, #080402 62%, #020101 100%);
+    --panel-rgb: 23, 11, 3;
+    --text-color: #ffe477;
+    --sub-text-color: #d7a646;
+    --accent-color: #ffb52d;
+    --border-color: #89551d;
     --border-radius: 1px;
-    --panel-shadow: 0 0 0 1px rgba(255, 157, 40, .1), 0 12px 30px rgba(0, 0, 0, .38);
-    --settings-bg: #08040d;
-    --settings-surface: #13081d;
-    --settings-surface-alt: #231035;
-    --settings-border: #70457f;
-    --settings-text: #f6f1fa;
-    --settings-muted: #c4b1cf;
+    --panel-shadow: 0 0 0 1px rgba(255, 211, 76, .13), 0 12px 30px rgba(0, 0, 0, .48);
+    --settings-bg: #100803;
+    --settings-surface: #1a0d04;
+    --settings-surface-alt: #2b1606;
+    --settings-border: #89551d;
+    --settings-text: #ffe477;
+    --settings-muted: #d7a646;
 }
 
 body.theme-niconico {
@@ -430,12 +430,12 @@ body.theme-nerv.window-mode #window-taskbar {
 /* Pattern 3: original near-future command-system UI. */
 body.theme-toyota { letter-spacing: .018em; }
 body.theme-toyota::before {
-    content: "CMS COMMAND 03   LINK: ACTIVE   CONDITION: GREEN";
+    content: "CMS COMMAND 03   ABSOLUTE LINE: HOLD   CONDITION: GREEN";
     position: fixed;
     top: 7px;
     right: 12px;
     z-index: 1;
-    color: rgba(156, 255, 87, .66);
+    color: rgba(255, 225, 100, .72);
     font: 9px/1 "Share Tech Mono", monospace;
     pointer-events: none;
 }
@@ -445,31 +445,31 @@ body.theme-toyota::after {
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    opacity: .24;
+    opacity: .28;
     background-image:
-        repeating-linear-gradient(0deg, transparent 0 5px, rgba(255,157,40,.035) 6px),
-        linear-gradient(30deg, transparent 28px, rgba(156,255,87,.22) 29px, transparent 30px),
-        linear-gradient(150deg, transparent 28px, rgba(166,107,224,.24) 29px, transparent 30px),
-        linear-gradient(90deg, transparent 49.5%, rgba(255,157,40,.08) 50%, transparent 50.5%);
-    background-size: 100% 6px, 72px 42px, 72px 42px, 180px 180px;
+        repeating-linear-gradient(0deg, transparent 0 5px, rgba(255,211,76,.045) 6px),
+        linear-gradient(90deg, transparent 49.7%, rgba(255,194,49,.12) 50%, transparent 50.3%),
+        linear-gradient(32deg, transparent 31px, rgba(255,194,49,.16) 32px, transparent 33px),
+        linear-gradient(148deg, transparent 31px, rgba(143,75,20,.18) 32px, transparent 33px);
+    background-size: 100% 6px, 240px 100%, 88px 54px, 88px 54px;
 }
 body.theme-toyota #main-app { position: relative; z-index: 2; }
 body.theme-toyota cms-icon {
-    color: var(--theme-success);
-    background: rgba(85,34,118,.6);
-    border-color: var(--theme-success);
+    color: var(--theme-text);
+    background: rgba(69,32,5,.72);
+    border-color: var(--theme-accent);
     border-radius: 0;
     clip-path: polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);
 }
 body.theme-toyota .panel-glass {
     position: relative;
-    border-color: #6f3e7b;
+    border-color: #89551d;
     clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-    box-shadow: inset 3px 0 0 rgba(255,157,40,.42), inset 0 1px 0 rgba(156,255,87,.12), var(--theme-shadow);
+    box-shadow: inset 3px 0 0 rgba(255,181,45,.54), inset 0 1px 0 rgba(255,226,100,.16), var(--theme-shadow);
 }
 body.theme-toyota:not(.performance-mode) .panel-glass {
     background:
-        linear-gradient(135deg, rgba(255,157,40,.07), transparent 24%),
+        linear-gradient(135deg, rgba(255,181,45,.1), transparent 26%),
         rgba(var(--panel-rgb), var(--panel-alpha));
 }
 body.theme-toyota.performance-mode .panel-glass { background: var(--theme-surface); }
@@ -482,8 +482,8 @@ body.theme-toyota.window-mode .wm-panel {
     isolation: auto;
 }
 body.theme-toyota.window-mode .wm-panel {
-    border-color: #a75a28;
-    box-shadow: inset 3px 0 0 rgba(255,157,40,.58), inset 0 0 0 1px rgba(156,255,87,.08), 0 14px 38px rgba(0,0,0,.72);
+    border-color: #ad6a23;
+    box-shadow: inset 3px 0 0 rgba(255,181,45,.68), inset 0 0 0 1px rgba(255,226,100,.1), 0 14px 38px rgba(0,0,0,.76);
 }
 body.theme-toyota #widget-player::after,
 body.theme-toyota #widget-controls::after,
@@ -508,24 +508,24 @@ body.theme-toyota .settings-window::after { content: "02 SETTINGS / SYS-SET-02";
 body.theme-toyota .sidebar-header,
 body.theme-toyota .list-header,
 body.theme-toyota #library-nav-wrapper {
-    color: #f8f1fc;
+    color: #ffe477;
     background:
-        linear-gradient(90deg, rgba(255,157,40,.17), transparent 28%),
-        linear-gradient(90deg, rgba(48,17,61,.96), rgba(9,5,13,.99));
-    border-bottom-color: #8f4d26;
+        linear-gradient(90deg, rgba(255,181,45,.2), transparent 30%),
+        linear-gradient(90deg, rgba(55,27,6,.98), rgba(10,5,2,.99));
+    border-bottom-color: #ad6a23;
     border-left: 3px solid var(--theme-warning);
-    box-shadow: inset 0 -1px 0 rgba(156,255,87,.08);
+    box-shadow: inset 0 -1px 0 rgba(255,226,100,.12);
 }
 body.theme-toyota .w-f-item,
 body.theme-toyota .w-t-item {
-    background-image: linear-gradient(135deg, rgba(166,107,224,.075), transparent 34%);
-    border-bottom-color: rgba(255,157,40,.18);
+    background-image: linear-gradient(135deg, rgba(255,181,45,.065), transparent 36%);
+    border-bottom-color: rgba(255,181,45,.2);
 }
 body.theme-toyota .w-f-item:hover,
 body.theme-toyota .w-t-item:hover { border-left-color: var(--theme-warning); }
 body.theme-toyota .w-f-item.active,
 body.theme-toyota .w-t-item.active {
-    background: linear-gradient(90deg, rgba(87,42,123,.94), rgba(20,8,31,.94) 74%);
+    background: linear-gradient(90deg, rgba(91,43,5,.96), rgba(20,9,2,.97) 76%);
     border-left-color: var(--theme-border-active);
     box-shadow: inset 3px 0 0 var(--theme-border-active), inset 0 0 0 1px rgba(255,211,76,.24);
 }
@@ -547,9 +547,9 @@ body.theme-toyota .controls-main .play-btn {
 body.theme-toyota .control-tool-btn,
 body.theme-toyota .theme-btn {
     color: var(--theme-text);
-    background: linear-gradient(180deg, #351346, #13081d 62%, #08040d);
-    border-color: #8d4b27;
-    box-shadow: inset 0 1px 0 rgba(255,157,40,.18);
+    background: linear-gradient(180deg, #3b1c05, #170b03 62%, #080402);
+    border-color: #9a5e20;
+    box-shadow: inset 0 1px 0 rgba(255,211,76,.2);
 }
 body.theme-toyota .control-tool-btn:hover,
 body.theme-toyota .theme-btn:hover { color: var(--theme-success); border-color: var(--theme-success); }
@@ -568,31 +568,31 @@ body.theme-toyota input[type="checkbox"]:checked::after { content: none; }
 body.theme-toyota .url-add-status.error { color: var(--theme-danger); }
 body.theme-toyota .url-add-status.success { color: var(--theme-success); }
 body.theme-toyota .progress-container {
-    border-color: #8d4b27;
-    background: repeating-linear-gradient(90deg, #0a0610 0 14px, #160a20 14px 16px);
+    border-color: #9a5e20;
+    background: repeating-linear-gradient(90deg, #090401 0 14px, #241104 14px 16px);
 }
 body.theme-toyota .progress-bar {
-    background: linear-gradient(90deg, #ff7b19, #ffd34c 72%, #9cff57);
-    box-shadow: 0 0 9px rgba(255,157,40,.38);
+    background: linear-gradient(90deg, #ff8a24, #ffd34c 74%, #fff09a);
+    box-shadow: 0 0 9px rgba(255,181,45,.44);
 }
 body.theme-toyota.window-mode .window-titlebar {
-    color: #fff3dd;
+    color: #ffe477;
     background:
-        linear-gradient(90deg, rgba(255,157,40,.24), transparent 34%),
-        linear-gradient(180deg, #32113f, #110719 72%, #08040d);
-    border-bottom-color: #c76b26;
-    box-shadow: inset 4px 0 0 #ff9d28, inset 0 -1px 0 rgba(156,255,87,.12);
+        linear-gradient(90deg, rgba(255,181,45,.26), transparent 36%),
+        linear-gradient(180deg, #3a1b05, #160a03 72%, #080402);
+    border-bottom-color: #c67825;
+    box-shadow: inset 4px 0 0 #ffb52d, inset 0 -1px 0 rgba(255,226,100,.16);
 }
 body.theme-toyota.window-mode #window-taskbar {
-    color: #fff3dd;
-    background: linear-gradient(180deg, rgba(26,9,34,.99), rgba(5,3,7,.995));
-    border-top-color: #c76b26;
-    box-shadow: inset 0 2px 0 rgba(255,157,40,.14);
+    color: #ffe477;
+    background: linear-gradient(180deg, rgba(37,17,4,.99), rgba(6,3,1,.995));
+    border-top-color: #c67825;
+    box-shadow: inset 0 2px 0 rgba(255,181,45,.16);
 }
 body.theme-toyota.window-mode #window-taskbar button.active {
-    color: var(--theme-success);
-    background: linear-gradient(180deg, rgba(87,42,123,.78), rgba(18,7,27,.96));
-    border-bottom-color: var(--theme-success);
+    color: #fff09a;
+    background: linear-gradient(180deg, rgba(91,43,5,.88), rgba(20,9,2,.97));
+    border-bottom-color: var(--theme-border-active);
 }
 body.theme-toyota #settings-modal .setting-group {
     border-left-color: var(--theme-warning);
@@ -601,7 +601,11 @@ body.theme-toyota #settings-modal .setting-group {
 
 @keyframes cms-eva-grid-drift {
     from { background-position: 0 0, 0 0, 0 0, 0 0; }
-    to { background-position: 0 18px, 72px 42px, -72px 42px, 0 0; }
+    to { background-position: 0 18px, 240px 0, 88px 54px, -88px 54px; }
+}
+@keyframes cms-eva-readout-breathe {
+    0%, 100% { filter: brightness(.92); text-shadow: 0 0 5px rgba(255,181,45,.34); }
+    50% { filter: brightness(1.08); text-shadow: 0 0 13px rgba(255,211,76,.58); }
 }
 @keyframes cms-eva-active-in {
     from { opacity: .45; box-shadow: inset 3px 0 0 var(--theme-accent); }
@@ -609,7 +613,51 @@ body.theme-toyota #settings-modal .setting-group {
 }
 body.theme-toyota:not(.performance-mode)::after { animation: cms-eva-grid-drift 18s linear infinite; }
 body.theme-toyota:not(.performance-mode) .w-t-item.active { animation: cms-eva-active-in .34s ease-out 1; }
+body.theme-toyota:not(.performance-mode) #clock-time { animation: cms-eva-readout-breathe 4.8s ease-in-out infinite; }
 body.theme-toyota.performance-mode::after { animation: none; opacity: .06; }
+body.theme-toyota #widget-clock .clock-inner {
+    align-items: stretch;
+    gap: 4px;
+    padding: 8px 12px;
+    background:
+        linear-gradient(90deg, rgba(255,181,45,.09), transparent 24%),
+        repeating-linear-gradient(0deg, transparent 0 7px, rgba(255,211,76,.035) 8px);
+}
+body.theme-toyota #clock-date {
+    color: #ffb52d !important;
+    padding: 0 7px 4px;
+    border-left: 3px solid #ff8a24;
+    border-bottom: 1px solid rgba(255,181,45,.42);
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-align: left;
+    text-transform: uppercase;
+}
+body.theme-toyota #clock-time {
+    color: #ffe477 !important;
+    font-family: "Bahnschrift Condensed", "Arial Narrow", "Share Tech Mono", monospace;
+    font-stretch: condensed;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-weight: 300;
+    letter-spacing: -.055em;
+    line-height: .88;
+    text-align: center;
+}
+body.theme-toyota.is-pc:not(.window-mode) #widget-clock { min-height: 190px; }
+body.theme-toyota.is-pc:not(.window-mode) #clock-time { font-size: clamp(4rem, 7vw, 7.8rem) !important; }
+body.theme-toyota.window-mode #widget-clock #clock-time { font-size: clamp(1.35rem, 18cqw, 4.2rem); }
+body.theme-toyota .time-text,
+body.theme-toyota .w-t-idx {
+    color: #ffd34c;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 5px rgba(255,181,45,.28);
+}
+body.theme-toyota #widget-title {
+    color: #ffe477;
+    font-family: var(--font-display);
+    letter-spacing: .035em;
+}
 
 /* Pattern 4: retain the compact video-culture appearance and reduce orange noise. */
 body.theme-niconico .panel-glass { border-color: #4a4a4a; box-shadow: 2px 2px 0 rgba(0,0,0,.38); }
