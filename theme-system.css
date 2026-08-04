@@ -443,6 +443,46 @@ body.theme-toyota.is-pc:not(.has-custom-background) {
 }
 body.theme-toyota.is-pc:not(.has-custom-background)::after { opacity: .48; }
 body.theme-toyota.is-pc.performance-mode:not(.has-custom-background)::after { opacity: .16; }
+body.theme-toyota.is-pc:not(.has-custom-background) #main-app::before {
+    content: "";
+    position: fixed;
+    left: clamp(68px, 7vw, 126px);
+    bottom: clamp(42px, 7vh, 82px);
+    width: clamp(150px, 13vw, 220px);
+    aspect-ratio: 1;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: 50%;
+    opacity: .5;
+    background:
+        radial-gradient(circle, transparent 0 33%, rgba(255,226,100,.36) 33.4% 34.1%, transparent 34.5% 49%, rgba(255,181,45,.48) 49.4% 50.2%, transparent 50.6% 66%, rgba(153,70,14,.72) 66.5% 68%, transparent 68.5%),
+        repeating-conic-gradient(from 217deg, rgba(255,213,76,.78) 0 1deg, transparent 1deg 7deg);
+    -webkit-mask: radial-gradient(circle, transparent 0 31%, #000 32% 69%, transparent 70%);
+    mask: radial-gradient(circle, transparent 0 31%, #000 32% 69%, transparent 70%);
+    filter: drop-shadow(0 0 12px rgba(255,145,28,.22));
+}
+body.theme-toyota.is-pc:not(.has-custom-background) #main-app::after {
+    content: "AUX 07  /  SYNC-LINK  /  028.4  /  RANGE 120";
+    position: fixed;
+    left: 22px;
+    bottom: 18px;
+    z-index: -1;
+    width: min(calc(var(--pc-left-width) - 44px), 330px);
+    padding: 8px 12px 7px;
+    color: rgba(255,224,105,.7);
+    border: 1px solid rgba(198,120,37,.44);
+    border-left: 6px solid rgba(255,181,45,.72);
+    background:
+        repeating-linear-gradient(90deg, rgba(255,181,45,.18) 0 1px, transparent 1px 38px),
+        rgba(17,7,2,.42);
+    font: 10px/1 "Share Tech Mono", monospace;
+    letter-spacing: .16em;
+    pointer-events: none;
+}
+body.theme-toyota.is-pc.performance-mode:not(.has-custom-background) #main-app::before,
+body.theme-toyota.is-pc.performance-mode:not(.has-custom-background) #main-app::after {
+    display: none;
+}
 body.theme-toyota::before {
     content: "CMS COMMAND 03   ABSOLUTE LINE: HOLD   CONDITION: GREEN";
     position: fixed;
@@ -856,6 +896,20 @@ body.window-mode #widget-controls .control-tools { display: none !important; }
 body.is-mobile:not(.window-mode) .widget-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; padding-inline: 0; }
 body.is-mobile:not(.window-mode) .controls-main { grid-column: 1 / -1; grid-row: 1; justify-self: center; }
 body.is-mobile:not(.window-mode) .control-tools { grid-column: 2; grid-row: 1; justify-self: end; align-self: center; width: auto; z-index: 2; }
+@media (max-width: 390px) {
+    body.is-mobile:not(.window-mode) .widget-controls {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
+        row-gap: 4px;
+        min-height: 102px;
+    }
+    body.is-mobile:not(.window-mode) .controls-main {
+        grid-column: 1; grid-row: 1; justify-self: center;
+    }
+    body.is-mobile:not(.window-mode) .control-tools {
+        grid-column: 1; grid-row: 2; justify-self: end; align-self: center;
+    }
+}
 body.is-mobile.mobile-list-focus:not(.performance-mode) #right-pane {
     background-color: var(--bg-color) !important;
     background-image: none !important;
