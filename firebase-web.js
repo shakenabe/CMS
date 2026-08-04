@@ -44,7 +44,9 @@ const PAGE_SIZE = 400;
 const CACHE_DB = 'cms_web_library_v4';
 const PLAYBACK_QUEUE_KEY = 'cms_player_playback_queue_v1';
 const PLAYBACK_HISTORY_QUEUE_KEY = 'cms_player_playback_history_queue_v1';
-const PLAYBACK_FLUSH_DELAY_MS = 2 * 60 * 1000;
+const FIREBASE_OWNER_UID = 'Kt8r2xqtrZavgowOEYA4mNVQc8J2';
+const PLAYBACK_FLUSH_DELAY_MS = 3000;
+const PLAYBACK_RETRY_DELAY_MS = 5 * 60 * 1000;
 const PLAYBACK_FLUSH_MAX_PENDING = 5;
 const PLAYBACK_HISTORY_MAX_LOCAL = 2000;
 let currentUser = null;
@@ -410,7 +412,10 @@ function schedulePlaybackQueueFlush(delay = PLAYBACK_FLUSH_DELAY_MS) {
   if (!canSyncPlaybackQueue()) return;
   playbackFlushTimer = setTimeout(() => {
     playbackFlushTimer = null;
-    flushPlaybackQueue({ silent: true }).catch(error => console.error('[firebase-playback] flush failed', error));
+    flushPlaybackQueue({ silent: true }).catch(error => {
+      console.error('[firebase-playback] flush failed; retrying in 5 minutes', error);
+      schedulePlaybackQueueFlush(PLAYBACK_RETRY_DELAY_MS);
+    });
   }, Math.max(0, delay));
 }
 
@@ -608,10 +613,16 @@ function showLibrary(data, source, options = {}) {
 
 async function syncCloud({ force = false, silent = false } = {}) {
   if (!currentUser) throw new Error('Googleログインが必要です');
+  if (currentUser.uid !== FIREBASE_OWNER_UID) throw new Error('このCMSのFirebase利用権限がありません');
   if (syncInFlight) return syncInFlight;
   syncInFlight = (async () => {
     updateStatus('Firebase: 更新確認中...');
-    await flushPlaybackQueue({ silent: true });
+    try {
+      await flushPlaybackQueue({ silent: true });
+    } catch (error) {
+      console.error('[firebase-playback] sync flush failed; library pull will continue', error);
+      schedulePlaybackQueueFlush(PLAYBACK_RETRY_DELAY_MS);
+    }
     const cache = await readCache();
     const cloudBaseline = await readCloudBaseline();
     const metaSnapshot = await getDoc(userDoc(currentUser.uid, 'sync', 'meta'));
@@ -661,6 +672,12 @@ async function login() {
     updateStatus('Firebase: Googleログイン画面を開いています…');
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
+    if (user.uid !== FIREBASE_OWNER_UID) {
+      await signOut(auth);
+      const denied = new Error('このCMSは所有者のGoogleアカウントだけが利用できます');
+      denied.code = 'auth/not-authorized';
+      throw denied;
+    }
     console.info('[auth] login success', {
       uid: user.uid,
       email: user.email,
@@ -714,6 +731,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 onAuthStateChanged(auth, async user => {
   currentUser = user;
   if (!user) { updateStatus('Firebase: 未接続（JSONのみでも利用できます）'); return; }
+  if (user.uid !== FIREBASE_OWNER_UID) {
+    updateStatus('Firebase: このGoogleアカウントには利用権限がありません');
+    await signOut(auth);
+    return;
+  }
   updateStatus(`Firebase: ${user.email || 'ログイン済み'}（再生回数同期可）`);
   schedulePlaybackQueueFlush(1000);
   if (window.CmsWebPlayer?.getUseFirebase()) await syncCloud({ force: false, silent: true }).catch(() => {});
@@ -721,11 +743,25 @@ onAuthStateChanged(auth, async user => {
 
 setInterval(() => {
   if (currentUser && window.CmsWebPlayer?.getUseFirebase()) void syncCloud({ force: false, silent: true });
-}, 10 * 60 * 1000);
+}, 5 * 60 * 1000);
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'hidden' || !canSyncPlaybackQueue()) return;
-  clearTimeout(playbackFlushTimer);
-  playbackFlushTimer = null;
-  flushPlaybackQueue({ silent: true }).catch(error => console.error('[firebase-playback] background flush failed', error));
+  if (document.visibilityState === 'hidden' && canSyncPlaybackQueue()) {
+    clearTimeout(playbackFlushTimer);
+    playbackFlushTimer = null;
+    flushPlaybackQueue({ silent: true }).catch(error => {
+      console.error('[firebase-playback] background flush failed', error);
+      schedulePlaybackQueueFlush(PLAYBACK_RETRY_DELAY_MS);
+    });
+    return;
+  }
+  if (document.visibilityState === 'visible' && currentUser && window.CmsWebPlayer?.getUseFirebase()) {
+    void syncCloud({ force: false, silent: true }).catch(() => {});
+  }
+});
+
+window.addEventListener('online', () => {
+  if (!currentUser || !window.CmsWebPlayer?.getUseFirebase()) return;
+  schedulePlaybackQueueFlush(0);
+  void syncCloud({ force: false, silent: true }).catch(() => {});
 });
