@@ -1,11 +1,15 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js';
 import {
-  getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut
+  getAuth, getRedirectResult, GoogleAuthProvider, onAuthStateChanged,
+  signInWithPopup, signInWithRedirect, signOut
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
 import {
   arrayUnion, collection, doc, documentId, getDoc, getDocs, getFirestore, increment, limit,
   orderBy, query, serverTimestamp, startAfter, Timestamp, where, writeBatch
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-lite.js';
+import {
+  createIosHostedLoginUrl, isFirebaseHostedWeb, isIosWebKit
+} from './firebase-auth-route.mjs';
 
 const CMS_SAFE_PATCH_VERSION = '2026062704';
 
@@ -49,6 +53,7 @@ const PLAYBACK_FLUSH_DELAY_MS = 3000;
 const PLAYBACK_RETRY_DELAY_MS = 5 * 60 * 1000;
 const PLAYBACK_FLUSH_MAX_PENDING = 5;
 const PLAYBACK_HISTORY_MAX_LOCAL = 2000;
+const IOS_REDIRECT_MARKER_KEY = 'cms_web_ios_redirect_started_v1';
 let currentUser = null;
 let syncInFlight = null;
 let playbackFlushTimer = null;
@@ -607,6 +612,68 @@ function updateStatus(message) {
   }
 }
 
+function clearIosAuthQuery() {
+  const url = new URL(location.href);
+  if (!url.searchParams.has('iosAuth')) return;
+  url.searchParams.delete('iosAuth');
+  history.replaceState(null, document.title, `${url.pathname}${url.search}${url.hash}`);
+}
+
+async function completeAuthorizedLogin(user, source = 'popup') {
+  if (user.uid !== FIREBASE_OWNER_UID) {
+    await signOut(auth);
+    const denied = new Error('このCMSは所有者のGoogleアカウントだけが利用できます');
+    denied.code = 'auth/not-authorized';
+    throw denied;
+  }
+  currentUser = user;
+  console.info('[auth] login success', {
+    source,
+    uid: user.uid,
+    email: user.email,
+    displayName: user.displayName
+  });
+  return await syncCloud({ force: false, silent: false });
+}
+
+async function handleIosHostedRedirect() {
+  if (!isIosWebKit() || !isFirebaseHostedWeb()) return null;
+  const requested = new URL(location.href).searchParams.get('iosAuth') === '1';
+  const redirectStarted = sessionStorage.getItem(IOS_REDIRECT_MARKER_KEY) === '1';
+
+  try {
+    const result = await getRedirectResult(auth);
+    if (result?.user) {
+      sessionStorage.removeItem(IOS_REDIRECT_MARKER_KEY);
+      clearIosAuthQuery();
+      return await completeAuthorizedLogin(result.user, 'ios-same-origin-redirect');
+    }
+    if (requested && auth.currentUser) {
+      sessionStorage.removeItem(IOS_REDIRECT_MARKER_KEY);
+      clearIosAuthQuery();
+      return await completeAuthorizedLogin(auth.currentUser, 'ios-existing-session');
+    }
+    if (requested && !redirectStarted) {
+      sessionStorage.setItem(IOS_REDIRECT_MARKER_KEY, '1');
+      updateStatus('Firebase: iOS用Googleログインへ移動しています…');
+      await signInWithRedirect(auth, provider);
+      return { status: 'redirecting' };
+    }
+    if (requested && redirectStarted) {
+      sessionStorage.removeItem(IOS_REDIRECT_MARKER_KEY);
+      clearIosAuthQuery();
+      const missing = new Error('Googleログイン結果を受信できませんでした。もう一度お試しください。');
+      missing.code = 'auth/redirect-result-missing';
+      throw missing;
+    }
+  } catch (error) {
+    sessionStorage.removeItem(IOS_REDIRECT_MARKER_KEY);
+    clearIosAuthQuery();
+    throw error;
+  }
+  return null;
+}
+
 function showLibrary(data, source, options = {}) {
   if (data.mediaItems?.length) window.CmsWebPlayer?.applyLibrary(data, source, options);
 }
@@ -669,21 +736,21 @@ async function syncCloud({ force = false, silent = false } = {}) {
 
 async function login() {
   try {
+    if (isIosWebKit()) {
+      if (!isFirebaseHostedWeb()) {
+        updateStatus('Firebase: iOS対応ログイン画面へ移動します…');
+        location.assign(createIosHostedLoginUrl());
+        return { status: 'redirecting-to-hosted-web' };
+      }
+      sessionStorage.removeItem(IOS_REDIRECT_MARKER_KEY);
+      const currentUrl = new URL(location.href);
+      currentUrl.searchParams.set('iosAuth', '1');
+      history.replaceState(null, document.title, `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`);
+      return await handleIosHostedRedirect();
+    }
     updateStatus('Firebase: Googleログイン画面を開いています…');
     const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-    if (user.uid !== FIREBASE_OWNER_UID) {
-      await signOut(auth);
-      const denied = new Error('このCMSは所有者のGoogleアカウントだけが利用できます');
-      denied.code = 'auth/not-authorized';
-      throw denied;
-    }
-    console.info('[auth] login success', {
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName
-    });
-    return await syncCloud({ force: false, silent: false });
+    return await completeAuthorizedLogin(result.user, 'popup');
   } catch (error) {
     if (error?.code === 'auth/popup-blocked') {
       updateStatus('Firebase: ポップアップがブロックされました。Safariのポップアップを許可して、もう一度お試しください。');
@@ -721,6 +788,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   bind('btn-cloud-login-settings', login);
   bind('btn-load-firebase', () => syncCloud({ force: true, silent: false }));
   bind('btn-cloud-signout', () => signOut(auth));
+  try {
+    await handleIosHostedRedirect();
+  } catch (error) {
+    updateStatus(`Firebase認証エラー: ${error.code || error.message}`);
+    console.error('[auth] iOS redirect login failed', error);
+  }
   try {
     const cache = await readCache();
     showLibrary(cache, 'cache', { silent: true });
