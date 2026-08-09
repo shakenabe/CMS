@@ -34,6 +34,10 @@ let isTransitioning = false;
 let nicoDuration = 0;
 let nicoCurrentTime = 0;
 let nicoEndedFlag = false;
+let nicoPlayerReady = false;
+let nicoPendingSeekSeconds = null;
+let nicoSeekAttemptCount = 0;
+let nicoSeekLastSentAt = 0;
 
 let resizeTimer;
 let progressInterval;
@@ -332,6 +336,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('widget-sort-select').addEventListener('change', handleSortChange);
     document.getElementById('exclude-nico').addEventListener('change', handleNicoFilterChange);
     document.getElementById('progress-container').addEventListener('click', handleProgressClick);
+    document.getElementById('pocket-progress-container')?.addEventListener('click', handleProgressClick);
 
     // モバイル用フォルダ切り替え
     document.getElementById('btn-open-mobile-folder').addEventListener('click', () => { document.getElementById('mobile-folder-modal').classList.remove('hidden'); });
@@ -474,7 +479,7 @@ function seekSavedPlaybackTime(saved) {
     if (time <= 3) return;
     setTimeout(() => {
         if (currentPlayingItem?.site === 'youtube' && ytPlayer?.seekTo) ytPlayer.seekTo(time, true);
-        else if (currentPlayingItem?.site === 'niconico') nicoCurrentTime = time;
+        else if (currentPlayingItem?.site === 'niconico') requestNicoSeek(time);
     }, 1800);
 }
 function markPlaybackCompleted(item) {
@@ -1831,7 +1836,81 @@ function updateProgress() {
     if (dur > 0) { const pct = (cur / dur) * 100; document.getElementById('progress-bar').style.width = `${pct}%`; document.getElementById('pocket-progress-bar').style.width = `${pct}%`; document.getElementById('time-current').textContent = formatTime(cur); document.getElementById('time-duration').textContent = formatTime(dur); document.getElementById('pocket-time-current').textContent = formatTime(cur); document.getElementById('pocket-time-duration').textContent = formatTime(dur); savePlaybackState({ currentTime: cur }); armPlaybackWatchdog(false); }
 }
 function formatTime(s) { if (!s || isNaN(s)) return "0:00"; const m = Math.floor(s / 60); const sc = Math.floor(s % 60); return `${m}:${sc.toString().padStart(2, '0')}`; }
-function handleProgressClick(e) { if (!currentPlayingItem || !ytPlayer || currentPlayingItem.site !== 'youtube' || typeof ytPlayer.getDuration !== 'function') return; const r = e.target.getBoundingClientRect(); const pos = (e.clientX - r.left) / r.width; const dur = ytPlayer.getDuration(); if (dur > 0) { ytPlayer.seekTo(dur * pos, true); updateProgress(); } }
+
+function renderProgressPosition(currentTime, duration) {
+    if (!(duration > 0)) return;
+    const current = Math.min(Math.max(0, Number(currentTime) || 0), duration);
+    const pct = Math.min(100, Math.max(0, current / duration * 100));
+    document.getElementById('progress-bar').style.width = `${pct}%`;
+    document.getElementById('pocket-progress-bar').style.width = `${pct}%`;
+    document.getElementById('time-current').textContent = formatTime(current);
+    document.getElementById('time-duration').textContent = formatTime(duration);
+    document.getElementById('pocket-time-current').textContent = formatTime(current);
+    document.getElementById('pocket-time-duration').textContent = formatTime(duration);
+}
+
+function postPendingNicoSeek() {
+    if (!nicoPlayerReady || nicoPendingSeekSeconds === null || nicoSeekAttemptCount >= 4) return false;
+    const iframe = document.getElementById('nico-player');
+    if (!iframe?.contentWindow) return false;
+    iframe.contentWindow.postMessage({
+        sourceConnectorType: 1,
+        playerId: "1",
+        eventName: "seek",
+        data: { time: Math.round(nicoPendingSeekSeconds * 1000) }
+    }, 'https://embed.nicovideo.jp');
+    nicoSeekAttemptCount += 1;
+    nicoSeekLastSentAt = Date.now();
+    return true;
+}
+
+function requestNicoSeek(seconds) {
+    if (!currentPlayingItem || currentPlayingItem.site !== 'niconico') return false;
+    const duration = nicoDuration > 0 ? nicoDuration : Number(currentPlayingItem.duration) || 0;
+    if (!(duration > 0)) return false;
+    const target = Math.min(Math.max(0, Number(seconds) || 0), Math.max(0, duration - 0.25));
+    nicoCurrentTime = target;
+    nicoEndedFlag = false;
+    nicoPendingSeekSeconds = target;
+    nicoSeekAttemptCount = 0;
+    renderProgressPosition(target, duration);
+    savePlaybackState({ force: true, currentTime: target });
+    postPendingNicoSeek();
+    armPlaybackWatchdog(true);
+    return true;
+}
+
+function confirmOrRetryNicoSeek(actualSeconds) {
+    if (nicoPendingSeekSeconds === null || !Number.isFinite(actualSeconds)) return;
+    if (Math.abs(actualSeconds - nicoPendingSeekSeconds) <= 1.5) {
+        nicoPendingSeekSeconds = null;
+        nicoSeekAttemptCount = 0;
+        return;
+    }
+    if (Date.now() - nicoSeekLastSentAt >= 300) postPendingNicoSeek();
+}
+
+function handleProgressClick(e) {
+    if (!currentPlayingItem) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (!(rect.width > 0)) return;
+    const position = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    if (currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.getDuration === 'function') {
+        const duration = Number(ytPlayer.getDuration()) || 0;
+        if (duration > 0) {
+            const target = duration * position;
+            ytPlayer.seekTo(target, true);
+            renderProgressPosition(target, duration);
+            savePlaybackState({ force: true, currentTime: target });
+            armPlaybackWatchdog(true);
+        }
+        return;
+    }
+    if (currentPlayingItem.site === 'niconico') {
+        const duration = nicoDuration > 0 ? nicoDuration : Number(currentPlayingItem.duration) || 0;
+        if (duration > 0) requestNicoSeek(duration * position);
+    }
+}
 
 function startPlaylist(items, idx = 0) { if (items.length === 0) return; currentPlaylist = items; currentIndex = idx; loadVideo(currentIndex); }
 function playNextVideo() { if (currentPlaylist.length === 0 || isTransitioning) return; cancelPlaybackWatchdog(); isTransitioning = true; setTimeout(() => { isTransitioning = false; }, 1000); currentIndex = (currentIndex + 1) % currentPlaylist.length; loadVideo(currentIndex); }
@@ -1850,7 +1929,7 @@ function onPlayerStateChange(e) { if (e.data === YT.PlayerState.PLAYING) { isPla
 function loadVideo(idx) {
     if (idx < 0 || idx >= currentPlaylist.length) return;
     cancelPlaybackWatchdog();
-    currentIndex = idx; isTransitioning = false; currentPlayingItem = currentPlaylist[idx]; isPlaying = true; nicoDuration = 0; nicoCurrentTime = 0; nicoEndedFlag = false;
+    currentIndex = idx; isTransitioning = false; currentPlayingItem = currentPlaylist[idx]; isPlaying = true; nicoDuration = 0; nicoCurrentTime = 0; nicoEndedFlag = false; nicoPlayerReady = false; nicoPendingSeekSeconds = null; nicoSeekAttemptCount = 0; nicoSeekLastSentAt = 0;
     playbackWatchdogToken = `${Date.now()}:${idx}:${currentPlayingItem.id || currentPlayingItem.url || currentPlayingItem.title || ''}`;
     savePlaybackState({ force: true, currentTime: 0 });
     updatePlayerUI(currentPlayingItem); updateActiveTrackUI();
@@ -1873,8 +1952,21 @@ function loadVideo(idx) {
 function handleNicoMessage(e) {
     if (e.origin !== 'https://embed.nicovideo.jp' || !currentPlayingItem || currentPlayingItem.site !== 'niconico' || !e.data || !e.data.eventName) return;
     const ev = e.data.eventName; const d = e.data.data;
-    if (ev === 'loadComplete') { const i = document.getElementById('nico-player'); if (i && i.contentWindow) { setTimeout(() => { i.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: "play" }, 'https://embed.nicovideo.jp'); applyVolume(); startProgressTimer(); startSilentAudio(); schedulePlaybackRecovery(); }, 150); } } 
-    else if (ev === 'playerMetadataChange') { if (d && d.duration) { nicoDuration = d.duration / 1000; armPlaybackWatchdog(true); } } else if (ev === 'playerPlayTimeChange') { if (d && d.playTime) { nicoCurrentTime = d.playTime / 1000; armPlaybackWatchdog(false); } }
+    if (ev === 'loadComplete') { const i = document.getElementById('nico-player'); if (i && i.contentWindow) { nicoPlayerReady = true; setTimeout(() => { i.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: "play" }, 'https://embed.nicovideo.jp'); postPendingNicoSeek(); applyVolume(); startProgressTimer(); startSilentAudio(); schedulePlaybackRecovery(); }, 150); } }
+    else if (ev === 'playerMetadataChange') {
+        if (Number.isFinite(Number(d?.duration)) && Number(d.duration) > 0) nicoDuration = Number(d.duration) / 1000;
+        if (d?.currentTime !== undefined && d?.currentTime !== null && Number.isFinite(Number(d.currentTime))) {
+            nicoCurrentTime = Math.max(0, Number(d.currentTime) / 1000);
+            confirmOrRetryNicoSeek(nicoCurrentTime);
+        }
+        armPlaybackWatchdog(true);
+    } else if (ev === 'playerPlayTimeChange') {
+        if (d?.playTime !== undefined && d?.playTime !== null && Number.isFinite(Number(d.playTime))) {
+            nicoCurrentTime = Math.max(0, Number(d.playTime) / 1000);
+            confirmOrRetryNicoSeek(nicoCurrentTime);
+            armPlaybackWatchdog(false);
+        }
+    }
     else if (ev === 'playerStatusChange') { const s = d.playerStatus; if (s === 4 && !nicoEndedFlag) { completeWebPlayback('niconico-ended'); } else if (s === 2) { isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); armPlaybackWatchdog(true); } else if (s === 3) { isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); cancelPlaybackWatchdog(); } }
     else if (ev === 'error') schedulePlaybackErrorSkip(5000);
 }
