@@ -6,7 +6,7 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2026080401">
+    <link rel="stylesheet" href="style.css?v=2026081002">
     <link rel="stylesheet" href="theme-system.css?v=2026080401">
 </head>
 <body class="theme-modern is-pc">
@@ -136,6 +136,12 @@
                     <div id="library-nav-wrapper" class="panel-glass">
                         <div class="controls-wrapper">
                             <label class="filter-option"><input type="checkbox" id="exclude-nico"> ニコ除外</label>
+                            <button id="vocaloid-group-back" class="theme-btn hidden" type="button" title="ボカログループ一覧へ戻る"><cms-icon name="back"></cms-icon></button>
+                            <select id="vocaloid-group-mode" class="widget-search hidden" title="ボカロ / Kiite の分け方">
+                                <option value="videos">動画一覧</option>
+                                <option value="uploader">投稿者別</option>
+                                <option value="channel">チャンネル別</option>
+                            </select>
                             <select id="widget-sort-select" class="widget-search">
                                 <option value="custom">カスタム順</option><option value="newest">新しい順</option><option value="oldest">古い順</option><option value="playCount_desc">再生数順</option>
                             </select>
@@ -214,7 +220,7 @@
                     <div class="setting-row"><label><input type="checkbox" id="set-music-mode"> <cms-icon name="music"></cms-icon>音楽モード (モバイルSpotify風UI)</label></div>
                     <div class="setting-row">
                         <label><input type="checkbox" id="set-vocaloid-collection"> <cms-icon name="music"></cms-icon>ボカロ / Kiite 専用一覧を表示</label>
-                        <span style="font-size:0.75rem; opacity:0.8;">拡張機能版でKiite照合した判定をFirebase経由で表示します。<a href="https://kiite.jp/" target="_blank" rel="noopener noreferrer">Kiiteを開く</a></span>
+                        <span style="font-size:0.75rem; opacity:0.8;">拡張機能版でKiite照合した判定をFirebase経由で表示し、動画一覧・投稿者別・チャンネル別に切り替えられます。<a href="https://kiite.jp/" target="_blank" rel="noopener noreferrer">Kiiteを開く</a></span>
                     </div>
                     <div class="setting-row"><label><input type="checkbox" id="set-resume-last-playback"> 前回のフォルダ・曲から再開する</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-show-thumbnails"> <cms-icon name="image"></cms-icon>サムネイルを表示</label></div>
@@ -350,6 +356,6 @@
 
     <script src="cms-icons.js?v=2026072502"></script>
     <script type="module" src="firebase-web.js?v=2026080501"></script>
-    <script src="script.js?v=2026081001"></script>
+    <script src="script.js?v=2026081002"></script>
 </body>
 </html>

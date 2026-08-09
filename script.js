@@ -7,7 +7,7 @@ const defaultSettings = {
     pocketBgManual: false, pocketBgX: 50, pocketBgY: 50, pocketBgScale: 100,
     pocketShowClock: true, pocketShowArt: true, pocketShowTitle: true, pocketShowProgress: true, pocketShowControls: true, pocketShowUnlock: true,
     pocketLayout: {}, pocketLayoutScale: {}, forcePcLayout: false,
-    musicMode: false, autoScrollActiveTrack: true, vocaloidCollectionEnabled: false,
+    musicMode: false, autoScrollActiveTrack: true, vocaloidCollectionEnabled: false, vocaloidGroupMode: 'videos',
     windowMode: false, windowPositions: {}, windowStates: {}, windowColorsLinked: true,
     windowPanelColor: '#000000', windowPanelAlpha: 55, windowTitleColor: '#1f4f8f', windowTitleAlpha: 100,
     defaultSortOrder: 'custom', useFirebase: false, resumeLastPlayback: true
@@ -22,6 +22,7 @@ let currentFolderId = null;
 let currentSortOrder = 'custom';
 let currentSearchQuery = "";
 let excludeNico = false;
+let currentVocaloidGroup = null;
 
 let currentPlaylist =[];
 let currentIndex = 0;
@@ -304,6 +305,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadSettings();
     currentSortOrder = appSettings.defaultSortOrder || 'custom';
     document.getElementById('widget-sort-select').value = currentSortOrder;
+    document.getElementById('vocaloid-group-mode').value = normalizeVocaloidGroupMode(appSettings.vocaloidGroupMode);
     
     updateLayoutMode(); applyThemeSettings(); await loadBgImageFromDB();
 
@@ -335,6 +337,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('widget-search-box').addEventListener('input', handleSearch);
     document.getElementById('widget-sort-select').addEventListener('change', handleSortChange);
     document.getElementById('exclude-nico').addEventListener('change', handleNicoFilterChange);
+    document.getElementById('vocaloid-group-mode').addEventListener('change', (event) => {
+        appSettings.vocaloidGroupMode = normalizeVocaloidGroupMode(event.target.value);
+        currentVocaloidGroup = null;
+        saveSettings();
+        if (currentFolderId === '__vocaloid') selectFolder('__vocaloid');
+    });
+    document.getElementById('vocaloid-group-back').addEventListener('click', () => {
+        currentVocaloidGroup = null;
+        selectFolder('__vocaloid');
+    });
     document.getElementById('progress-container').addEventListener('click', handleProgressClick);
     document.getElementById('pocket-progress-container')?.addEventListener('click', handleProgressClick);
 
@@ -1375,7 +1387,72 @@ function renderFolders() {
     populateEditFolders();
 }
 
+function normalizeVocaloidGroupMode(value) {
+    return ['videos', 'uploader', 'channel'].includes(value) ? value : 'videos';
+}
+
+function getVocaloidGroupName(item, mode) {
+    if (mode === 'channel') return item.channelName || item.uploader || 'チャンネル不明';
+    return item.uploader || item.vocaloidInfo?.creatorName || item.channelName || '投稿者不明';
+}
+
+function updateVocaloidGroupingControls(folderId) {
+    const modeSelect = document.getElementById('vocaloid-group-mode');
+    const backButton = document.getElementById('vocaloid-group-back');
+    const isVocaloid = folderId === '__vocaloid';
+    modeSelect?.classList.toggle('hidden', !isVocaloid);
+    if (modeSelect && isVocaloid) modeSelect.value = normalizeVocaloidGroupMode(appSettings.vocaloidGroupMode);
+    backButton?.classList.toggle('hidden', !isVocaloid || !currentVocaloidGroup);
+}
+
+function renderVocaloidGroups(songs, mode) {
+    const isChannelMode = mode === 'channel';
+    const groups = new Map();
+    songs.forEach(song => {
+        const name = getVocaloidGroupName(song, mode);
+        if (!groups.has(name)) groups.set(name, { name, songs: [], thumbnail: song.channelIcon || song.thumbnail || '' });
+        const group = groups.get(name);
+        group.songs.push(song);
+        if (!group.thumbnail && (song.channelIcon || song.thumbnail)) group.thumbnail = song.channelIcon || song.thumbnail;
+    });
+    const orderedGroups = [...groups.values()].sort((left, right) => right.songs.length - left.songs.length || left.name.localeCompare(right.name, 'ja'));
+    currentRenderSongs = [];
+    currentRenderedCount = 0;
+    trackVirtualStart = -1;
+    trackVirtualEnd = -1;
+    trackListEl.scrollTop = 0;
+    trackListEl.replaceChildren();
+    document.getElementById('current-folder-title').textContent = `ボカロ / Kiite / ${isChannelMode ? 'チャンネル別' : '投稿者別'}`;
+    document.getElementById('current-folder-count').textContent = `${orderedGroups.length}グループ / ${songs.length}動画`;
+    if (!orderedGroups.length) {
+        trackListEl.innerHTML = '<div style="padding:20px; text-align:center;">ボカロ判定済みの動画がありません</div>';
+        return;
+    }
+    const fragment = document.createDocumentFragment();
+    orderedGroups.forEach((group, index) => {
+        const row = document.createElement('div');
+        row.className = 'w-t-item vocaloid-web-group-item';
+        row.title = group.name;
+        const thumbnail = group.thumbnail || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>";
+        row.innerHTML = `
+            <span class="w-t-idx">${index + 1}</span>
+            <img class="w-t-thumb vocaloid-web-group-thumb" src="${escapeHTML(thumbnail)}" loading="lazy">
+            <div class="w-t-info overflow-hidden">
+                <div class="marquee-wrapper"><span class="track-title-text marquee-content">${escapeHTML(group.name)}</span></div>
+                <div class="marquee-wrapper"><span class="track-artist-text marquee-content">${group.songs.length}動画・${isChannelMode ? 'チャンネル' : '投稿者'}</span></div>
+            </div>`;
+        row.onclick = () => {
+            currentVocaloidGroup = { mode, name: group.name };
+            selectFolder('__vocaloid');
+        };
+        fragment.appendChild(row);
+    });
+    trackListEl.appendChild(fragment);
+    scheduleMarqueeUpdate();
+}
+
 function selectFolder(id, options = {}) {
+    if (id !== currentFolderId || id !== '__vocaloid') currentVocaloidGroup = null;
     currentFolderId = id;
     document.querySelectorAll('.w-f-item').forEach(e => e.classList.toggle('active', e.dataset.folderId === id));
     document.querySelectorAll('.m-f-item').forEach(e => { 
@@ -1406,7 +1483,24 @@ function selectFolder(id, options = {}) {
         if (folderCount) folderCount.textContent = `${f.songs.length}件のアイテム`;
     }
     selectedItems.clear(); updateEditBar();
-    renderTracks(f ? f.songs :[], { preserveScroll: Boolean(options.preserveScroll) });
+    updateVocaloidGroupingControls(id);
+    const vocaloidMode = normalizeVocaloidGroupMode(appSettings.vocaloidGroupMode);
+    if (f && id === '__vocaloid' && vocaloidMode !== 'videos') {
+        if (currentVocaloidGroup?.mode === vocaloidMode) {
+            const groupedSongs = f.songs.filter(song => getVocaloidGroupName(song, vocaloidMode) === currentVocaloidGroup.name);
+            const modeLabel = vocaloidMode === 'channel' ? 'チャンネル' : '投稿者';
+            document.getElementById('current-folder-title').textContent = `ボカロ / ${modeLabel}: ${currentVocaloidGroup.name}`;
+            document.getElementById('current-folder-count').textContent = `${groupedSongs.length}件のアイテム`;
+            document.getElementById('vocaloid-group-back')?.classList.remove('hidden');
+            renderTracks(groupedSongs, { preserveScroll: Boolean(options.preserveScroll) });
+        } else {
+            currentVocaloidGroup = null;
+            updateVocaloidGroupingControls(id);
+            renderVocaloidGroups(f.songs, vocaloidMode);
+        }
+    } else {
+        renderTracks(f ? f.songs :[], { preserveScroll: Boolean(options.preserveScroll) });
+    }
     if (!options.skipSave) saveCurrentSession({ force: true, folderId: id });
 }
 
