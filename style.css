@@ -504,6 +504,8 @@ body.is-mobile.music-mode .w-t-item { min-height: 76px; }
 
 .widget-search { background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 0; padding: 8px 15px; color: var(--text-color); outline: none; flex: 1; min-width: 120px; font-size: 0.9rem;}
 select.widget-search option { background-color: var(--bg-color); color: var(--text-color); }
+#vocaloid-group-mode { flex: 0 1 150px; min-width: 128px; }
+#vocaloid-group-back { flex: 0 0 auto; min-width: 42px; padding-inline: 10px; }
 
 .w-f-item { padding: 12px 15px; cursor: pointer; transition: 0.2s; border-left: 3px solid transparent; font-size: 0.95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-color); border-radius: 0; }
 .w-f-item:hover { background: rgba(255,255,255,0.1); }
@@ -514,6 +516,8 @@ select.widget-search option { background-color: var(--bg-color); color: var(--te
 .w-t-item:hover { background: rgba(255,255,255,0.1); }
 .w-t-item.active { background: rgba(255,255,255,0.15); border-left: 3px solid var(--text-color); color: var(--text-color); }
 .w-t-item.active .track-title-text { color: var(--text-color); }
+.vocaloid-web-group-item { min-height: 66px; border-left-color: color-mix(in srgb, var(--text-color) 55%, transparent); }
+.vocaloid-web-group-item .vocaloid-web-group-thumb { display: block; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--text-color) 55%, transparent); }
 
 body.theme-nerv .w-f-item.active, body.theme-nerv .w-t-item.active {
     background: linear-gradient(90deg, rgba(111,45,189,.94), rgba(230,0,18,.78)) !important;
