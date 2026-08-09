@@ -7,7 +7,7 @@ const defaultSettings = {
     pocketBgManual: false, pocketBgX: 50, pocketBgY: 50, pocketBgScale: 100,
     pocketShowClock: true, pocketShowArt: true, pocketShowTitle: true, pocketShowProgress: true, pocketShowControls: true, pocketShowUnlock: true,
     pocketLayout: {}, pocketLayoutScale: {}, forcePcLayout: false,
-    musicMode: false, autoScrollActiveTrack: true,
+    musicMode: false, autoScrollActiveTrack: true, vocaloidCollectionEnabled: false,
     windowMode: false, windowPositions: {}, windowStates: {}, windowColorsLinked: true,
     windowPanelColor: '#000000', windowPanelAlpha: 55, windowTitleColor: '#1f4f8f', windowTitleAlpha: 100,
     defaultSortOrder: 'custom', useFirebase: false, resumeLastPlayback: true
@@ -1123,6 +1123,7 @@ function setupSettingsModal() {
         
         document.getElementById('set-performance-mode').checked = appSettings.performanceMode; document.getElementById('set-data-saver').checked = appSettings.dataSaverMode;
         document.getElementById('set-music-mode').checked = Boolean(appSettings.musicMode);
+        document.getElementById('set-vocaloid-collection').checked = Boolean(appSettings.vocaloidCollectionEnabled);
         document.getElementById('set-resume-last-playback').checked = appSettings.resumeLastPlayback !== false;
         document.getElementById('set-show-thumbnails').checked = appSettings.showThumbnails;
         document.getElementById('set-show-clock').checked = Boolean(appSettings.showClock);
@@ -1181,8 +1182,9 @@ function setupSettingsModal() {
     document.getElementById('btn-reset-pocket-layout').onclick = () => { appSettings.pocketLayout = {}; saveSettings(); applyPocketAppearance(); alert('ロック画面を標準配置へ戻しました。'); };
 
     document.getElementById('btn-save-settings').onclick = async () => {
+        const previousVocaloidCollectionEnabled = Boolean(appSettings.vocaloidCollectionEnabled);
         appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
-        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
+        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.vocaloidCollectionEnabled = document.getElementById('set-vocaloid-collection').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         appSettings.windowColorsLinked = true; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = appSettings.windowPanelColor; appSettings.windowTitleAlpha = appSettings.windowPanelAlpha;
         appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value); appSettings.pocketBgManual = document.getElementById('set-pocket-bg-manual').checked; appSettings.pocketBgX = Number(document.getElementById('set-pocket-bg-x').value); appSettings.pocketBgY = Number(document.getElementById('set-pocket-bg-y').value); appSettings.pocketBgScale = Number(document.getElementById('set-pocket-bg-scale').value); appSettings.pocketShowClock = document.getElementById('set-pocket-show-clock').checked; appSettings.pocketShowArt = document.getElementById('set-pocket-show-art').checked; appSettings.pocketShowTitle = document.getElementById('set-pocket-show-title').checked; appSettings.pocketShowProgress = document.getElementById('set-pocket-show-progress').checked; appSettings.pocketShowControls = document.getElementById('set-pocket-show-controls').checked; appSettings.pocketShowUnlock = document.getElementById('set-pocket-show-unlock').checked;
         appSettings.pocketLayoutScale = appSettings.pocketLayoutScale || {};
@@ -1191,7 +1193,13 @@ function setupSettingsModal() {
         const fInput = document.getElementById('set-bg-img'); 
         if (fInput.files.length > 0) { await saveBgImageToDB(fInput.files[0]); }
         
-        saveSettings(); applyVolume(); modal.classList.add('hidden'); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); scheduleMarqueeUpdate(); 
+        saveSettings(); applyVolume(); modal.classList.add('hidden'); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); scheduleMarqueeUpdate();
+        if (previousVocaloidCollectionEnabled !== Boolean(appSettings.vocaloidCollectionEnabled)) {
+            buildLibrary();
+            renderFolders();
+            const nextFolderId = musicLibrary.some(folder => folder.id === currentFolderId) ? currentFolderId : '__all';
+            selectFolder(nextFolderId, { preserveScroll: true });
+        }
     };
 }
 
@@ -1307,6 +1315,9 @@ function startGame() {
     startPlaybackFromCurrentLibrary();
 }
 
+const VIRTUAL_LIBRARY_FOLDER_IDS = new Set(['__all', '__vocaloid']);
+function isVirtualLibraryFolderId(id) { return VIRTUAL_LIBRARY_FOLDER_IDS.has(id); }
+
 function buildLibrary() {
     const fMap = new Map(); const fOrderIndex = new Map();
     folderSettingsByName = new Map(folderSettings.map(setting => [setting.folderName, setting]));
@@ -1328,14 +1339,23 @@ function buildLibrary() {
         const orderB = sB && typeof sB.order === 'number' ? sB.order : (fOrderIndex.get(b) ?? 0) + 10000;
         return orderA - orderB;
     });
-    musicLibrary = [{ id: '__all', name: 'All', songs: sortSongs(items) }, ...fNames.map(n => ({ id: n, name: n, songs: sortSongs(fMap.get(n)) }))];
+    const virtualFolders = [{ id: '__all', name: 'All', songs: sortSongs(items) }];
+    if (appSettings.vocaloidCollectionEnabled) {
+        virtualFolders.push({
+            id: '__vocaloid',
+            name: 'ボカロ / Kiite',
+            songs: sortSongs(items.filter(item => item?.vocaloidInfo?.matched === true))
+        });
+    }
+    musicLibrary = [...virtualFolders, ...fNames.map(n => ({ id: n, name: n, songs: sortSongs(fMap.get(n)) }))];
 }
 function sortSongs(songs) { return[...songs].sort((a, b) => { const sf = (s) => s || ""; switch (currentSortOrder) { case 'title_asc': return sf(a.title).localeCompare(sf(b.title)); case 'title_desc': return sf(b.title).localeCompare(sf(a.title)); case 'newest': return b.safeDate - a.safeDate; case 'oldest': return a.safeDate - b.safeDate; case 'playCount_desc': return b.safePlayCount - a.safePlayCount; case 'custom': default: return a.originalIndex - b.originalIndex; } }); }
 
 function renderFolders() {
     folderListEl.innerHTML = ''; const mList = document.getElementById('mobile-folder-list-modal'); if (mList) mList.innerHTML = '';
     musicLibrary.forEach(f => {
-        const div = document.createElement('div'); div.className = 'w-f-item'; div.replaceChildren(CmsIcons.create(f.id === '__all' ? 'library' : 'folder'), document.createTextNode(f.name)); div.dataset.folderId = f.id; div.title = f.name; div.onclick = () => selectFolder(f.id); folderListEl.appendChild(div);
+        const folderIcon = f.id === '__all' ? 'library' : f.id === '__vocaloid' ? 'music' : 'folder';
+        const div = document.createElement('div'); div.className = 'w-f-item'; div.replaceChildren(CmsIcons.create(folderIcon), document.createTextNode(f.name)); div.dataset.folderId = f.id; div.title = f.name; div.onclick = () => selectFolder(f.id); folderListEl.appendChild(div);
         if (mList) { 
             const mDiv = document.createElement('div'); mDiv.className = 'm-f-item'; mDiv.dataset.folderId = f.id; 
             mDiv.innerHTML = `
@@ -1566,8 +1586,8 @@ async function fetchVideoUrlMetadata(info) {
 function populateUrlAddFolders() {
     const select = document.getElementById('add-video-folder-select');
     if (!select) return;
-    const current = currentFolderId && currentFolderId !== '__all' ? currentFolderId : '';
-    const names = musicLibrary.filter(folder => folder.id !== '__all').map(folder => folder.id);
+    const current = currentFolderId && !isVirtualLibraryFolderId(currentFolderId) ? currentFolderId : '';
+    const names = musicLibrary.filter(folder => !isVirtualLibraryFolderId(folder.id)).map(folder => folder.id);
     select.innerHTML = '';
     [...new Set(names)].forEach(name => {
         const option = document.createElement('option');
@@ -1756,7 +1776,7 @@ function populateEditFolders() {
     if (selFilter) selFilter.innerHTML = '';
 
     musicLibrary.forEach(f => { 
-        if(selEdit && f.id !== '__all') {
+        if(selEdit && !isVirtualLibraryFolderId(f.id)) {
             const opt1 = document.createElement('option'); opt1.value = f.id; opt1.textContent = f.name; selEdit.appendChild(opt1); 
         }
         if (selFilter) {
