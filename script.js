@@ -93,7 +93,12 @@ let playbackWatchdogTimer = 0;
 let playbackWatchdogToken = '';
 let playbackExpectedEndAt = 0;
 let playbackWatchdogLastRefreshAt = 0;
+let playbackWatchdogLastClockTime = 0;
+let playbackWatchdogLastDuration = 0;
+let playbackWatchdogLastRate = 1;
+let playbackDeadlineTrusted = false;
 let backgroundPlaybackSetup = false;
+const PLAYBACK_WATCHDOG_RETRY_MS = 5000;
 function setupBackgroundPlayback() {
     if (!silentAudio) {
         const silentWav = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
@@ -106,6 +111,10 @@ function setupBackgroundPlayback() {
             reconcilePlaybackDeadline('visibility-return');
             updateProgress();
             if (isPlaying) schedulePlaybackRecovery();
+        } else if (isPlaying && currentPlayingItem) {
+            // Capture a fresh end deadline before Chrome starts throttling this tab.
+            armPlaybackWatchdog(true);
+            startSilentAudio();
         }
     });
     window.addEventListener('focus', () => reconcilePlaybackDeadline('window-focus'));
@@ -149,6 +158,10 @@ function cancelPlaybackWatchdog() {
     playbackWatchdogTimer = 0;
     playbackExpectedEndAt = 0;
     playbackWatchdogLastRefreshAt = 0;
+    playbackWatchdogLastClockTime = 0;
+    playbackWatchdogLastDuration = 0;
+    playbackWatchdogLastRate = 1;
+    playbackDeadlineTrusted = false;
     if (playbackWatchdogWorker) playbackWatchdogWorker.postMessage({ type: 'cancel', token: playbackWatchdogToken });
 }
 
@@ -161,7 +174,7 @@ function getPlaybackClock() {
             const duration = liveDuration || Number(currentPlayingItem.duration) || 0;
             const playbackRate = Math.max(0.1, Number(ytPlayer.getPlaybackRate?.()) || 1);
             const state = Number(ytPlayer.getPlayerState?.());
-            return { currentTime, duration, playbackRate, valid: duration > 5, liveDuration: liveDuration > 5, ended: Boolean(window.YT && state === YT.PlayerState.ENDED) };
+            return { currentTime, duration, playbackRate, playerState: state, valid: duration > 5, liveDuration: liveDuration > 5, ended: Boolean(window.YT && state === YT.PlayerState.ENDED) };
         } catch (_) {}
     }
     if (currentPlayingItem.site === 'niconico') {
@@ -172,19 +185,43 @@ function getPlaybackClock() {
     return { currentTime: 0, duration: Number(currentPlayingItem.duration) || 0, playbackRate: 1, valid: false, ended: false };
 }
 
+function isYouTubePlayerState(state, name) {
+    return Boolean(window.YT?.PlayerState) && state === window.YT.PlayerState[name];
+}
+
+function schedulePlaybackWatchdogWake(deadline, token = playbackWatchdogToken) {
+    if (!token || !Number.isFinite(Number(deadline))) return;
+    clearTimeout(playbackWatchdogTimer);
+    playbackWatchdogTimer = setTimeout(() => reconcilePlaybackDeadline('page-timer', token), Math.max(1000, Number(deadline) - Date.now()));
+    ensurePlaybackWatchdogWorker()?.postMessage({ type: 'arm', token, deadline: Number(deadline) });
+}
+
 function armPlaybackWatchdog(force = false) {
     if (!isPlaying || !currentPlayingItem || !playbackWatchdogToken) return;
     const now = Date.now();
     if (!force && now - playbackWatchdogLastRefreshAt < 5000) return;
     const clock = getPlaybackClock();
     if (!clock.valid || clock.duration <= clock.currentTime) return;
+    const clockAdvanced = clock.currentTime > playbackWatchdogLastClockTime + 0.2;
+    const durationChanged = Math.abs(clock.duration - playbackWatchdogLastDuration) > 1;
+    const rateChanged = Math.abs(clock.playbackRate - playbackWatchdogLastRate) > 0.01;
+    const playerJustConfirmed = currentPlayingItem.site === 'youtube'
+        && isYouTubePlayerState(clock.playerState, 'PLAYING')
+        && !playbackDeadlineTrusted;
+    // A hidden iframe can expose the same frozen currentTime on every timer tick.
+    // Do not slide the expected end farther into the future unless its clock moved.
+    if (!force && !clockAdvanced && !durationChanged && !rateChanged && !playerJustConfirmed) return;
     playbackWatchdogLastRefreshAt = now;
+    playbackWatchdogLastClockTime = clock.currentTime;
+    playbackWatchdogLastDuration = clock.duration;
+    playbackWatchdogLastRate = clock.playbackRate;
+    playbackDeadlineTrusted = currentPlayingItem.site === 'niconico'
+        ? Boolean(clock.liveDuration)
+        : isYouTubePlayerState(clock.playerState, 'PLAYING');
     playbackExpectedEndAt = now + ((clock.duration - clock.currentTime) / clock.playbackRate) * 1000;
     const deadline = playbackExpectedEndAt + (currentPlayingItem.site === 'niconico' ? 10000 : 6000);
     const token = playbackWatchdogToken;
-    clearTimeout(playbackWatchdogTimer);
-    playbackWatchdogTimer = setTimeout(() => reconcilePlaybackDeadline('page-timer', token), Math.max(1000, deadline - now));
-    ensurePlaybackWatchdogWorker()?.postMessage({ type: 'arm', token, deadline });
+    schedulePlaybackWatchdogWake(deadline, token);
 }
 
 function completeWebPlayback(reason, token = playbackWatchdogToken) {
@@ -212,8 +249,13 @@ function reconcilePlaybackDeadline(reason = 'reconcile', token = playbackWatchdo
         completeWebPlayback(reason, token);
         return;
     }
-    if (!playbackExpectedEndAt || Date.now() < playbackExpectedEndAt) {
+    const now = Date.now();
+    if (!playbackExpectedEndAt) {
         armPlaybackWatchdog(true);
+        return;
+    }
+    if (now < playbackExpectedEndAt) {
+        schedulePlaybackWatchdogWake(playbackExpectedEndAt + (currentPlayingItem.site === 'niconico' ? 10000 : 6000), token);
         return;
     }
     if (currentPlayingItem.site === 'niconico' && clock.liveDuration) {
@@ -227,10 +269,29 @@ function reconcilePlaybackDeadline(reason = 'reconcile', token = playbackWatchdo
         armPlaybackWatchdog(true);
         return;
     }
-    // YouTube exposes a live clock. Buffering or an advert can extend playback,
-    // so recompute instead of skipping when the media is not actually near end.
+    if (currentPlayingItem.site === 'youtube') {
+        const playerIsPlaying = isYouTubePlayerState(clock.playerState, 'PLAYING');
+        if (document.visibilityState !== 'visible' && playbackDeadlineTrusted && playerIsPlaying) {
+            // YouTube occasionally omits ENDED and freezes its API clock in a hidden tab.
+            // A deadline captured while PLAYING is safe after the normal grace period.
+            completeWebPlayback(`${reason}-youtube-background-deadline`, token);
+            return;
+        }
+        if (playerIsPlaying && !playbackDeadlineTrusted) {
+            armPlaybackWatchdog(true);
+            return;
+        }
+        if (document.visibilityState === 'visible' && clock.valid) {
+            armPlaybackWatchdog(true);
+            return;
+        }
+        // BUFFERING, CUED and hidden-unstarted states are not completion evidence.
+        schedulePlaybackRecovery();
+        schedulePlaybackWatchdogWake(now + PLAYBACK_WATCHDOG_RETRY_MS, token);
+        return;
+    }
     if (clock.valid) armPlaybackWatchdog(true);
-    else if (Date.now() >= playbackExpectedEndAt + 15000) completeWebPlayback(`${reason}-unreachable`, token);
+    else if (now >= playbackExpectedEndAt + 15000) completeWebPlayback(`${reason}-unreachable`, token);
 }
 
 // IndexedDB (背景画像保存処理)
@@ -2018,7 +2079,30 @@ function createYouTubePlayer(vId) {
         ytPlayer = new YT.Player('yt-player-mount', { height: '100%', width: '100%', videoId: vId, playerVars: { 'playsinline': 1, 'autoplay': 1, 'rel': 0 }, events: { 'onReady': (e) => { if(appSettings.dataSaverMode && typeof e.target.setPlaybackQuality === 'function') e.target.setPlaybackQuality('tiny'); isPlaying = true; try { e.target.playVideo(); } catch (_) {} updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); schedulePlaybackRecovery(); armPlaybackWatchdog(true); }, 'onStateChange': onPlayerStateChange, 'onPlaybackRateChange': () => armPlaybackWatchdog(true), 'onError': () => schedulePlaybackErrorSkip(5000) } });
     } else setTimeout(() => createYouTubePlayer(vId), 1000);
 }
-function onPlayerStateChange(e) { if (e.data === YT.PlayerState.PLAYING) { isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); armPlaybackWatchdog(true); } else if (e.data === YT.PlayerState.PAUSED) { isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); cancelPlaybackWatchdog(); } else if (e.data === YT.PlayerState.ENDED) { completeWebPlayback('youtube-ended'); document.getElementById('progress-bar').style.width = '0%'; } }
+function onPlayerStateChange(e) {
+    if (e.data === YT.PlayerState.PLAYING) {
+        isPlaying = true;
+        updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); armPlaybackWatchdog(true);
+    } else if (e.data === YT.PlayerState.PAUSED) {
+        const clock = getPlaybackClock();
+        const nearEnd = clock.valid && clock.currentTime >= Math.max(0, clock.duration - 1.2);
+        const hiddenDeadlineReached = document.visibilityState !== 'visible'
+            && playbackDeadlineTrusted
+            && playbackExpectedEndAt > 0
+            && Date.now() >= playbackExpectedEndAt;
+        if (nearEnd || hiddenDeadlineReached) {
+            completeWebPlayback('youtube-paused-at-end');
+            return;
+        }
+        isPlaying = false;
+        updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); cancelPlaybackWatchdog();
+    } else if (e.data === YT.PlayerState.ENDED) {
+        completeWebPlayback('youtube-ended');
+        document.getElementById('progress-bar').style.width = '0%';
+    } else if (e.data === YT.PlayerState.BUFFERING || e.data === YT.PlayerState.CUED || e.data === YT.PlayerState.UNSTARTED) {
+        playbackDeadlineTrusted = false;
+    }
+}
 
 function loadVideo(idx) {
     if (idx < 0 || idx >= currentPlaylist.length) return;
