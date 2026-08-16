@@ -412,6 +412,42 @@ async function flushPlaybackQueue({ silent = true } = {}) {
   }
 }
 
+async function getPlaybackHistory({ days = 90, forceFlush = true } = {}) {
+  const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 90)));
+  const sinceAt = Date.now() - safeDays * 24 * 60 * 60 * 1000;
+  const pendingEvents = readPlaybackHistoryQueue();
+  const normalizeEvents = events => (Array.isArray(events) ? events : [])
+    .filter(event => event?.eventId && Number.isFinite(new Date(event.playedAt).getTime()))
+    .filter(event => new Date(event.playedAt).getTime() >= sinceAt);
+
+  if (!currentUser || currentUser.uid !== FIREBASE_OWNER_UID || !window.CmsWebPlayer?.getUseFirebase?.()) {
+    return { events: normalizeEvents(pendingEvents).sort((a, b) => new Date(b.playedAt) - new Date(a.playedAt)), source: 'local', days: safeDays };
+  }
+
+  if (forceFlush) {
+    try { await flushPlaybackQueue({ silent: true }); } catch (_) { /* Include the unsent local queue below. */ }
+  }
+
+  const sinceBucket = new Date(sinceAt).toISOString().slice(0, 13).replace(/[-T]/g, '');
+  const maxBuckets = Math.min(2400, safeDays * 24 + 24);
+  const snapshot = await getDocs(query(
+    collection(firestore, 'users', currentUser.uid, 'playbackHistory'),
+    where(documentId(), '>=', sinceBucket),
+    orderBy(documentId(), 'desc'),
+    limit(maxBuckets)
+  ));
+  const merged = new Map();
+  snapshot.forEach(bucket => {
+    for (const event of normalizeEvents(bucket.data()?.events)) merged.set(event.eventId, event);
+  });
+  for (const event of normalizeEvents(readPlaybackHistoryQueue())) merged.set(event.eventId, event);
+  return {
+    events: [...merged.values()].sort((a, b) => new Date(b.playedAt) - new Date(a.playedAt)),
+    source: 'firebase',
+    days: safeDays
+  };
+}
+
 function schedulePlaybackQueueFlush(delay = PLAYBACK_FLUSH_DELAY_MS) {
   clearTimeout(playbackFlushTimer);
   if (!canSyncPlaybackQueue()) return;
@@ -772,6 +808,7 @@ window.CmsWebFirebase = {
   saveLibrary: saveLibrarySnapshot,
   queuePlaybackUpdate,
   flushPlaybackQueue,
+  getPlaybackHistory,
   logout: () => signOut(auth),
   cacheImportedData: data => replaceCache({
     mediaItems: Array.isArray(data) ? data : (data.mediaItems || []),

@@ -426,7 +426,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         selectFolder(e.target.value);
     });
 
-    setupPlayerControls(); setupSettingsModal(); setupUrlAdd(); window.addEventListener('message', handleNicoMessage); setupPocketMode(); setupPocketLayoutDrag(); setupClockUI(); setupTrackListReturnGesture(); setupControlsReturnGesture();
+    setupPlayerControls(); setupSettingsModal(); setupStatsModal(); setupUrlAdd(); window.addEventListener('message', handleNicoMessage); setupPocketMode(); setupPocketLayoutDrag(); setupClockUI(); setupTrackListReturnGesture(); setupControlsReturnGesture();
     setupEditMode();
     applyWindowMode(); 
 });
@@ -936,6 +936,7 @@ function ensureWindowTaskbar() {
         };
         addToolButton('window-tool window-add', 'fas fa-plus', '動画追加', 'btn-add-video-url');
         addToolButton('window-tool window-pocket', 'fas fa-lock', 'ロック', 'btn-pocket-mode');
+        addToolButton('window-tool window-stats', 'fas fa-chart-column', '履歴・統計', 'btn-open-stats');
         addToolButton('window-tool window-settings', 'fas fa-cog', '設定', 'btn-open-settings');
         const exit = document.createElement('button'); exit.type = 'button'; exit.className = 'window-exit'; exit.innerHTML = '<i class="fas fa-right-from-bracket"></i> 終了';
         exit.addEventListener('click', () => { appSettings.windowMode = false; saveSettings(); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); });
@@ -1566,6 +1567,180 @@ function selectFolder(id, options = {}) {
 }
 
 function escapeHTML(str) { return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
+
+function getStatsItemFolders(item) {
+    const values = Array.isArray(item?.folders) && item.folders.length ? item.folders : [item?.folder];
+    const normalized = [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))];
+    return normalized.length ? normalized : ['未分類'];
+}
+
+function getStatsChannel(item) {
+    return String(item?.channelName || item?.uploader || item?.vocaloidInfo?.creatorName || '投稿者不明').trim() || '投稿者不明';
+}
+
+function statsDateKey(value) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return '';
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function buildStatsModel(items, historyEvents = [], now = Date.now()) {
+    const mediaItems = (Array.isArray(items) ? items : []).filter(item => item?.site !== 'system');
+    const addGroup = (map, name, item) => {
+        const key = String(name || '不明').trim() || '不明';
+        const current = map.get(key) || { name: key, count: 0, plays: 0 };
+        current.count += 1;
+        current.plays += Math.max(0, Number(item?.playCount) || 0);
+        map.set(key, current);
+    };
+    const sites = new Map();
+    const folders = new Map();
+    const channels = new Map();
+    let totalPlays = 0;
+    let totalDuration = 0;
+    let cumulativeSeconds = 0;
+    let playedItems = 0;
+    let favorite = null;
+    for (const item of mediaItems) {
+        const plays = Math.max(0, Number(item.playCount) || 0);
+        const duration = Math.max(0, Number(item.duration) || 0);
+        totalPlays += plays;
+        totalDuration += duration;
+        cumulativeSeconds += duration * plays;
+        if (plays > 0) playedItems += 1;
+        if (!favorite || plays > favorite.plays) favorite = { title: item.title || '無題', plays };
+        addGroup(sites, item.site || 'その他', item);
+        getStatsItemFolders(item).forEach(folder => addGroup(folders, folder, item));
+        addGroup(channels, getStatsChannel(item), item);
+    }
+    const sortGroups = map => [...map.values()].sort((a, b) => b.plays - a.plays || b.count - a.count || a.name.localeCompare(b.name, 'ja'));
+    const history = (Array.isArray(historyEvents) ? historyEvents : [])
+        .filter(event => Number.isFinite(new Date(event?.playedAt).getTime()))
+        .sort((a, b) => new Date(b.playedAt) - new Date(a.playedAt));
+    const itemById = new Map(mediaItems.map(item => [String(item.id || ''), item]));
+    const recent = history.length ? history.slice(0, 50).map(event => ({
+        title: event.title || itemById.get(String(event.mediaId || ''))?.title || '無題',
+        site: event.site || itemById.get(String(event.mediaId || ''))?.site || '',
+        folder: event.folder || getStatsItemFolders(itemById.get(String(event.mediaId || '')))[0],
+        playedAt: event.playedAt
+    })) : mediaItems.filter(item => Number.isFinite(new Date(item.lastPlayedAt).getTime()))
+        .sort((a, b) => new Date(b.lastPlayedAt) - new Date(a.lastPlayedAt)).slice(0, 50).map(item => ({
+            title: item.title || '無題', site: item.site || '', folder: getStatsItemFolders(item)[0], playedAt: item.lastPlayedAt
+        }));
+    const dailyCounts = new Map();
+    const dailySource = history.length ? history : recent;
+    dailySource.forEach(event => {
+        const key = statsDateKey(event.playedAt);
+        if (key) dailyCounts.set(key, (dailyCounts.get(key) || 0) + 1);
+    });
+    const daily = [];
+    for (let offset = 13; offset >= 0; offset -= 1) {
+        const date = new Date(now);
+        date.setHours(12, 0, 0, 0);
+        date.setDate(date.getDate() - offset);
+        const key = statsDateKey(date);
+        daily.push({ key, label: `${date.getMonth() + 1}/${date.getDate()}`, count: dailyCounts.get(key) || 0 });
+    }
+    return {
+        totalItems: mediaItems.length,
+        totalPlays,
+        playedItems,
+        totalDuration,
+        cumulativeSeconds,
+        favorite: favorite && favorite.plays > 0 ? favorite : null,
+        sites: sortGroups(sites),
+        folders: sortGroups(folders),
+        channels: sortGroups(channels),
+        daily,
+        recent,
+        historyCount: history.length
+    };
+}
+
+function formatStatsDuration(value) {
+    const seconds = Math.max(0, Math.floor(Number(value) || 0));
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (days > 0) return `${days}日 ${hours}時間`;
+    if (hours > 0) return `${hours}時間 ${minutes}分`;
+    return `${minutes}分`;
+}
+
+function renderStatsRankedList(targetId, groups, limitCount = 10) {
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    const rows = (groups || []).slice(0, limitCount);
+    const maxPlays = Math.max(1, ...rows.map(row => row.plays));
+    target.innerHTML = rows.length ? rows.map(row => `
+        <div class="stats-ranked-row">
+            <div class="stats-ranked-label"><span title="${escapeHTML(row.name)}">${escapeHTML(row.name)}</span><small>${row.count.toLocaleString()}件 / ${row.plays.toLocaleString()}回</small></div>
+            <div class="stats-bar-track"><span style="width:${Math.max(3, row.plays / maxPlays * 100).toFixed(1)}%"></span></div>
+        </div>`).join('') : '<p class="stats-empty">集計できるデータがありません</p>';
+}
+
+function renderStats(historyData = { events: [], source: 'library', days: 90 }) {
+    const model = buildStatsModel(allItems, historyData.events || []);
+    const coverage = model.totalItems ? Math.round(model.playedItems / model.totalItems * 100) : 0;
+    const summaries = [
+        ['登録動画', `${model.totalItems.toLocaleString()}件`, '現在のライブラリ'],
+        ['累計再生', `${model.totalPlays.toLocaleString()}回`, `${model.playedItems.toLocaleString()}動画を再生`],
+        ['再生済み率', `${coverage}%`, `${model.playedItems.toLocaleString()} / ${model.totalItems.toLocaleString()}`],
+        ['総動画時間', formatStatsDuration(model.totalDuration), '1回ずつ再生した場合'],
+        ['推定累計時間', formatStatsDuration(model.cumulativeSeconds), '動画時間 × 再生回数'],
+        ['最多再生', model.favorite ? `${model.favorite.plays.toLocaleString()}回` : '未再生', model.favorite?.title || '履歴がありません']
+    ];
+    document.getElementById('stats-summary-grid').innerHTML = summaries.map(([label, value, note]) => `
+        <article class="stats-summary-card"><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong><small title="${escapeHTML(note)}">${escapeHTML(note)}</small></article>`).join('');
+    const maxDaily = Math.max(1, ...model.daily.map(day => day.count));
+    document.getElementById('stats-daily-chart').innerHTML = model.daily.map(day => `
+        <div class="stats-day" title="${day.label}: ${day.count}回"><span class="stats-day-value">${day.count}</span><span class="stats-day-bar" style="height:${Math.max(day.count ? 10 : 2, day.count / maxDaily * 100).toFixed(1)}%"></span><small>${day.label}</small></div>`).join('');
+    renderStatsRankedList('stats-site-list', model.sites, 10);
+    renderStatsRankedList('stats-folder-list', model.folders, 10);
+    renderStatsRankedList('stats-channel-list', model.channels, 10);
+    document.getElementById('stats-recent-list').innerHTML = model.recent.length ? model.recent.map(entry => `
+        <div class="stats-recent-row"><div><strong>${escapeHTML(entry.title)}</strong><small>${escapeHTML([entry.site, entry.folder].filter(Boolean).join(' / '))}</small></div><time datetime="${escapeHTML(entry.playedAt)}">${new Date(entry.playedAt).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</time></div>`).join('') : '<p class="stats-empty">再生履歴はまだありません</p>';
+    const status = document.getElementById('stats-source-status');
+    if (historyData.source === 'firebase') status.textContent = `Firebaseの直近${historyData.days || 90}日・${model.historyCount.toLocaleString()}再生とライブラリを集計`;
+    else if (historyData.source === 'local') status.textContent = model.historyCount ? `この端末の未送信履歴 ${model.historyCount.toLocaleString()}件とライブラリを集計` : 'ライブラリの再生回数・最終再生日から集計';
+    else status.textContent = 'ライブラリの再生回数・最終再生日から集計';
+}
+
+async function refreshStatsHistory() {
+    const button = document.getElementById('btn-refresh-stats');
+    button.disabled = true;
+    button.classList.add('is-loading');
+    try {
+        if (!window.CmsWebFirebase?.getPlaybackHistory || !appSettings.useFirebase) {
+            renderStats({ events: [], source: 'library', days: 90 });
+            return;
+        }
+        const history = await window.CmsWebFirebase.getPlaybackHistory({ days: 90, forceFlush: true });
+        renderStats(history);
+    } catch (error) {
+        console.warn('[stats] history load failed', error);
+        renderStats({ events: [], source: 'library', days: 90 });
+        document.getElementById('stats-source-status').textContent = `Firebase履歴を取得できないため、ライブラリのみ集計（${error.code || error.message}）`;
+    } finally {
+        button.disabled = false;
+        button.classList.remove('is-loading');
+    }
+}
+
+function setupStatsModal() {
+    const modal = document.getElementById('stats-modal');
+    const open = () => {
+        modal.classList.remove('hidden');
+        renderStats({ events: [], source: 'library', days: 90 });
+        refreshStatsHistory();
+    };
+    const close = () => modal.classList.add('hidden');
+    document.getElementById('btn-open-stats')?.addEventListener('click', open);
+    document.getElementById('btn-close-stats')?.addEventListener('click', close);
+    document.getElementById('btn-refresh-stats')?.addEventListener('click', refreshStatsHistory);
+    modal?.addEventListener('click', event => { if (event.target === modal) close(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && !modal.classList.contains('hidden')) close(); });
+}
 
 function renderTracks(songs) {
     trackListEl.innerHTML = '';
