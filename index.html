@@ -6,7 +6,7 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2026081701">
+    <link rel="stylesheet" href="style.css?v=2026082201">
     <link rel="stylesheet" href="theme-system.css?v=2026080401">
 </head>
 <body class="theme-modern is-pc">
@@ -223,6 +223,7 @@
             <div class="setting-scroll-area">
                 <!-- 基本設定タブ -->
                 <div id="tab-basic" class="tab-content active">
+                    <div class="setting-section-label"><strong>表示と並び順</strong><span>日常的に変更する項目です</span></div>
                     <div class="setting-row">
                         <label>テーマ</label>
                         <select id="set-theme" class="widget-search"><option value="modern">パターン1</option><option value="nerv">パターン2</option><option value="toyota">パターン3</option><option value="niconico">パターン4</option></select>
@@ -242,6 +243,7 @@
                         <label style="color: #ffaa00;"><input type="checkbox" id="set-data-saver"> <cms-icon name="data"></cms-icon>データセーバー (低画質再生)</label>
                         <span style="font-size:0.75rem; opacity:0.8;">※ニコニコ動画等、仕様上画質が自動調整される場合があります</span>
                     </div>
+                    <div class="setting-section-label"><strong>再生と一覧</strong><span>通信量・表示要素・前回位置を調整します</span></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-performance-mode"> <cms-icon name="performance"></cms-icon>軽量化 (動作を軽くする)</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-music-mode"> <cms-icon name="music"></cms-icon>音楽モード (モバイルSpotify風UI)</label></div>
                     <div class="setting-row">
@@ -255,6 +257,7 @@
 
                 <!-- 詳細設定タブ -->
                <div id="tab-advanced" class="tab-content">
+                    <div class="setting-section-label"><strong>画面モード</strong><span>端末別レイアウトとウィンドウ配置</span></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-pocket-always-on"> <cms-icon name="mobile"></cms-icon>ポケットモードの情報を常時表示</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-pocket-swipe-unlock"> <cms-icon name="mobile"></cms-icon>ポケットモード上スワイプ解除を有効</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-force-pc-layout"> <cms-icon name="desktop"></cms-icon>モバイル版レイアウトを無効化 (常にPC表示)</label></div>
@@ -273,6 +276,7 @@
                         </div>
                     </div>
 
+                    <div class="setting-section-label"><strong>配色と背景</strong><span>テーマを保ったまま文字・枠・背景を調整します</span></div>
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
                         <label><input type="checkbox" id="set-use-custom-color"> カスタムカラーを有効にする</label>
                     </div>
@@ -323,6 +327,7 @@
                             <option value="analog">アナログ時計</option>
                         </select>
                     </div>
+                    <div class="setting-section-label"><strong>時計とロック画面</strong><span>ポケット表示の要素・位置・大きさ</span></div>
                     <div class="setting-row" style="margin-top: 10px;">
                         <label>ロック画面(ポケット) 時計スタイル</label>
                         <select id="set-pocket-clock-type" class="widget-search">
@@ -364,6 +369,7 @@
                         </div>
                         <span class="setting-help">配置編集では各要素をドラッグ／タッチ移動できます。端末サイズが変わっても画面内に収まる比率で保存します。</span>
                     </div>
+                    <div class="setting-section-label"><strong>再生補助</strong><span>サイトごとの音量差を調整します</span></div>
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
                         <label>ニコニコ音量ブースト: <span id="boost-val">1.0</span>x</label>
                         <input type="range" id="set-nico-boost" min="1" max="5" step="0.5" value="1">
@@ -381,7 +387,7 @@
     </div>
 
     <script src="cms-icons.js?v=2026072502"></script>
-    <script type="module" src="firebase-web.js?v=2026081701"></script>
-    <script src="script.js?v=2026081701"></script>
+    <script type="module" src="firebase-web.js?v=2026082201"></script>
+    <script src="script.js?v=2026082201"></script>
 </body>
 </html>
