@@ -328,6 +328,13 @@ function pendingPlaybackCount() {
   return Math.max(playCountPending, readPlaybackHistoryQueue().length);
 }
 
+function updateHistoryStatus(message, state = 'warning') {
+  const element = document.getElementById('cloud-history-status-settings');
+  if (!element) return;
+  element.textContent = message;
+  element.dataset.syncState = state;
+}
+
 function canSyncPlaybackQueue() {
   return Boolean(currentUser && window.CmsWebPlayer?.getUseFirebase?.());
 }
@@ -358,6 +365,8 @@ async function flushPlaybackQueue({ silent = true } = {}) {
     .filter(entry => entry.id && entry.playCountDelta > 0);
   const historyGroups = groupPlaybackHistoryByHour(historySnapshot);
   if (!entries.length && !historyGroups.length) return { status: 'success', sent: 0, historySent: 0 };
+
+  updateHistoryStatus(`再生履歴同期: 送信中（${Math.max(entries.length, historySnapshot.length)}件）`, 'syncing');
 
   playbackFlushInFlight = (async () => {
     const uid = currentUser.uid;
@@ -398,6 +407,7 @@ async function flushPlaybackQueue({ silent = true } = {}) {
       // eventId is stable, so a retry cannot duplicate an already appended history event.
       removeSentPlaybackHistory(chunk.flatMap(group => group.events));
     }
+    updateHistoryStatus(`再生履歴同期: 最新（送信 ${historySnapshot.length}件）`, 'success');
     if (!silent) updateStatus(`Firebase: 再生回数を同期しました（${entries.length}件）`);
     return { status: 'success', sent: entries.length, historySent: historySnapshot.length };
   })();
@@ -405,6 +415,9 @@ async function flushPlaybackQueue({ silent = true } = {}) {
   try {
     return await playbackFlushInFlight;
   } catch (error) {
+    updateHistoryStatus(`再生履歴同期: 送信失敗（${pendingPlaybackCount()}件を端末に保持）`, 'danger');
+    const friendly = window.CmsUI?.friendlyError(error, '再生履歴同期');
+    if (!silent && friendly) window.CmsUI.notify(friendly.message, { type: 'danger', persistent: true, title: 'Firebase', detail: friendly.detail });
     if (!silent) updateStatus(`Firebase再生回数エラー: ${error.code || error.message}`);
     throw error;
   } finally {
@@ -465,6 +478,7 @@ function queuePlaybackUpdate(item) {
   // Playback history is a cloud feature only while Firebase auto update is enabled.
   if (!window.CmsWebPlayer?.getUseFirebase?.()) return;
   appendPlaybackHistory(item);
+  updateHistoryStatus(`再生履歴同期: 送信待ち（${pendingPlaybackCount()}件）`, 'warning');
   schedulePlaybackQueueFlush(pendingPlaybackCount() >= PLAYBACK_FLUSH_MAX_PENDING ? 0 : PLAYBACK_FLUSH_DELAY_MS);
 }
 
@@ -642,9 +656,17 @@ async function saveLibrarySnapshot(data = {}) {
 }
 
 function updateStatus(message) {
-  for (const id of ['cloud-status-start', 'cloud-status-settings']) {
-    const element = document.getElementById(id);
-    if (element) element.textContent = message;
+  const raw = String(message || '');
+  const failed = /エラー|失敗|権限|利用権限/.test(raw);
+  const working = /接続中|読込中|同期中|保存中/.test(raw);
+  const disconnected = /未接続/.test(raw);
+  const state = failed ? 'danger' : working ? 'syncing' : disconnected ? 'warning' : 'success';
+  const start = document.getElementById('cloud-status-start');
+  if (start) { start.textContent = raw; start.dataset.syncState = state; }
+  const settings = document.getElementById('cloud-status-settings');
+  if (settings) {
+    settings.textContent = `ライブラリ同期: ${raw.replace(/^Firebase\s*:\s*/i, '').replace(/^ローカルキャッシュ\s*:\s*/i, '端末キャッシュ ')}`;
+    settings.dataset.syncState = state;
   }
 }
 
@@ -829,6 +851,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await handleIosHostedRedirect();
   } catch (error) {
     updateStatus(`Firebase認証エラー: ${error.code || error.message}`);
+    const friendly = window.CmsUI?.friendlyError(error, 'Firebase認証');
+    if (friendly) window.CmsUI.notify(friendly.message, { type: 'danger', persistent: true, title: 'Googleログイン', detail: friendly.detail });
     console.error('[auth] iOS redirect login failed', error);
   }
   try {
@@ -840,13 +864,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 onAuthStateChanged(auth, async user => {
   currentUser = user;
-  if (!user) { updateStatus('Firebase: 未接続（JSONのみでも利用できます）'); return; }
+  if (!user) {
+    updateStatus('Firebase: 未接続（JSONのみでも利用できます）');
+    updateHistoryStatus('再生履歴同期: 未接続', 'warning');
+    return;
+  }
   if (user.uid !== FIREBASE_OWNER_UID) {
     updateStatus('Firebase: このGoogleアカウントには利用権限がありません');
     await signOut(auth);
     return;
   }
   updateStatus(`Firebase: ${user.email || 'ログイン済み'}（再生回数同期可）`);
+  updateHistoryStatus(pendingPlaybackCount() ? `再生履歴同期: 送信待ち（${pendingPlaybackCount()}件）` : '再生履歴同期: 最新', pendingPlaybackCount() ? 'warning' : 'success');
   schedulePlaybackQueueFlush(1000);
   if (window.CmsWebPlayer?.getUseFirebase()) await syncCloud({ force: false, silent: true }).catch(() => {});
 });

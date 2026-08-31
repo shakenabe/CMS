@@ -381,6 +381,12 @@ function clearBgImageDB() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    window.CmsUI?.init();
+    window.CmsUI?.installAlertBridge();
+    folderListEl.setAttribute('role', 'listbox');
+    folderListEl.setAttribute('aria-label', 'フォルダ一覧');
+    trackListEl.setAttribute('role', 'listbox');
+    trackListEl.setAttribute('aria-label', '動画一覧');
     loadSettings();
     currentSortOrder = appSettings.defaultSortOrder || 'custom';
     document.getElementById('widget-sort-select').value = currentSortOrder;
@@ -430,8 +436,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('pocket-progress-container')?.addEventListener('click', handleProgressClick);
 
     // モバイル用フォルダ切り替え
-    document.getElementById('btn-open-mobile-folder').addEventListener('click', () => { document.getElementById('mobile-folder-modal').classList.remove('hidden'); });
-    document.getElementById('btn-close-folder-modal').addEventListener('click', () => document.getElementById('mobile-folder-modal').classList.add('hidden'));
+    const mobileFolderModal = document.getElementById('mobile-folder-modal');
+    document.getElementById('btn-open-mobile-folder').addEventListener('click', () => {
+        window.CmsUI?.openDialog(mobileFolderModal, { labelledBy: 'mobile-folder-title', initialFocus: mobileFolderModal.querySelector('.m-f-item'), onEscape: () => window.CmsUI?.closeDialog(mobileFolderModal) });
+    });
+    document.getElementById('btn-close-folder-modal').addEventListener('click', () => window.CmsUI?.closeDialog(mobileFolderModal));
+    window.CmsUI?.makeInteractive(document.querySelector('.m-play-btn-circle'), { label: '再生・一時停止' });
+    window.CmsUI?.makeInteractive(document.getElementById('btn-open-mobile-folder'), { label: 'フォルダを選択' });
     
     // フィルタ・ソートメニューのトグル
     document.getElementById('btn-toggle-mobile-nav').addEventListener('click', () => { 
@@ -1212,9 +1223,37 @@ function beginBackgroundPositionEditor() {
 
 function setupSettingsModal() {
     const modal = document.getElementById('settings-modal');
+    const saveButton = document.getElementById('btn-save-settings');
+    const saveStatus = document.getElementById('settings-save-status');
+    let settingsBaseline = '';
+    let settingsManualDirty = false;
+    let settingsOpenSnapshot = null;
+    const getSettingsFingerprint = () => JSON.stringify([...modal.querySelectorAll('input[id], select[id], textarea[id]')]
+        .filter(element => element.type !== 'file')
+        .map(element => [element.id, element.type === 'checkbox' ? element.checked : element.value]));
+    const updateSettingsDirtyState = () => {
+        if (modal.classList.contains('hidden')) return;
+        const dirty = settingsManualDirty || getSettingsFingerprint() !== settingsBaseline;
+        saveButton.disabled = !dirty;
+        saveStatus.textContent = dirty ? '未保存の変更があります' : '変更はありません';
+        saveStatus.classList.toggle('is-dirty', dirty);
+        saveStatus.classList.remove('is-saved');
+    };
+    const markSettingsDirty = () => { settingsManualDirty = true; updateSettingsDirtyState(); };
+    const closeSettings = ({ restore = false } = {}) => {
+        if (restore && settingsOpenSnapshot) appSettings = { ...settingsOpenSnapshot };
+        window.CmsUI?.closeDialog(modal);
+        settingsBaseline = '';
+        settingsManualDirty = false;
+        settingsOpenSnapshot = null;
+    };
+    modal.addEventListener('input', updateSettingsDirtyState);
+    modal.addEventListener('change', updateSettingsDirtyState);
+    document.getElementById('set-bg-img')?.addEventListener('change', markSettingsDirty);
     document.querySelectorAll('.tab-btn').forEach(btn => { btn.addEventListener('click', () => { document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); btn.classList.add('active'); document.getElementById('tab-' + btn.dataset.tab).classList.add('active'); }); });
 
     document.getElementById('btn-open-settings').onclick = () => {
+        settingsOpenSnapshot = JSON.parse(JSON.stringify(appSettings));
         document.getElementById('set-theme').value = appSettings.theme; document.getElementById('set-font-size').value = appSettings.baseFontSize; document.getElementById('font-val').textContent = appSettings.baseFontSize;
         document.getElementById('set-pc-left-width').value = appSettings.pcLeftWidth; document.getElementById('pc-width-val').textContent = appSettings.pcLeftWidth;
         document.getElementById('set-bg-position').value = appSettings.bgPosition; document.getElementById('set-bg-size').value = appSettings.bgSize;
@@ -1250,7 +1289,12 @@ function setupSettingsModal() {
             document.getElementById(`set-pocket-scale-${key}`).value = value;
             document.getElementById(`pocket-scale-${key}-val`).textContent = value;
         });
-        modal.classList.remove('hidden');
+        settingsManualDirty = false;
+        settingsBaseline = getSettingsFingerprint();
+        saveButton.disabled = true;
+        saveStatus.textContent = '変更はありません';
+        saveStatus.classList.remove('is-dirty', 'is-saved');
+        window.CmsUI?.openDialog(modal, { labelledBy: 'settings-title', initialFocus: document.getElementById('set-theme'), onEscape: () => closeSettings({ restore: true }) });
     };
 
     document.getElementById('set-font-size').oninput = (e) => document.getElementById('font-val').textContent = e.target.value; document.getElementById('set-pc-left-width').oninput = (e) => document.getElementById('pc-width-val').textContent = e.target.value;
@@ -1266,12 +1310,20 @@ function setupSettingsModal() {
         document.getElementById(`set-pocket-scale-${key}`).oninput = (e) => document.getElementById(`pocket-scale-${key}-val`).textContent = e.target.value;
     });
 
-    document.getElementById('btn-close-settings').onclick = () => modal.classList.add('hidden');
+    document.getElementById('btn-close-settings').onclick = () => closeSettings({ restore: true });
     document.getElementById('btn-reset-settings').onclick = () => { if (confirm('初期化しますか？')) { localStorage.removeItem('cms_player_settings_v23'); clearBgImageDB(); location.reload(); } };
-    document.getElementById('btn-clear-bg').onclick = () => { clearBgImageDB(); alert('背景をクリアしました。Saveを押してください。'); };
+    document.getElementById('btn-clear-bg').onclick = () => {
+        clearBgImageDB();
+        window.CmsUI?.notify('背景画像をクリアしました。この操作はすぐに反映されます。', { type: 'success', title: '背景画像' });
+    };
     const bgEditBtn = document.getElementById('btn-edit-bg-position');
     if (bgEditBtn) bgEditBtn.onclick = () => beginBackgroundPositionEditor();
-    document.getElementById('btn-reset-window').onclick = () => { appSettings.windowPositions = {}; appSettings.windowStates = {}; alert('配置をリセットしました。Saveを押してください。'); };
+    document.getElementById('btn-reset-window').onclick = () => {
+        appSettings.windowPositions = {};
+        appSettings.windowStates = {};
+        markSettingsDirty();
+        window.CmsUI?.notify('ウィンドウ配置を標準状態へ戻しました。保存して適用してください。', { type: 'info' });
+    };
     document.getElementById('btn-edit-pocket-layout').onclick = () => {
         appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value);
         appSettings.pocketBgManual = document.getElementById('set-pocket-bg-manual').checked; appSettings.pocketBgX = Number(document.getElementById('set-pocket-bg-x').value); appSettings.pocketBgY = Number(document.getElementById('set-pocket-bg-y').value); appSettings.pocketBgScale = Number(document.getElementById('set-pocket-bg-scale').value);
@@ -1280,7 +1332,12 @@ function setupSettingsModal() {
         ['clock', 'art', 'title', 'progress', 'controls', 'unlock'].forEach(key => { appSettings.pocketLayoutScale[key] = Number(document.getElementById(`set-pocket-scale-${key}`).value); });
         beginPocketLayoutEditor();
     };
-    document.getElementById('btn-reset-pocket-layout').onclick = () => { appSettings.pocketLayout = {}; saveSettings(); applyPocketAppearance(); alert('ロック画面を標準配置へ戻しました。'); };
+    document.getElementById('btn-reset-pocket-layout').onclick = () => {
+        appSettings.pocketLayout = {};
+        saveSettings();
+        applyPocketAppearance();
+        window.CmsUI?.notify('ロック画面を標準配置へ戻しました。この操作はすぐに保存されます。', { type: 'success' });
+    };
 
     document.getElementById('btn-save-settings').onclick = async () => {
         const previousVocaloidCollectionEnabled = Boolean(appSettings.vocaloidCollectionEnabled);
@@ -1294,13 +1351,21 @@ function setupSettingsModal() {
         const fInput = document.getElementById('set-bg-img'); 
         if (fInput.files.length > 0) { await saveBgImageToDB(fInput.files[0]); }
         
-        saveSettings(); applyVolume(); modal.classList.add('hidden'); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); scheduleMarqueeUpdate();
+        saveSettings(); applyVolume(); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); scheduleMarqueeUpdate();
         if (previousVocaloidCollectionEnabled !== Boolean(appSettings.vocaloidCollectionEnabled)) {
             buildLibrary();
             renderFolders();
             const nextFolderId = musicLibrary.some(folder => folder.id === currentFolderId) ? currentFolderId : '__all';
             selectFolder(nextFolderId, { preserveScroll: true });
         }
+        settingsBaseline = getSettingsFingerprint();
+        settingsManualDirty = false;
+        saveButton.disabled = true;
+        saveStatus.textContent = '設定を保存しました';
+        saveStatus.classList.remove('is-dirty');
+        saveStatus.classList.add('is-saved');
+        window.CmsUI?.notify('設定を保存して適用しました。', { type: 'success', title: 'システム設定' });
+        closeSettings();
     };
 }
 
@@ -1422,7 +1487,14 @@ function isVirtualLibraryFolderId(id) { return VIRTUAL_LIBRARY_FOLDER_IDS.has(id
 function buildLibrary() {
     const fMap = new Map(); const fOrderIndex = new Map();
     folderSettingsByName = new Map(folderSettings.map(setting => [setting.folderName, setting]));
-    const items = allItems.filter(i => { if (excludeNico && i.site === 'niconico') return false; if (currentSearchQuery) { const q = currentSearchQuery.toLowerCase(); return (i.title || "").toLowerCase().includes(q) || (i.tags ||[]).join(' ').toLowerCase().includes(q); } return true; });
+    const items = allItems.filter(i => {
+        if (excludeNico && i.site === 'niconico') return false;
+        if (!currentSearchQuery) return true;
+        const q = currentSearchQuery.toLowerCase();
+        return [i.title, i.channelName, i.uploader, i.memo, ...(i.tags || [])]
+            .filter(Boolean)
+            .some(value => String(value).toLowerCase().includes(q));
+    });
     items.forEach(i => {
         const fs = i.folders && i.folders.length > 0 ? i.folders : [i.folder || 'Manual'];
         fs.forEach(f => {
@@ -1454,9 +1526,19 @@ function sortSongs(songs) { return[...songs].sort((a, b) => { const sf = (s) => 
 
 function renderFolders() {
     folderListEl.innerHTML = ''; const mList = document.getElementById('mobile-folder-list-modal'); if (mList) mList.innerHTML = '';
+    if (!musicLibrary.length) {
+        window.CmsUI?.renderEmptyState(folderListEl, {
+            title: 'フォルダがありません',
+            description: 'JSONを読み込むか、URLから動画を追加してください。',
+            actions: [{ label: 'URLから動画を追加', onClick: () => document.getElementById('btn-add-video-url')?.click() }]
+        });
+        return;
+    }
     musicLibrary.forEach(f => {
         const folderIcon = f.id === '__all' ? 'library' : f.id === '__vocaloid' ? 'music' : 'folder';
-        const div = document.createElement('div'); div.className = 'w-f-item'; div.replaceChildren(CmsIcons.create(folderIcon), document.createTextNode(f.name)); div.dataset.folderId = f.id; div.title = f.name; div.onclick = () => selectFolder(f.id); folderListEl.appendChild(div);
+        const div = document.createElement('div'); div.className = 'w-f-item'; div.replaceChildren(CmsIcons.create(folderIcon), document.createTextNode(f.name)); div.dataset.folderId = f.id; div.title = f.name; div.onclick = () => selectFolder(f.id);
+        window.CmsUI?.makeInteractive(div, { role: 'option', label: `${f.name}、${f.songs.length}件`, selected: f.id === currentFolderId });
+        folderListEl.appendChild(div);
         if (mList) { 
             const mDiv = document.createElement('div'); mDiv.className = 'm-f-item'; mDiv.dataset.folderId = f.id; 
             mDiv.innerHTML = `
@@ -1464,7 +1546,8 @@ function renderFolders() {
                 <span>${f.name}</span>
                 <i class="fas fa-music"></i>
             `; 
-            mDiv.onclick = () => { selectFolder(f.id); document.getElementById('mobile-folder-modal').classList.add('hidden'); }; 
+            mDiv.onclick = () => { selectFolder(f.id); window.CmsUI?.closeDialog(document.getElementById('mobile-folder-modal')); };
+            window.CmsUI?.makeInteractive(mDiv, { role: 'option', label: `${f.name}、${f.songs.length}件`, selected: f.id === currentFolderId });
             mList.appendChild(mDiv); 
         }
     });
@@ -1529,6 +1612,7 @@ function renderVocaloidGroups(songs, mode) {
             currentVocaloidGroup = { mode, name: group.name };
             selectFolder('__vocaloid');
         };
+        window.CmsUI?.makeInteractive(row, { role: 'option', label: `${group.name}、${group.songs.length}動画` });
         fragment.appendChild(row);
     });
     trackListEl.appendChild(fragment);
@@ -1538,9 +1622,13 @@ function renderVocaloidGroups(songs, mode) {
 function selectFolder(id, options = {}) {
     if (id !== currentFolderId || id !== '__vocaloid') currentVocaloidGroup = null;
     currentFolderId = id;
-    document.querySelectorAll('.w-f-item').forEach(e => e.classList.toggle('active', e.dataset.folderId === id));
+    document.querySelectorAll('.w-f-item').forEach(e => {
+        const active = e.dataset.folderId === id;
+        e.classList.toggle('active', active);
+        e.setAttribute('aria-selected', String(active));
+    });
     document.querySelectorAll('.m-f-item').forEach(e => { 
-        const act = e.dataset.folderId === id; e.classList.toggle('active', act); 
+        const act = e.dataset.folderId === id; e.classList.toggle('active', act); e.setAttribute('aria-selected', String(act));
         e.innerHTML = `
             ${act ? '<i class="fas fa-check"></i>' : '<i class="fas fa-check" style="visibility:hidden;"></i>'}
             <span>${e.querySelector('span').textContent}</span>
@@ -1739,10 +1827,24 @@ async function refreshStatsHistory() {
         }
         const history = await window.CmsWebFirebase.getPlaybackHistory({ days: 90, forceFlush: true });
         renderStats(history);
+        const historyStatus = document.getElementById('cloud-history-status-settings');
+        if (historyStatus) {
+            historyStatus.textContent = history.source === 'firebase'
+                ? `再生履歴同期: 最新（${(history.events || []).length.toLocaleString()}件）`
+                : `再生履歴同期: ローカル待機中（${(history.events || []).length.toLocaleString()}件）`;
+            historyStatus.dataset.syncState = history.source === 'firebase' ? 'success' : 'warning';
+        }
     } catch (error) {
         console.warn('[stats] history load failed', error);
         renderStats({ events: [], source: 'library', days: 90 });
-        document.getElementById('stats-source-status').textContent = `Firebase履歴を取得できないため、ライブラリのみ集計（${error.code || error.message}）`;
+        const friendly = window.CmsUI?.friendlyError(error, '再生履歴') || { message: '再生履歴を取得できないため、ライブラリのみ集計しています。', detail: error?.message || String(error) };
+        document.getElementById('stats-source-status').textContent = friendly.message;
+        const historyStatus = document.getElementById('cloud-history-status-settings');
+        if (historyStatus) {
+            historyStatus.textContent = '再生履歴同期: 取得失敗（ライブラリ統計を表示）';
+            historyStatus.dataset.syncState = 'danger';
+        }
+        window.CmsUI?.notify(friendly.message, { type: 'warning', persistent: true, title: '履歴・統計', detail: friendly.detail });
     } finally {
         button.disabled = false;
         button.classList.remove('is-loading');
@@ -1752,11 +1854,11 @@ async function refreshStatsHistory() {
 function setupStatsModal() {
     const modal = document.getElementById('stats-modal');
     const open = () => {
-        modal.classList.remove('hidden');
+        window.CmsUI?.openDialog(modal, { labelledBy: 'stats-title', initialFocus: document.getElementById('btn-refresh-stats'), onEscape: close });
         renderStats({ events: [], source: 'library', days: 90 });
         refreshStatsHistory();
     };
-    const close = () => modal.classList.add('hidden');
+    function close() { window.CmsUI?.closeDialog(modal); }
     document.getElementById('btn-open-stats')?.addEventListener('click', open);
     document.getElementById('btn-close-stats')?.addEventListener('click', close);
     document.getElementById('btn-refresh-stats')?.addEventListener('click', refreshStatsHistory);
@@ -1773,7 +1875,13 @@ function renderTracks(songs) {
     trackVirtualStart = -1;
     trackVirtualEnd = -1;
     if (songs.length === 0) {
-        trackListEl.innerHTML = '<div style="padding:20px; text-align:center;">動画がありません</div>';
+        window.CmsUI?.renderEmptyState(trackListEl, {
+            title: currentSearchQuery ? '検索結果がありません' : '動画がありません',
+            description: currentSearchQuery ? '検索語を変更するか、検索条件を解除してください。' : 'このフォルダへ動画を追加できます。',
+            actions: currentSearchQuery
+                ? [{ label: '検索を解除', onClick: () => { const input = document.getElementById('widget-search-box'); input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true })); input.focus(); } }]
+                : [{ label: 'URLから動画を追加', onClick: () => document.getElementById('btn-add-video-url')?.click() }]
+        });
         return;
     }
     renderTrackWindow({ force: true });
@@ -1833,6 +1941,11 @@ function renderTrackWindow({ force = false } = {}) {
                 startPlaylist(currentRenderSongs, i);
             }
         }; 
+        window.CmsUI?.makeInteractive(div, {
+            role: 'option',
+            label: `${s.title}、${s.channelName || s.site || '投稿者不明'}`,
+            current: isSameMediaItem(s, currentPlayingItem)
+        });
         frag.appendChild(div);
     }
     if (virtual && end < currentRenderSongs.length) {
@@ -1860,14 +1973,19 @@ function scrollTrackIndexIntoView(index, { force = false } = {}) {
 
 function updateActiveTrackUI({ ensureVisible = true } = {}) {
     if (!currentRenderSongs) return; const tIdx = currentRenderSongs.findIndex(s => isSameMediaItem(s, currentPlayingItem)); if (tIdx < 0) return;
-    document.querySelectorAll('.w-t-item').forEach(el => { el.classList.remove('active'); el.querySelector('.w-t-idx').classList.remove('hidden'); el.querySelector('.w-t-playing-icon').classList.add('hidden'); });
+    document.querySelectorAll('.w-t-item').forEach(el => {
+        el.classList.remove('active');
+        el.removeAttribute('aria-current');
+        el.querySelector('.w-t-idx')?.classList.remove('hidden');
+        el.querySelector('.w-t-playing-icon')?.classList.add('hidden');
+    });
     let activeEl = trackListEl.querySelector(`.w-t-item[data-index="${tIdx}"]`);
     if (!activeEl && ensureVisible && canAutoScrollActiveTrack()) {
         scrollTrackIndexIntoView(tIdx);
         activeEl = trackListEl.querySelector(`.w-t-item[data-index="${tIdx}"]`);
     }
     if (activeEl) {
-        activeEl.classList.add('active'); activeEl.querySelector('.w-t-idx').classList.add('hidden'); activeEl.querySelector('.w-t-playing-icon').classList.remove('hidden');
+        activeEl.classList.add('active'); activeEl.setAttribute('aria-current', 'true'); activeEl.querySelector('.w-t-idx').classList.add('hidden'); activeEl.querySelector('.w-t-playing-icon').classList.remove('hidden');
         
         if (canAutoScrollActiveTrack()) setTimeout(() => {
             if (canAutoScrollActiveTrack()) scrollActiveTrackInList(activeEl);
@@ -1973,13 +2091,12 @@ function setupUrlAdd() {
         status.classList.remove('error', 'success');
         if (type) status.classList.add(type);
     };
-    const close = () => modal.classList.add('hidden');
+    const close = () => window.CmsUI?.closeDialog(modal);
     openButton.onclick = () => {
         populateUrlAddFolders();
         input.value = '';
         setStatus('');
-        modal.classList.remove('hidden');
-        setTimeout(() => input.focus(), 0);
+        window.CmsUI?.openDialog(modal, { labelledBy: 'add-video-title', initialFocus: input, onEscape: close });
     };
     cancelButton.onclick = close;
     submitButton.onclick = async () => {
@@ -2026,9 +2143,13 @@ function setupUrlAdd() {
                 await saveEditedLibraryTargets({ cloud: true });
             }
             setStatus(`追加しました：${item.title}`, 'success');
+            window.CmsUI?.notify(`「${item.title}」を追加しました。`, { type: 'success', title: '動画追加' });
             setTimeout(close, 900);
         } catch (error) {
-            setStatus(error.message || String(error), 'error');
+            const friendly = window.CmsUI?.friendlyError(error, '動画追加') || { message: error.message || String(error), detail: error?.stack || '' };
+            const duplicate = /すでにCMSへ登録/.test(error?.message || '');
+            setStatus(duplicate ? error.message : friendly.message, 'error');
+            if (!duplicate) window.CmsUI?.notify(friendly.message, { type: 'danger', persistent: true, title: '動画を追加できませんでした', detail: friendly.detail });
         } finally {
             submitButton.disabled = false;
         }
@@ -2379,6 +2500,15 @@ function updatePlayPauseIcon() {
     document.getElementById('widget-play-icon').className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
     const mIcon = document.getElementById('m-header-play-icon'); if (mIcon) mIcon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
     const pocketIcon = document.getElementById('pocket-play-icon'); if (pocketIcon) pocketIcon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
+    const actionLabel = isPlaying ? '一時停止' : '再生';
+    window.CmsUI?.setButtonLabel(document.getElementById('widget-btn-play'), actionLabel, { pressed: isPlaying });
+    window.CmsUI?.setButtonLabel(document.getElementById('pocket-btn-play'), actionLabel, { pressed: isPlaying });
+    const mobilePlay = document.querySelector('.m-play-btn-circle');
+    if (mobilePlay) {
+        mobilePlay.setAttribute('aria-label', actionLabel);
+        mobilePlay.setAttribute('aria-pressed', String(isPlaying));
+        mobilePlay.title = actionLabel;
+    }
     try { if ('mediaSession' in navigator) navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused"; } catch (_) {}
 }
 
@@ -2413,13 +2543,18 @@ function setupClockUI() {
 
 function setupPocketMode() {
     const pOverlay = document.getElementById('pocket-overlay');
+    const holdStatus = document.getElementById('pocket-hold-status');
     let holdTimer = null; let startY = null; let activePointer = null;
     const open = () => {
         applyPocketAppearance(); pOverlay.classList.remove('hidden'); document.body.classList.add('pocket-active');
         const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
         if (request) { try { const result = request.call(document.documentElement); if (result?.catch) result.catch(() => {}); } catch (_) {} }
     };
-    const cancelHold = () => { pOverlay.classList.remove('touch-holding'); clearTimeout(holdTimer); holdTimer = null; activePointer = null; startY = null; };
+    const cancelHold = () => {
+        const wasHolding = pOverlay.classList.contains('touch-holding');
+        pOverlay.classList.remove('touch-holding'); clearTimeout(holdTimer); holdTimer = null; activePointer = null; startY = null;
+        if (wasHolding && holdStatus) holdStatus.innerHTML = '<i class="fas fa-lock"></i> 2秒長押し または 上スワイプで解除';
+    };
     const unlock = () => {
         cancelHold(); activePointer = null; startY = null;
         pOverlay.classList.add('hidden'); document.body.classList.remove('pocket-active');
@@ -2433,6 +2568,8 @@ function setupPocketMode() {
     pOverlay.addEventListener('pointerdown', (e) => {
         if (e.target.closest('button')) return;
         activePointer = e.pointerId; startY = e.clientY; pOverlay.classList.add('touch-holding');
+        if (holdStatus) holdStatus.innerHTML = '<i class="fas fa-unlock"></i> 長押し中…指を離さずお待ちください';
+        window.CmsUI?.announce('ロック解除の長押しを開始しました');
         clearTimeout(holdTimer); holdTimer = setTimeout(unlock, 2000);
     });
     pOverlay.addEventListener('pointermove', (e) => {

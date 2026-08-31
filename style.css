@@ -796,3 +796,19 @@ body.theme-niconico {
     --panel-shadow: 2px 2px 0 rgba(0,0,0,.34);
     --font-family: "Meiryo", "MS PGothic", sans-serif;
 }
+
+.settings-save-status {
+    min-height: 18px;
+    color: var(--settings-muted, var(--theme-text-muted));
+    font-size: .76rem;
+    text-align: right;
+}
+.settings-save-status.is-dirty { color: var(--theme-status-warning); font-weight: 700; }
+.settings-save-status.is-saved { color: var(--theme-status-success); }
+.settings-danger-btn { background: var(--theme-status-danger); color: #fff; border: 1px solid var(--theme-status-danger); cursor: pointer; }
+.settings-cancel-btn { background: transparent; color: var(--settings-text, var(--theme-text)); border: 1px solid var(--settings-border, var(--theme-border)); cursor: pointer; }
+.settings-actions button:disabled { cursor: not-allowed; opacity: .46; }
+.url-add-status { min-height: 1.4em; }
+.url-add-status:not(:empty) { padding: 8px; border-left: 4px solid var(--theme-status-info); background: var(--theme-surface-alt); }
+.url-add-status.error { border-left-color: var(--theme-status-danger); }
+.url-add-status.success { border-left-color: var(--theme-status-success); }
