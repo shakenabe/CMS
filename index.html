@@ -6,14 +6,14 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2026082201">
-    <link rel="stylesheet" href="theme-system.css?v=2026080401">
+    <link rel="stylesheet" href="style.css?v=2026083101">
+    <link rel="stylesheet" href="theme-system.css?v=2026083101">
 </head>
 <body class="theme-modern is-pc">
 
     <!-- ポケットモード（疑似バックグラウンド）オーバーレイ -->
     <div id="pocket-overlay" class="hidden">
-        <div class="pocket-hint"><i class="fas fa-lock"></i> 2秒長押し または 上スワイプで解除</div>
+        <div class="pocket-hint" id="pocket-hold-status" aria-live="polite"><i class="fas fa-lock"></i> 2秒長押し または 上スワイプで解除</div>
         <div class="pocket-content" id="pocket-content">
             <div id="pocket-clock-container" style="margin-bottom: 20px;">
                 <div id="pocket-clock-text" class="theme-text digital1" style="font-size: 4rem;">00:00</div>
@@ -26,7 +26,7 @@
             </div>
             
             <img id="pocket-art" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>">
-            <h2 id="pocket-title" class="theme-text" style="text-align: center; margin-top: 15px; font-size: 1.2rem; padding: 0 20px;">Not Playing</h2>
+            <h2 id="pocket-title" class="theme-text" style="text-align: center; margin-top: 15px; font-size: 1.2rem; padding: 0 20px;">未再生</h2>
             
             <div class="progress-area" id="pocket-progress-area" style="width: 80%; max-width: 300px; margin-top: 15px;">
                 <span id="pocket-time-current" class="time-text">0:00</span>
@@ -56,9 +56,9 @@
 
     <div id="ready-screen" class="overlay-screen hidden">
         <div class="start-content panel-glass" style="text-align: center;">
-            <h2 class="theme-text" style="margin-top:0;">Ready</h2>
+            <h2 class="theme-text" style="margin-top:0;">準備完了</h2>
             <p>データの読み込みが完了しました。</p>
-            <button class="btn-start theme-btn" id="btn-user-start"><i class="fas fa-play"></i> PLAY START</button>
+            <button class="btn-start theme-btn" id="btn-user-start"><i class="fas fa-play"></i> 再生画面を開く</button>
         </div>
     </div>
 
@@ -89,7 +89,7 @@
                         <img id="widget-art" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'/>" class="widget-art">
                         <div class="widget-info-container">
                             <div class="widget-info overflow-hidden">
-                                <div class="marquee-wrapper"><h2 id="widget-title" class="theme-text marquee-content">Not Playing</h2></div>
+                                <div class="marquee-wrapper"><h2 id="widget-title" class="theme-text marquee-content">未再生</h2></div>
                                 <div class="marquee-wrapper"><p id="widget-artist" class="marquee-content">---</p></div>
                             </div>
                             <div class="progress-area">
@@ -99,9 +99,9 @@
                             </div>
                             <div class="widget-controls">
                                 <div class="controls-main">
-                                    <button id="widget-btn-prev"><i class="fas fa-backward-step"></i></button>
-                                    <button id="widget-btn-play" class="play-btn theme-btn"><i class="fas fa-play" id="widget-play-icon"></i></button>
-                                    <button id="widget-btn-next"><i class="fas fa-forward-step"></i></button>
+                                    <button id="widget-btn-prev" type="button" aria-label="前の曲" title="前の曲"><i class="fas fa-backward-step"></i></button>
+                                    <button id="widget-btn-play" type="button" class="play-btn theme-btn" aria-label="再生" title="再生"><i class="fas fa-play" id="widget-play-icon"></i></button>
+                                    <button id="widget-btn-next" type="button" aria-label="次の曲" title="次の曲"><i class="fas fa-forward-step"></i></button>
                                 </div>
                                 <div class="control-tools">
                                     <button id="btn-add-video-url" class="control-tool-btn" aria-label="URLから動画を追加"><i class="fas fa-plus"></i></button>
@@ -124,8 +124,8 @@
 
                     <div id="mobile-tools-wrapper">
                         <div class="m-folder-header">
-                            <div class="m-play-btn-circle" onclick="togglePlay()"><i class="fas fa-pause" id="m-header-play-icon"></i></div>
-                            <div class="m-folder-info" id="btn-open-mobile-folder">
+                            <div class="m-play-btn-circle" onclick="togglePlay()" role="button" tabindex="0" aria-label="再生・一時停止"><i class="fas fa-pause" id="m-header-play-icon"></i></div>
+                            <div class="m-folder-info" id="btn-open-mobile-folder" role="button" tabindex="0" aria-label="フォルダを選択">
                                 <span id="current-folder-name">All <i class="fas fa-chevron-down" style="font-size: 0.8rem; opacity: 0.7; margin-left: 5px;"></i></span>
                                 <span id="current-folder-count">--件のアイテム</span>
                             </div>
@@ -136,7 +136,7 @@
                     <div id="library-nav-wrapper" class="panel-glass">
                         <div class="controls-wrapper">
                             <button id="btn-open-stats" class="theme-btn stats-toolbar-btn" type="button" title="履歴・統計"><i class="fas fa-chart-column"></i><span>統計</span></button>
-                            <label class="filter-option"><input type="checkbox" id="exclude-nico"> ニコ除外</label>
+                            <label class="filter-option"><input type="checkbox" id="exclude-nico"> ニコニコ動画を除外</label>
                             <button id="vocaloid-group-back" class="theme-btn hidden" type="button" title="ボカログループ一覧へ戻る"><cms-icon name="back"></cms-icon></button>
                             <select id="vocaloid-group-mode" class="widget-search hidden" title="ボカロ / Kiite の分け方">
                                 <option value="videos">動画一覧</option>
@@ -146,7 +146,7 @@
                             <select id="widget-sort-select" class="widget-search">
                                 <option value="custom">カスタム順</option><option value="newest">新しい順</option><option value="oldest">古い順</option><option value="playCount_desc">再生数順</option>
                             </select>
-                            <input type="text" id="widget-search-box" class="widget-search" placeholder="Search...">
+                            <input type="text" id="widget-search-box" class="widget-search" placeholder="曲名・投稿者・タグを検索" aria-label="曲名・投稿者・タグを検索">
                         </div>
                     </div>
 
@@ -161,8 +161,8 @@
 
     <!-- スマホ用フォルダ選択 -->
     <div id="mobile-folder-modal" class="overlay-screen hidden" style="z-index: 9500; align-items: flex-end;">
-        <div class="panel-glass settings-window" style="width: 100%; max-width: none; max-height: 75vh; padding: 0; display: flex; flex-direction: column; border-bottom-left-radius: 0; border-bottom-right-radius: 0;">
-            <div style="padding: 15px; text-align: center; border-bottom: 1px solid var(--border-color); font-weight: bold; font-size: 1.2rem;">フォルダを選択</div>
+        <div class="panel-glass settings-window" role="dialog" aria-modal="true" aria-labelledby="mobile-folder-title" style="width: 100%; max-width: none; max-height: 75vh; padding: 0; display: flex; flex-direction: column; border-bottom-left-radius: 0; border-bottom-right-radius: 0;">
+            <div id="mobile-folder-title" style="padding: 15px; text-align: center; border-bottom: 1px solid var(--border-color); font-weight: bold; font-size: 1.2rem;">フォルダを選択</div>
             <div id="mobile-folder-list-modal" style="overflow-y: auto; flex: 1;"></div>
             <div style="padding: 15px;"><button id="btn-close-folder-modal" class="theme-btn" style="width: 100%; padding: 15px; border-radius: 30px; font-size: 1.1rem;">閉じる</button></div>
         </div>
@@ -170,16 +170,16 @@
 
     <!-- 設定モーダル -->
     <div id="add-video-modal" class="overlay-screen hidden" style="z-index: 10000;">
-        <div class="url-add-dialog panel-glass">
-            <h2><i class="fas fa-link"></i> URLから動画を追加</h2>
+        <div class="url-add-dialog panel-glass" role="dialog" aria-modal="true" aria-labelledby="add-video-title">
+            <h2 id="add-video-title"><i class="fas fa-link"></i> URLから動画を追加</h2>
             <p>動画URLを入力すると、タイトル・投稿者・サムネイルを取得してCMSへ追加します。</p>
             <label>動画URL
-                <input id="add-video-url-input" class="widget-search" type="url" placeholder="https://www.youtube.com/watch?v=...">
+                <input id="add-video-url-input" class="widget-search" type="url" placeholder="https://www.youtube.com/watch?v=..." aria-describedby="add-video-status">
             </label>
             <label>追加先フォルダ
                 <select id="add-video-folder-select" class="widget-search"></select>
             </label>
-            <div id="add-video-status" class="url-add-status"></div>
+            <div id="add-video-status" class="url-add-status" role="status" aria-live="polite"></div>
             <div class="url-add-actions">
                 <button id="btn-add-video-cancel" type="button">キャンセル</button>
                 <button id="btn-add-video-submit" type="button" class="theme-btn">情報取得＋追加</button>
@@ -213,8 +213,8 @@
     </div>
 
     <div id="settings-modal" class="overlay-screen hidden" style="z-index: 9999;">
-        <div class="panel-glass settings-window">
-            <h2 class="theme-text" style="margin-top:0; padding-bottom:5px;"><i class="fas fa-cog"></i> System Settings</h2>
+        <div class="panel-glass settings-window" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+            <h2 id="settings-title" class="theme-text" style="margin-top:0; padding-bottom:5px;"><i class="fas fa-cog"></i> システム設定</h2>
             <div class="settings-tabs">
                 <button class="tab-btn active" data-tab="basic">基本設定</button>
                 <button class="tab-btn" data-tab="advanced">詳細設定</button>
@@ -268,7 +268,8 @@
 
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
                         <label><input type="checkbox" id="set-use-firebase"> <cms-icon name="cloud"></cms-icon>Firebaseから自動読込する（再生回数・履歴は差分同期）</label>
-                        <div id="cloud-status-settings" class="cloud-status">Firebase: 未接続</div>
+                        <div id="cloud-status-settings" class="cloud-status" data-sync-state="warning">ライブラリ同期: 未接続</div>
+                        <div id="cloud-history-status-settings" class="cloud-status" data-sync-state="warning">再生履歴同期: 未接続</div>
                         <div style="display:flex; gap:10px; margin-top:5px; flex-wrap:wrap;">
                             <button id="btn-cloud-login-settings" class="theme-btn cloud-action">Googleログイン</button>
                             <button id="btn-load-firebase" class="theme-btn cloud-action">クラウド再読込</button>
@@ -378,16 +379,18 @@
                 </div>
             </div>
 
+            <div id="settings-save-status" class="settings-save-status" role="status" aria-live="polite">変更はありません</div>
             <div class="settings-actions">
-                <button id="btn-save-settings" class="theme-btn" style="flex:1;">Save & Apply</button>
-                <button id="btn-reset-settings" style="background:#ff4444; color:#fff; border:none; border-radius:30px; cursor:pointer;">Reset</button>
-                <button id="btn-close-settings" style="background:transparent; color:#fff; border:1px solid #fff; border-radius:30px; cursor:pointer;">Cancel</button>
+                <button id="btn-save-settings" class="theme-btn" style="flex:1;" disabled>保存して適用</button>
+                <button id="btn-reset-settings" class="settings-danger-btn">初期化</button>
+                <button id="btn-close-settings" class="settings-cancel-btn">キャンセル</button>
             </div>
         </div>
     </div>
 
     <script src="cms-icons.js?v=2026072502"></script>
-    <script type="module" src="firebase-web.js?v=2026082201"></script>
-    <script src="script.js?v=2026082201"></script>
+    <script src="ui-feedback.js?v=2026083101"></script>
+    <script type="module" src="firebase-web.js?v=2026083101"></script>
+    <script src="script.js?v=2026083101"></script>
 </body>
 </html>
