@@ -1,7 +1,7 @@
 const defaultSettings = {
     theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, nicoBoost: 1.0,
     baseFontSize: 100, pcLeftWidth: 350, showClock: true, clockFeatureV1: true, clockType: 'digital1', pocketClockType: 'digital1', showThumbnails: true,
-    performanceMode: false, dataSaverMode: false,
+    performanceMode: false, dataSaverMode: false, colorMode: 'system', motionMode: 'full',
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff', blurBaseColor: '#000000',
     pocketAlwaysOn: false, pocketSwipeUnlock: true, pocketUseBackground: false, pocketBgDim: 35,
     pocketBgManual: false, pocketBgX: 50, pocketBgY: 50, pocketBgScale: 100,
@@ -12,6 +12,8 @@ const defaultSettings = {
     windowPanelColor: '#000000', windowPanelAlpha: 55, windowTitleColor: '#1f4f8f', windowTitleAlpha: 100,
     defaultSortOrder: 'custom', useFirebase: false, resumeLastPlayback: true
 };
+const MOBILE_LAYOUT_MAX = 720;
+const TABLET_LAYOUT_MAX = 1100;
 let appSettings = { ...defaultSettings };
 
 let allItems = [];
@@ -388,6 +390,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     trackListEl.setAttribute('role', 'listbox');
     trackListEl.setAttribute('aria-label', '動画一覧');
     loadSettings();
+    setupSystemPreferenceListeners();
     currentSortOrder = appSettings.defaultSortOrder || 'custom';
     document.getElementById('widget-sort-select').value = currentSortOrder;
     document.getElementById('vocaloid-group-mode').value = normalizeVocaloidGroupMode(appSettings.vocaloidGroupMode);
@@ -471,9 +474,48 @@ function loadSettings() {
         } else {
             const isMobile = window.innerWidth <= 900; if (isMobile) appSettings.performanceMode = true;
         }
+        if (!['modern', 'nerv', 'toyota', 'niconico'].includes(appSettings.theme)) appSettings.theme = defaultSettings.theme;
+        if (!['dark', 'light', 'system'].includes(appSettings.colorMode)) appSettings.colorMode = defaultSettings.colorMode;
+        if (!['full', 'reduced', 'off'].includes(appSettings.motionMode)) appSettings.motionMode = defaultSettings.motionMode;
     } catch (e) {}
 }
 function saveSettings() { localStorage.setItem('cms_player_settings_v23', JSON.stringify(appSettings)); }
+
+function getResolvedColorMode() {
+    if (appSettings.colorMode === 'dark' || appSettings.colorMode === 'light') return appSettings.colorMode;
+    return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function getResolvedMotionMode() {
+    const requested = ['full', 'reduced', 'off'].includes(appSettings.motionMode) ? appSettings.motionMode : 'full';
+    if (requested === 'full' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return 'reduced';
+    return requested;
+}
+
+function applyColorAndMotionModeClasses() {
+    const colorMode = getResolvedColorMode();
+    const motionMode = getResolvedMotionMode();
+    document.body.classList.remove('theme-dark', 'theme-light', 'motion-full', 'motion-reduced', 'motion-off');
+    document.body.classList.add(`theme-${colorMode}`, `motion-${motionMode}`);
+    document.body.dataset.colorMode = colorMode;
+    document.body.dataset.motionMode = motionMode;
+}
+
+function setupSystemPreferenceListeners() {
+    if (window.__cmsSystemPreferenceListenersReady) return;
+    window.__cmsSystemPreferenceListenersReady = true;
+    const refresh = () => {
+        if (appSettings.colorMode === 'system' || appSettings.motionMode === 'full') {
+            applyColorAndMotionModeClasses();
+            scheduleMarqueeUpdate();
+        }
+    };
+    ['(prefers-color-scheme: light)', '(prefers-reduced-motion: reduce)'].forEach(query => {
+        const media = window.matchMedia?.(query);
+        if (media?.addEventListener) media.addEventListener('change', refresh);
+        else if (media?.addListener) media.addListener(refresh);
+    });
+}
 function saveCurrentSession(extra = {}) {
     const now = Date.now();
     if (suppressSessionSave && !extra.force) return;
@@ -601,13 +643,24 @@ function markPlaybackCompleted(item) {
 }
 
 function updateLayoutMode() {
-    if (appSettings.windowMode) { document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile'); updateMobileBackgroundStart(); return; }
-    if (window.innerWidth <= 900 && !appSettings.forcePcLayout) {
-        document.body.classList.add('is-mobile'); document.body.classList.remove('is-pc');
+    document.body.classList.remove('is-mobile', 'is-pc', 'is-tablet');
+    if (appSettings.windowMode) {
+        document.body.classList.add('is-pc');
+        document.body.classList.remove('mobile-list-focus', 'show-mobile-nav');
+        document.getElementById('mobile-list-fullscreen-header')?.classList.add('hidden');
+        document.body.classList.toggle('show-clock', Boolean(appSettings.showClock));
+        updateMobileBackgroundStart();
+        return;
+    }
+    if (window.innerWidth <= MOBILE_LAYOUT_MAX && !appSettings.forcePcLayout) {
+        document.body.classList.add('is-mobile');
     } else {
-        document.body.classList.add('is-pc'); document.body.classList.remove('is-mobile', 'mobile-list-focus');
+        document.body.classList.add('is-pc');
+        if (window.innerWidth <= TABLET_LAYOUT_MAX) document.body.classList.add('is-tablet');
+        document.body.classList.remove('mobile-list-focus', 'show-mobile-nav');
         document.getElementById('mobile-list-fullscreen-header')?.classList.add('hidden');
     }
+    document.body.classList.toggle('show-clock', Boolean(appSettings.showClock) && document.body.classList.contains('is-pc'));
     updateMobileBackgroundStart();
 }
 
@@ -626,8 +679,8 @@ function updateMobileBackgroundStart() {
 function setupMobileTrackListFocus() {
     const header = document.getElementById('mobile-list-fullscreen-header');
     const closeButton = document.getElementById('mobile-list-close-btn');
-    const pullDownCloseDistance = 18;
-    const listTopTolerance = 12;
+    const pullDownCloseDistance = 12;
+    const listTopTolerance = 16;
     let pointerStart = null;
     let touchStart = null;
     const open = () => {
@@ -1017,11 +1070,11 @@ function makeAdaptiveGradient(hex) {
 }
 
 function applyThemeSettings() {
-    const layoutClass = document.body.classList.contains('is-mobile') ? 'is-mobile' : 'is-pc';
-    document.body.className = `theme-${appSettings.theme} ${layoutClass}`;
+    document.body.classList.remove('theme-modern', 'theme-nerv', 'theme-toyota', 'theme-niconico');
+    document.body.classList.add(`theme-${appSettings.theme}`);
+    applyColorAndMotionModeClasses();
     document.body.classList.toggle('has-custom-background', hasCustomBackgroundImage);
-    if (appSettings.forcePcLayout || appSettings.windowMode) document.body.classList.add('is-pc');
-    if (appSettings.windowMode) document.body.classList.add('window-mode');
+    document.body.classList.toggle('window-mode', Boolean(appSettings.windowMode));
     
     document.body.classList.toggle('show-list-thumbnails', appSettings.showThumbnails);
     document.body.classList.toggle('performance-mode', appSettings.performanceMode);
@@ -1047,9 +1100,15 @@ function applyThemeSettings() {
         ['--text-color', '--sub-text-color', '--accent-color', '--border-color', '--theme-text', '--theme-text-muted', '--theme-accent', '--theme-border', '--theme-border-active'].forEach(name => document.body.style.removeProperty(name));
     }
     const baseColor = appSettings.blurBaseColor || '#000000';
-    document.body.style.setProperty('--panel-rgb', hexToRgbString(baseColor));
-    document.body.style.setProperty('--bg-color', baseColor);
-    document.documentElement.style.setProperty('--bg-gradient', makeAdaptiveGradient(baseColor));
+    if (hasCustomBackgroundImage) {
+        document.body.style.setProperty('--panel-rgb', hexToRgbString(baseColor));
+        document.body.style.setProperty('--bg-color', baseColor);
+        document.documentElement.style.setProperty('--bg-gradient', makeAdaptiveGradient(baseColor));
+    } else {
+        document.body.style.removeProperty('--panel-rgb');
+        document.body.style.removeProperty('--bg-color');
+        document.documentElement.style.removeProperty('--bg-gradient');
+    }
     
     const op = parseFloat(appSettings.bgOpacity); const panelAlpha = 0.12 + ((100 - op) / 100 * 0.68); document.documentElement.style.setProperty('--panel-alpha', panelAlpha); document.documentElement.style.setProperty('--panel-blur', appSettings.performanceMode ? '0px' : `${((100 - op) / 100 * 20)}px`);
     const windowPanelColor = appSettings.windowPanelColor || baseColor;
@@ -1254,7 +1313,7 @@ function setupSettingsModal() {
 
     document.getElementById('btn-open-settings').onclick = () => {
         settingsOpenSnapshot = JSON.parse(JSON.stringify(appSettings));
-        document.getElementById('set-theme').value = appSettings.theme; document.getElementById('set-font-size').value = appSettings.baseFontSize; document.getElementById('font-val').textContent = appSettings.baseFontSize;
+        document.getElementById('set-theme').value = appSettings.theme; document.getElementById('set-color-mode').value = appSettings.colorMode; document.getElementById('set-motion-mode').value = appSettings.motionMode; document.getElementById('set-font-size').value = appSettings.baseFontSize; document.getElementById('font-val').textContent = appSettings.baseFontSize;
         document.getElementById('set-pc-left-width').value = appSettings.pcLeftWidth; document.getElementById('pc-width-val').textContent = appSettings.pcLeftWidth;
         document.getElementById('set-bg-position').value = appSettings.bgPosition; document.getElementById('set-bg-size').value = appSettings.bgSize;
         document.getElementById('set-opacity').value = appSettings.bgOpacity; document.getElementById('op-val').textContent = appSettings.bgOpacity;
@@ -1341,7 +1400,7 @@ function setupSettingsModal() {
 
     document.getElementById('btn-save-settings').onclick = async () => {
         const previousVocaloidCollectionEnabled = Boolean(appSettings.vocaloidCollectionEnabled);
-        appSettings.theme = document.getElementById('set-theme').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
+        appSettings.theme = document.getElementById('set-theme').value; appSettings.colorMode = document.getElementById('set-color-mode').value; appSettings.motionMode = document.getElementById('set-motion-mode').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
         appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.vocaloidCollectionEnabled = document.getElementById('set-vocaloid-collection').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         appSettings.windowColorsLinked = true; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = appSettings.windowPanelColor; appSettings.windowTitleAlpha = appSettings.windowPanelAlpha;
         appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value); appSettings.pocketBgManual = document.getElementById('set-pocket-bg-manual').checked; appSettings.pocketBgX = Number(document.getElementById('set-pocket-bg-x').value); appSettings.pocketBgY = Number(document.getElementById('set-pocket-bg-y').value); appSettings.pocketBgScale = Number(document.getElementById('set-pocket-bg-scale').value); appSettings.pocketShowClock = document.getElementById('set-pocket-show-clock').checked; appSettings.pocketShowArt = document.getElementById('set-pocket-show-art').checked; appSettings.pocketShowTitle = document.getElementById('set-pocket-show-title').checked; appSettings.pocketShowProgress = document.getElementById('set-pocket-show-progress').checked; appSettings.pocketShowControls = document.getElementById('set-pocket-show-controls').checked; appSettings.pocketShowUnlock = document.getElementById('set-pocket-show-unlock').checked;
@@ -1376,7 +1435,7 @@ function updateMarquee() {
         c.style.removeProperty('--marquee-distance');
         c.style.removeProperty('--marquee-duration');
     });
-    if (appSettings.performanceMode) return;
+    if (appSettings.performanceMode || !document.body.classList.contains('motion-full')) return;
     requestAnimationFrame(() => {
         document.querySelectorAll('.marquee-wrapper').forEach(w => {
             const c = w.querySelector('.marquee-content');
@@ -1821,11 +1880,11 @@ async function refreshStatsHistory() {
     button.disabled = true;
     button.classList.add('is-loading');
     try {
-        if (!window.CmsWebFirebase?.getPlaybackHistory || !appSettings.useFirebase) {
+        if (!window.CmsWebFirebase?.getPlaybackHistory) {
             renderStats({ events: [], source: 'library', days: 90 });
             return;
         }
-        const history = await window.CmsWebFirebase.getPlaybackHistory({ days: 90, forceFlush: true });
+        const history = await window.CmsWebFirebase.getPlaybackHistory({ days: 365, forceFlush: appSettings.useFirebase });
         renderStats(history);
         const historyStatus = document.getElementById('cloud-history-status-settings');
         if (historyStatus) {
