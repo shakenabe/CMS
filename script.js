@@ -422,7 +422,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('import-json').addEventListener('change', handleFileImport);
     document.getElementById('btn-user-start').addEventListener('click', startGame);
-    document.getElementById('widget-search-box').addEventListener('input', handleSearch);
+    const widgetSearchBox = document.getElementById('widget-search-box');
+    const pcSearchBox = document.getElementById('pc-search-box');
+    widgetSearchBox.addEventListener('input', (event) => {
+        if (pcSearchBox && pcSearchBox.value !== event.target.value) pcSearchBox.value = event.target.value;
+        handleSearch(event);
+    });
+    pcSearchBox?.addEventListener('input', (event) => {
+        if (widgetSearchBox.value === event.target.value) return;
+        widgetSearchBox.value = event.target.value;
+        widgetSearchBox.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    document.getElementById('pc-stats-button')?.addEventListener('click', () => document.getElementById('btn-open-stats')?.click());
+    document.getElementById('pc-settings-button')?.addEventListener('click', () => document.getElementById('btn-open-settings')?.click());
     document.getElementById('widget-sort-select').addEventListener('change', handleSortChange);
     document.getElementById('exclude-nico').addEventListener('change', handleNicoFilterChange);
     document.getElementById('vocaloid-group-mode').addEventListener('change', (event) => {
@@ -1595,7 +1607,16 @@ function renderFolders() {
     }
     musicLibrary.forEach(f => {
         const folderIcon = f.id === '__all' ? 'library' : f.id === '__vocaloid' ? 'music' : 'folder';
-        const div = document.createElement('div'); div.className = 'w-f-item'; div.replaceChildren(CmsIcons.create(folderIcon), document.createTextNode(f.name)); div.dataset.folderId = f.id; div.title = f.name; div.onclick = () => selectFolder(f.id);
+        const div = document.createElement('div');
+        div.className = 'w-f-item';
+        const name = document.createElement('span');
+        name.className = 'w-f-name';
+        name.textContent = f.name;
+        const count = document.createElement('span');
+        count.className = 'w-f-count';
+        count.textContent = f.songs.length.toLocaleString('ja-JP');
+        div.replaceChildren(CmsIcons.create(folderIcon), name, count);
+        div.dataset.folderId = f.id; div.title = f.name; div.onclick = () => selectFolder(f.id);
         window.CmsUI?.makeInteractive(div, { role: 'option', label: `${f.name}、${f.songs.length}件`, selected: f.id === currentFolderId });
         folderListEl.appendChild(div);
         if (mList) { 
@@ -1611,6 +1632,19 @@ function renderFolders() {
         }
     });
     populateEditFolders();
+}
+
+function updateDesktopLibraryContext(name, countLabel) {
+    const safeName = String(name || 'すべてのアイテム');
+    const safeCount = String(countLabel || '--件のアイテム');
+    ['pc-current-folder-name', 'current-folder-title'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = safeName;
+    });
+    ['pc-current-folder-count', 'pc-track-folder-count'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = safeCount;
+    });
 }
 
 function normalizeVocaloidGroupMode(value) {
@@ -1648,8 +1682,10 @@ function renderVocaloidGroups(songs, mode) {
     trackVirtualEnd = -1;
     trackListEl.scrollTop = 0;
     trackListEl.replaceChildren();
-    document.getElementById('current-folder-title').textContent = `ボカロ / Kiite / ${isChannelMode ? 'チャンネル別' : '投稿者別'}`;
-    document.getElementById('current-folder-count').textContent = `${orderedGroups.length}グループ / ${songs.length}動画`;
+    const groupedTitle = `ボカロ / Kiite / ${isChannelMode ? 'チャンネル別' : '投稿者別'}`;
+    const groupedCount = `${orderedGroups.length}グループ / ${songs.length}動画`;
+    updateDesktopLibraryContext(groupedTitle, groupedCount);
+    document.getElementById('current-folder-count').textContent = groupedCount;
     if (!orderedGroups.length) {
         trackListEl.innerHTML = '<div style="padding:20px; text-align:center;">ボカロ判定済みの動画がありません</div>';
         return;
@@ -1712,6 +1748,7 @@ function selectFolder(id, options = {}) {
             folderName.replaceChildren(document.createTextNode(name), icon);
         }
         if (folderCount) folderCount.textContent = `${f.songs.length}件のアイテム`;
+        updateDesktopLibraryContext(name, `${f.songs.length}件のアイテム`);
     }
     selectedItems.clear(); updateEditBar();
     updateVocaloidGroupingControls(id);
@@ -1720,8 +1757,10 @@ function selectFolder(id, options = {}) {
         if (currentVocaloidGroup?.mode === vocaloidMode) {
             const groupedSongs = f.songs.filter(song => getVocaloidGroupName(song, vocaloidMode) === currentVocaloidGroup.name);
             const modeLabel = vocaloidMode === 'channel' ? 'チャンネル' : '投稿者';
-            document.getElementById('current-folder-title').textContent = `ボカロ / ${modeLabel}: ${currentVocaloidGroup.name}`;
-            document.getElementById('current-folder-count').textContent = `${groupedSongs.length}件のアイテム`;
+            const groupedTitle = `ボカロ / ${modeLabel}: ${currentVocaloidGroup.name}`;
+            const groupedCount = `${groupedSongs.length}件のアイテム`;
+            updateDesktopLibraryContext(groupedTitle, groupedCount);
+            document.getElementById('current-folder-count').textContent = groupedCount;
             document.getElementById('vocaloid-group-back')?.classList.remove('hidden');
             renderTracks(groupedSongs, { preserveScroll: Boolean(options.preserveScroll) });
         } else {

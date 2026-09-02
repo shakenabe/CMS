@@ -949,13 +949,49 @@ body.theme-toyota.has-custom-background { --bg-scrim: linear-gradient(rgba(15,6,
 
 /* Theme structure without moving the Window mode panels. */
 body.is-pc:not(.window-mode).theme-modern .widget-container { border-top: 1px solid color-mix(in srgb, var(--theme-border) 72%, transparent); }
+body.is-pc:not(.window-mode).theme-modern #pc-appbar {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--theme-bg) 94%, transparent), color-mix(in srgb, var(--theme-surface) 92%, transparent));
+    border-bottom: 1px solid var(--theme-border-active);
+    box-shadow: 0 12px 32px rgba(0,0,0,.2);
+}
+body.is-pc:not(.window-mode).theme-modern #widget-player,
+body.is-pc:not(.window-mode).theme-modern #widget-controls,
+body.is-pc:not(.window-mode).theme-modern #widget-folder-list-wrapper { border-radius: 0; }
 body.is-pc:not(.window-mode).theme-nerv .widget-container { background: linear-gradient(180deg, color-mix(in srgb, var(--theme-surface-alt) 44%, transparent), transparent 46px); }
+body.is-pc:not(.window-mode).theme-nerv #pc-appbar {
+    color: var(--theme-text);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--theme-surface) 78%, #fff 22%), color-mix(in srgb, var(--theme-surface-alt) 92%, transparent));
+    border: 1px solid color-mix(in srgb, var(--theme-border) 76%, #fff 24%);
+    box-shadow: inset 0 1px rgba(255,255,255,.52), 0 4px 14px rgba(0,35,70,.18);
+}
+body.is-pc:not(.window-mode).theme-nerv .pc-search-field,
+body.is-pc:not(.window-mode).theme-nerv .pc-appbar-actions button { box-shadow: inset 0 1px rgba(255,255,255,.48); }
 body.is-pc:not(.window-mode).theme-nerv #left-pane,
 body.is-pc:not(.window-mode).theme-nerv #right-pane { border: 1px solid var(--theme-border); box-shadow: var(--theme-shadow); }
 body.is-pc:not(.window-mode).theme-toyota .widget-container { grid-template-rows: minmax(0,1fr); }
+body.is-pc:not(.window-mode).theme-toyota #pc-appbar {
+    background: #050200;
+    border-bottom: 2px solid var(--theme-warning);
+    box-shadow: inset 0 -1px var(--theme-danger);
+    clip-path: polygon(0 0, calc(100% - 24px) 0, 100% 24px, 100% 100%, 0 100%);
+}
+body.is-pc:not(.window-mode).theme-toyota .pc-appbar-brand strong { color: var(--theme-warning); }
+body.is-pc:not(.window-mode).theme-toyota .pc-appbar-context::after { content: "映像資料管制 / 回線正常"; color: var(--theme-success); font: 700 .58rem/1 var(--font-numeric); letter-spacing: .08em; }
+body.is-pc:not(.window-mode).theme-toyota .pc-section-heading,
+body.is-pc:not(.window-mode).theme-toyota .pc-track-heading { border-left: 3px solid var(--theme-warning); }
 body.is-pc:not(.window-mode).theme-toyota #left-pane,
 body.is-pc:not(.window-mode).theme-toyota #right-pane { border-top: 2px solid var(--theme-warning); }
 body.is-pc:not(.window-mode).theme-niconico .widget-container { background: color-mix(in srgb, var(--theme-bg) 72%, transparent); border-top: 3px solid var(--theme-accent); }
+body.is-pc:not(.window-mode).theme-niconico #pc-appbar {
+    min-height: 48px;
+    background: linear-gradient(#3b3b3b, #242424);
+    border: 1px solid #111;
+    border-bottom-color: var(--theme-accent);
+    box-shadow: inset 0 1px rgba(255,255,255,.18);
+    font-family: "MS UI Gothic", "Meiryo UI", sans-serif;
+}
+body.is-pc:not(.window-mode).theme-niconico .pc-search-field,
+body.is-pc:not(.window-mode).theme-niconico .pc-appbar-actions button { border-radius: 0; }
 
 body.is-pc.is-tablet:not(.window-mode).theme-toyota .widget-container { grid-template-columns: minmax(300px, 36vw) minmax(0,1fr); }
 body.is-pc.is-tablet:not(.window-mode).theme-toyota #widget-clock { min-height: 118px; }
