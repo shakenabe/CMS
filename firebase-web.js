@@ -461,7 +461,9 @@ async function getPlaybackHistory({ days = 90, forceFlush = true } = {}) {
   const snapshot = await getDocs(query(
     collection(firestore, 'users', currentUser.uid, 'playbackHistory'),
     where(documentId(), '>=', sinceBucket),
-    orderBy(documentId(), 'desc'),
+    // Ascending document-name order uses Firestore's built-in index. The
+    // merged event list is sorted newest-first below, so UI order is unchanged.
+    orderBy(documentId()),
     limit(maxBuckets)
   ));
   const merged = new Map();
