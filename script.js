@@ -1,7 +1,7 @@
 const defaultSettings = {
     theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, nicoBoost: 1.0,
     baseFontSize: 100, pcLeftWidth: 350, showClock: true, clockFeatureV1: true, clockType: 'digital1', pocketClockType: 'digital1', showThumbnails: true,
-    performanceMode: false, dataSaverMode: false, colorMode: 'system', motionMode: 'full',
+    performanceMode: false, dataSaverMode: false, colorMode: 'system',
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff', blurBaseColor: '#000000',
     pocketAlwaysOn: false, pocketSwipeUnlock: true, pocketUseBackground: false, pocketBgDim: 35,
     pocketBgManual: false, pocketBgX: 50, pocketBgY: 50, pocketBgScale: 100,
@@ -64,6 +64,7 @@ let trackVirtualFrame = 0;
 let searchRenderTimer = 0;
 let marqueeUpdateTimer = 0;
 let marqueeResizeObserver = null;
+let marqueeUpdateGeneration = 0;
 let lastPlaybackStateSavedAt = 0;
 let suppressSessionSave = false;
 let hasCustomBackgroundImage = false;
@@ -488,7 +489,9 @@ function loadSettings() {
         }
         if (!['modern', 'nerv', 'toyota', 'niconico'].includes(appSettings.theme)) appSettings.theme = defaultSettings.theme;
         if (!['dark', 'light', 'system'].includes(appSettings.colorMode)) appSettings.colorMode = defaultSettings.colorMode;
-        if (!['full', 'reduced', 'off'].includes(appSettings.motionMode)) appSettings.motionMode = defaultSettings.motionMode;
+        // motionMode was a separate setting until 2026-09. Keep old saved data readable,
+        // but make the lightweight flag the single source of truth from now on.
+        delete appSettings.motionMode;
     } catch (e) {}
 }
 function saveSettings() { localStorage.setItem('cms_player_settings_v23', JSON.stringify(appSettings)); }
@@ -499,9 +502,7 @@ function getResolvedColorMode() {
 }
 
 function getResolvedMotionMode() {
-    const requested = ['full', 'reduced', 'off'].includes(appSettings.motionMode) ? appSettings.motionMode : 'full';
-    if (requested === 'full' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return 'reduced';
-    return requested;
+    return appSettings.performanceMode ? 'off' : 'full';
 }
 
 function applyColorAndMotionModeClasses() {
@@ -517,12 +518,12 @@ function setupSystemPreferenceListeners() {
     if (window.__cmsSystemPreferenceListenersReady) return;
     window.__cmsSystemPreferenceListenersReady = true;
     const refresh = () => {
-        if (appSettings.colorMode === 'system' || appSettings.motionMode === 'full') {
+        if (appSettings.colorMode === 'system') {
             applyColorAndMotionModeClasses();
             scheduleMarqueeUpdate();
         }
     };
-    ['(prefers-color-scheme: light)', '(prefers-reduced-motion: reduce)'].forEach(query => {
+    ['(prefers-color-scheme: light)'].forEach(query => {
         const media = window.matchMedia?.(query);
         if (media?.addEventListener) media.addEventListener('change', refresh);
         else if (media?.addListener) media.addListener(refresh);
@@ -1325,7 +1326,7 @@ function setupSettingsModal() {
 
     document.getElementById('btn-open-settings').onclick = () => {
         settingsOpenSnapshot = JSON.parse(JSON.stringify(appSettings));
-        document.getElementById('set-theme').value = appSettings.theme; document.getElementById('set-color-mode').value = appSettings.colorMode; document.getElementById('set-motion-mode').value = appSettings.motionMode; document.getElementById('set-font-size').value = appSettings.baseFontSize; document.getElementById('font-val').textContent = appSettings.baseFontSize;
+        document.getElementById('set-theme').value = appSettings.theme; document.getElementById('set-color-mode').value = appSettings.colorMode; document.getElementById('set-font-size').value = appSettings.baseFontSize; document.getElementById('font-val').textContent = appSettings.baseFontSize;
         document.getElementById('set-pc-left-width').value = appSettings.pcLeftWidth; document.getElementById('pc-width-val').textContent = appSettings.pcLeftWidth;
         document.getElementById('set-bg-position').value = appSettings.bgPosition; document.getElementById('set-bg-size').value = appSettings.bgSize;
         document.getElementById('set-opacity').value = appSettings.bgOpacity; document.getElementById('op-val').textContent = appSettings.bgOpacity;
@@ -1412,7 +1413,7 @@ function setupSettingsModal() {
 
     document.getElementById('btn-save-settings').onclick = async () => {
         const previousVocaloidCollectionEnabled = Boolean(appSettings.vocaloidCollectionEnabled);
-        appSettings.theme = document.getElementById('set-theme').value; appSettings.colorMode = document.getElementById('set-color-mode').value; appSettings.motionMode = document.getElementById('set-motion-mode').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
+        appSettings.theme = document.getElementById('set-theme').value; appSettings.colorMode = document.getElementById('set-color-mode').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
         appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.vocaloidCollectionEnabled = document.getElementById('set-vocaloid-collection').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         appSettings.windowColorsLinked = true; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = appSettings.windowPanelColor; appSettings.windowTitleAlpha = appSettings.windowPanelAlpha;
         appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value); appSettings.pocketBgManual = document.getElementById('set-pocket-bg-manual').checked; appSettings.pocketBgX = Number(document.getElementById('set-pocket-bg-x').value); appSettings.pocketBgY = Number(document.getElementById('set-pocket-bg-y').value); appSettings.pocketBgScale = Number(document.getElementById('set-pocket-bg-scale').value); appSettings.pocketShowClock = document.getElementById('set-pocket-show-clock').checked; appSettings.pocketShowArt = document.getElementById('set-pocket-show-art').checked; appSettings.pocketShowTitle = document.getElementById('set-pocket-show-title').checked; appSettings.pocketShowProgress = document.getElementById('set-pocket-show-progress').checked; appSettings.pocketShowControls = document.getElementById('set-pocket-show-controls').checked; appSettings.pocketShowUnlock = document.getElementById('set-pocket-show-unlock').checked;
@@ -1440,23 +1441,73 @@ function setupSettingsModal() {
     };
 }
 
+function getMarqueeSourceText(content) {
+    const primary = content.querySelector('.marquee-copy-primary');
+    return String(primary ? primary.textContent : content.textContent || '').trim();
+}
+
+function resetMarqueeContent(content) {
+    const sourceText = getMarqueeSourceText(content);
+    content.classList.remove('is-marquee');
+    content.style.removeProperty('--marquee-shift');
+    content.style.removeProperty('--marquee-duration');
+    content.dataset.marqueeText = sourceText;
+    content.replaceChildren(document.createTextNode(sourceText));
+}
+
+function buildMarqueeCopies(content, durationSeconds) {
+    const text = content.dataset.marqueeText || getMarqueeSourceText(content);
+    if (!text) return;
+    const primary = document.createElement('span');
+    primary.className = 'marquee-copy marquee-copy-primary';
+    primary.textContent = text;
+    const separator1 = document.createElement('span');
+    separator1.className = 'marquee-separator';
+    separator1.textContent = '≪';
+    separator1.setAttribute('aria-hidden', 'true');
+    const copy2 = document.createElement('span');
+    copy2.className = 'marquee-copy';
+    copy2.textContent = text;
+    copy2.setAttribute('aria-hidden', 'true');
+    const separator2 = separator1.cloneNode(true);
+    const copy3 = copy2.cloneNode(true);
+    content.replaceChildren(primary, separator1, copy2, separator2, copy3);
+    const shift = primary.getBoundingClientRect().width + separator1.getBoundingClientRect().width;
+    content.style.setProperty('--marquee-shift', `-${Math.ceil(shift)}px`);
+    content.style.setProperty('--marquee-duration', `${durationSeconds.toFixed(2)}s`);
+    content.classList.add('is-marquee');
+}
+
 function updateMarquee() {
-    const contents = document.querySelectorAll('.marquee-content');
-    contents.forEach(c => {
-        c.classList.remove('is-marquee');
-        c.style.removeProperty('--marquee-distance');
-        c.style.removeProperty('--marquee-duration');
-    });
+    const generation = ++marqueeUpdateGeneration;
+    const contents = [...document.querySelectorAll('.marquee-content')];
+    contents.forEach(resetMarqueeContent);
     if (appSettings.performanceMode || !document.body.classList.contains('motion-full')) return;
     requestAnimationFrame(() => {
-        document.querySelectorAll('.marquee-wrapper').forEach(w => {
-            const c = w.querySelector('.marquee-content');
-            if (!c || w.clientWidth <= 0) return;
-            const overflow = Math.ceil(c.scrollWidth - w.clientWidth);
-            if (overflow <= 2) return;
-            c.style.setProperty('--marquee-distance', `-${overflow + 16}px`);
-            c.style.setProperty('--marquee-duration', `${Math.min(24, Math.max(10, 8 + overflow / 36)).toFixed(2)}s`);
-            c.classList.add('is-marquee');
+        if (generation !== marqueeUpdateGeneration) return;
+        const paired = new Set();
+        const groups = [];
+        const pairRoots = [document.querySelector('.widget-info'), ...document.querySelectorAll('.w-t-info')].filter(Boolean);
+        pairRoots.forEach(root => {
+            const pair = [...root.querySelectorAll('.marquee-content')].slice(0, 2);
+            if (!pair.length) return;
+            pair.forEach(content => paired.add(content));
+            groups.push(pair);
+        });
+        contents.forEach(content => { if (!paired.has(content)) groups.push([content]); });
+
+        groups.forEach(group => {
+            const measurements = group.map(content => {
+                const wrapper = content.closest('.marquee-wrapper');
+                const overflow = wrapper?.clientWidth > 0 ? Math.ceil(content.scrollWidth - wrapper.clientWidth) : 0;
+                return { content, overflow };
+            });
+            const maxOverflow = Math.max(0, ...measurements.map(entry => entry.overflow));
+            if (maxOverflow <= 2) return;
+            const duration = Math.min(32, Math.max(12, 9 + maxOverflow / 28));
+            measurements.forEach(entry => {
+                if (entry.overflow > 2) buildMarqueeCopies(entry.content, duration);
+            });
         });
     });
 }
