@@ -3,7 +3,7 @@
     --border-color: rgba(255, 255, 255, 0.15); --text-color: #fff; --sub-text-color: rgba(255, 255, 255, 0.7);
     --accent-color: #00aaff; --panel-shadow: 0 10px 30px rgba(0,0,0,0.3); --border-radius: 0px; 
     --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    --base-font-size: 100%; --pc-left-width: 350px; --bg-image: none; --bg-gradient: radial-gradient(circle at top, #26344d 0%, #0b1020 48%, #03050b 100%); --bg-position: center; --bg-size: cover;
+    --base-font-size: 100%; --pc-left-width: 350px; --bg-image: none; --bg-scrim: linear-gradient(transparent, transparent); --bg-gradient: radial-gradient(circle at top, #26344d 0%, #0b1020 48%, #03050b 100%); --bg-position: center; --bg-size: cover;
 }
 
 body.theme-toyota {
@@ -128,7 +128,7 @@ body.theme-nerv #widget-track-list-wrapper {
 html { font-size: var(--base-font-size); }
 html, body {
     margin: 0; padding: 0; width: 100%; font-family: var(--font-family); background-color: var(--bg-color);
-    background-image: var(--bg-image, none), var(--bg-gradient); background-position: var(--bg-position), center; background-size: var(--bg-size), cover; background-repeat: no-repeat;
+    background-image: var(--bg-image, none), var(--bg-scrim), var(--bg-gradient); background-position: var(--bg-position), center, center; background-size: var(--bg-size), cover, cover; background-repeat: no-repeat;
     color: var(--text-color); user-select: none; overscroll-behavior: none; touch-action: manipulation; box-sizing: border-box;
 }
 *, *:before, *:after { box-sizing: inherit; }
@@ -232,6 +232,26 @@ body.is-pc .w-track-list, body.is-pc .w-folder-list { flex: 1; overflow-y: auto;
 
 body.is-pc #mobile-tools-wrapper { display: none; }
 
+/* Tablet keeps the desktop information architecture. Only density changes. */
+body.is-pc.is-tablet:not(.window-mode) .widget-container {
+    grid-template-columns: minmax(275px, 34vw) minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px;
+}
+body.is-pc.is-tablet:not(.window-mode) #left-pane { gap: 8px; }
+body.is-pc.is-tablet:not(.window-mode) #widget-controls { gap: 10px; padding: 12px 10px; }
+body.is-pc.is-tablet:not(.window-mode) .widget-art { width: 58px; height: 58px; }
+body.is-pc.is-tablet:not(.window-mode) #widget-title { font-size: 1.12rem; }
+body.is-pc.is-tablet:not(.window-mode) .library-lists-container {
+    grid-template-columns: minmax(145px, 27%) minmax(0, 1fr);
+    gap: 8px;
+}
+body.is-pc.is-tablet:not(.window-mode) #library-nav-wrapper { padding: 7px 8px; }
+body.is-pc.is-tablet:not(.window-mode) .controls-wrapper { flex-wrap: wrap; }
+body.is-pc.is-tablet:not(.window-mode) .widget-search { min-width: 0; }
+body.is-pc.is-tablet:not(.window-mode) .w-f-item { padding-inline: 9px; }
+body.is-pc.is-tablet:not(.window-mode) .w-t-item { min-width: 0; }
+
 /* 編集モード時 (PC) */
 body.is-pc.edit-mode .widget-container { grid-template-columns: 1fr; }
 body.is-pc.edit-mode #left-pane { display: none !important; }
@@ -325,6 +345,7 @@ body.is-mobile.mobile-list-focus #mobile-list-fullscreen-header::before {
     background: currentColor; opacity: .42; pointer-events: none;
 }
 #mobile-list-fullscreen-header .fs-title { font-weight: 700; }
+#mobile-list-fullscreen-header .fs-title small { display: block; margin-top: 3px; color: var(--sub-text-color); font-size: .68rem; font-weight: 500; }
 body.is-mobile.mobile-list-focus #mobile-list-fullscreen-header { cursor: pointer; }
 #mobile-list-close-btn { padding: 8px 12px; color: var(--text-color); background: transparent; border: 1px solid var(--border-color); }
 
@@ -724,8 +745,19 @@ body.performance-mode .marquee-wrapper > .track-artist-text.marquee-content {
 }
 .is-marquee { will-change: transform; animation: scroll-left-once var(--marquee-duration, 14s) linear infinite; }
 @keyframes scroll-left-once {
-    0%, 10% { transform: translateX(0); }
-    88%, 100% { transform: translateX(var(--marquee-distance, 0px)); }
+    0%, 12% { transform: translateX(0); }
+    72%, 86% { transform: translateX(var(--marquee-distance, 0px)); }
+    100% { transform: translateX(0); }
+}
+
+body.motion-reduced .is-marquee,
+body.motion-off .is-marquee { animation: none !important; transform: none !important; }
+body.motion-reduced .marquee-wrapper > .marquee-content,
+body.motion-off .marquee-wrapper > .marquee-content {
+    display: block; width: auto; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+body.motion-off *, body.motion-off *::before, body.motion-off *::after {
+    animation: none !important; transition: none !important; scroll-behavior: auto !important;
 }
 
 /* 設定モーダル */

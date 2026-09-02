@@ -49,8 +49,10 @@ body.theme-modern {
     --theme-accent-secondary: #70d4ff;
     --theme-text: #f4f8fd;
     --theme-text-muted: #a8b8cc;
-    --theme-radius: 11px;
+    --theme-radius: 4px;
     --theme-shadow: 0 10px 26px rgba(1, 9, 22, .3);
+    --bg-color: #0b1424;
+    --panel-rgb: 18, 31, 51;
     --font-family: "Noto Sans JP", "Yu Gothic UI", "Segoe UI", Meiryo, sans-serif;
     --font-display: "Yu Gothic UI Semibold", "Segoe UI Semibold", "Noto Sans JP", Meiryo, sans-serif;
     --settings-bg: #0d1727;
@@ -141,6 +143,8 @@ body.theme-niconico {
     --theme-text-muted: #aaa;
     --theme-radius: 1px;
     --theme-shadow: 2px 2px 0 rgba(0, 0, 0, .4);
+    --bg-color: #111;
+    --panel-rgb: 31, 31, 31;
     --font-family: Tahoma, Verdana, Meiryo, "MS PGothic", sans-serif;
     --font-display: "MS PGothic", Tahoma, Meiryo, sans-serif;
     --settings-bg: #151515;
@@ -886,6 +890,87 @@ body #pocket-overlay.touch-holding .pocket-hint::after {
     body #pocket-overlay.touch-holding .pocket-hint::after { animation-timing-function: steps(4, end); }
 }
 
+/* 2026-09 responsive/theme mode layer. Internal theme IDs remain compatible. */
+body.theme-modern.theme-light {
+    --theme-bg: #eaf1f8; --theme-surface: rgba(250,252,255,.95); --theme-surface-alt: rgba(226,236,247,.96);
+    --theme-border: #8da3bc; --theme-border-active: #087dc4; --theme-accent: #087dc4; --theme-accent-secondary: #0b6fa9;
+    --theme-text: #13283d; --theme-text-muted: #52677d; --bg-color: #eaf1f8; --panel-rgb: 250,252,255;
+    --text-color: #13283d; --sub-text-color: #52677d; --border-color: #8da3bc; --accent-color: #087dc4;
+    --bg-gradient: radial-gradient(circle at 18% 8%, #fff 0%, #edf4fb 35%, #d6e2ef 100%);
+    --settings-bg: #eef4fa; --settings-surface: #fff; --settings-surface-alt: #e1ebf5; --settings-border: #8da3bc; --settings-text: #13283d; --settings-muted: #52677d;
+}
+body.theme-modern.theme-dark {
+    --bg-scrim: linear-gradient(rgba(3,10,20,.08), rgba(3,10,20,.32));
+}
+
+body.theme-nerv.theme-dark {
+    --theme-bg: #111b26; --theme-surface: rgba(25,37,49,.96); --theme-surface-alt: rgba(36,51,65,.97);
+    --theme-border: #60788d; --theme-border-active: #4fb8f0; --theme-accent: #278fca; --theme-accent-secondary: #83cef4;
+    --theme-text: #eef7fc; --theme-text-muted: #b4c5d2; --bg-color: #111b26; --panel-rgb: 25,37,49;
+    --text-color: #eef7fc; --sub-text-color: #b4c5d2; --border-color: #60788d; --accent-color: #278fca;
+    --bg-gradient: linear-gradient(180deg, #263a4d 0%, #172532 36%, #0d151d 100%);
+    --settings-bg: #101a24; --settings-surface: #1b2a38; --settings-surface-alt: #273b4d; --settings-border: #60788d; --settings-text: #eef7fc; --settings-muted: #b4c5d2;
+}
+body.theme-nerv.theme-light {
+    --bg-scrim: linear-gradient(rgba(255,255,255,.06), rgba(87,132,166,.12));
+}
+body.theme-nerv.theme-dark #library-nav-wrapper,
+body.theme-nerv.theme-dark #library-nav-wrapper .filter-option,
+body.theme-nerv.theme-dark #library-nav-wrapper .widget-search,
+body.theme-nerv.theme-dark .setting-row label,
+body.theme-nerv.theme-dark .setting-group h3 { color: var(--theme-text); }
+body.theme-nerv.theme-dark .setting-help { color: var(--theme-text-muted); }
+
+body.theme-toyota.theme-light {
+    --theme-bg: #231405; --theme-surface: rgba(50,28,7,.96); --theme-surface-alt: rgba(76,43,10,.97);
+    --theme-border: #b17b2c; --theme-text: #fff0a0; --theme-text-muted: #e2bc67;
+    --bg-color: #231405; --panel-rgb: 50,28,7; --text-color: #fff0a0; --sub-text-color: #e2bc67; --border-color: #b17b2c;
+    --bg-gradient: repeating-linear-gradient(0deg, rgba(255,232,123,.035) 0 1px, transparent 1px 6px), linear-gradient(145deg, #39210a, #170c03 70%);
+    --settings-bg: #251505; --settings-surface: #382108; --settings-surface-alt: #4c2b0a; --settings-border: #b17b2c; --settings-text: #fff0a0; --settings-muted: #e2bc67;
+}
+body.theme-toyota.theme-dark { --bg-scrim: linear-gradient(rgba(5,1,0,.05), rgba(5,1,0,.28)); }
+
+body.theme-niconico.theme-light {
+    --theme-bg: #efefef; --theme-surface: rgba(255,255,255,.98); --theme-surface-alt: rgba(231,231,231,.98);
+    --theme-border: #9a9a9a; --theme-text: #191919; --theme-text-muted: #666; --theme-shadow: 2px 2px 0 rgba(0,0,0,.18);
+    --bg-color: #efefef; --panel-rgb: 255,255,255; --text-color: #191919; --sub-text-color: #666; --border-color: #9a9a9a;
+    --bg-gradient: linear-gradient(#f8f8f8,#e4e4e4); --settings-bg: #eee; --settings-surface: #fff; --settings-surface-alt: #e4e4e4; --settings-border: #999; --settings-text: #191919; --settings-muted: #666;
+}
+body.theme-niconico.theme-light .sidebar-header,
+body.theme-niconico.theme-light .list-header,
+body.theme-niconico.theme-light #library-nav-wrapper { color: #1b1b1b; background: linear-gradient(#f7f7f7,#d8d8d8); border-bottom-color: #aaa; }
+body.theme-niconico.theme-light .theme-btn { color: #1b1b1b; background: linear-gradient(#fff,#dcdcdc); border-color: #999; }
+body.theme-niconico.theme-light .widget-search { color: #111; background: #fff; border-color: #888; }
+
+/* Wallpaper -> scrim -> panel -> content. Opacity remains the existing user value. */
+body.has-custom-background.theme-light { --bg-scrim: linear-gradient(rgba(255,255,255,.12), rgba(238,244,250,.32)); }
+body.has-custom-background.theme-dark { --bg-scrim: linear-gradient(rgba(2,5,10,.2), rgba(2,5,10,.5)); }
+body.theme-toyota.has-custom-background { --bg-scrim: linear-gradient(rgba(15,6,1,.28), rgba(5,2,0,.62)); }
+
+/* Theme structure without moving the Window mode panels. */
+body.is-pc:not(.window-mode).theme-modern .widget-container { border-top: 1px solid color-mix(in srgb, var(--theme-border) 72%, transparent); }
+body.is-pc:not(.window-mode).theme-nerv .widget-container { background: linear-gradient(180deg, color-mix(in srgb, var(--theme-surface-alt) 44%, transparent), transparent 46px); }
+body.is-pc:not(.window-mode).theme-nerv #left-pane,
+body.is-pc:not(.window-mode).theme-nerv #right-pane { border: 1px solid var(--theme-border); box-shadow: var(--theme-shadow); }
+body.is-pc:not(.window-mode).theme-toyota .widget-container { grid-template-rows: minmax(0,1fr); }
+body.is-pc:not(.window-mode).theme-toyota #left-pane,
+body.is-pc:not(.window-mode).theme-toyota #right-pane { border-top: 2px solid var(--theme-warning); }
+body.is-pc:not(.window-mode).theme-niconico .widget-container { background: color-mix(in srgb, var(--theme-bg) 72%, transparent); border-top: 3px solid var(--theme-accent); }
+
+body.is-pc.is-tablet:not(.window-mode).theme-toyota .widget-container { grid-template-columns: minmax(300px, 36vw) minmax(0,1fr); }
+body.is-pc.is-tablet:not(.window-mode).theme-toyota #widget-clock { min-height: 118px; }
+body.is-pc.is-tablet:not(.window-mode).theme-toyota #clock-time { font-size: clamp(3rem, 7vw, 5.3rem) !important; }
+
+body.motion-reduced.theme-toyota::after,
+body.motion-off.theme-toyota::after,
+body.motion-reduced.theme-toyota #clock-time,
+body.motion-off.theme-toyota #clock-time { animation: none !important; }
+
+@media (max-width: 720px) {
+    body.is-mobile #mobile-list-fullscreen-header { min-height: 66px; }
+    body.is-mobile .w-t-item { min-height: 68px; }
+}
+
 /* PC readability: keep transparent panels while preserving text against custom backgrounds. */
 body.is-pc:not(.window-mode) {
     --pc-readable-text: #f8fbff;
@@ -904,18 +989,18 @@ body.is-pc:not(.window-mode).theme-nerv .w-t-item.active .track-artist-text {
     color: #102b43 !important;
     text-shadow: 0 1px 1px rgba(255, 255, 255, .92);
 }
-body.is-pc:not(.window-mode).theme-nerv #library-nav-wrapper,
-body.is-pc:not(.window-mode).theme-nerv #library-nav-wrapper .filter-option,
-body.is-pc:not(.window-mode).theme-nerv #library-nav-wrapper .widget-search {
+body.is-pc:not(.window-mode).theme-nerv.theme-light #library-nav-wrapper,
+body.is-pc:not(.window-mode).theme-nerv.theme-light #library-nav-wrapper .filter-option,
+body.is-pc:not(.window-mode).theme-nerv.theme-light #library-nav-wrapper .widget-search {
     color: #173b59;
     text-shadow: none;
 }
-body.is-pc:not(.window-mode).theme-nerv .setting-row label,
-body.is-pc:not(.window-mode).theme-nerv .setting-group h3 {
+body.is-pc:not(.window-mode).theme-nerv.theme-light .setting-row label,
+body.is-pc:not(.window-mode).theme-nerv.theme-light .setting-group h3 {
     color: #173b59;
     text-shadow: none;
 }
-body.is-pc:not(.window-mode).theme-nerv .setting-help {
+body.is-pc:not(.window-mode).theme-nerv.theme-light .setting-help {
     color: #365b78;
     text-shadow: none;
 }
@@ -926,6 +1011,17 @@ body.is-pc:not(.window-mode).theme-toyota {
 body.is-pc:not(.window-mode).theme-niconico {
     --pc-readable-text: #fff;
     --pc-readable-muted: #e2e2e2;
+}
+body.is-pc:not(.window-mode).theme-modern.theme-light,
+body.is-pc:not(.window-mode).theme-nerv.theme-light,
+body.is-pc:not(.window-mode).theme-niconico.theme-light {
+    --pc-readable-text: var(--theme-text);
+    --pc-readable-muted: var(--theme-text-muted);
+    --pc-readable-shadow: none;
+}
+body.is-pc:not(.window-mode).theme-nerv.theme-dark {
+    --pc-readable-text: var(--theme-text);
+    --pc-readable-muted: var(--theme-text-muted);
 }
 
 body.is-pc:not(.window-mode) #widget-title {

@@ -58,6 +58,15 @@ let currentUser = null;
 let syncInFlight = null;
 let playbackFlushTimer = null;
 let playbackFlushInFlight = null;
+let resolveAuthStateReady;
+let authStateReadyResolved = false;
+const authStateReady = new Promise(resolve => { resolveAuthStateReady = resolve; });
+
+function markAuthStateReady(user) {
+  if (authStateReadyResolved) return;
+  authStateReadyResolved = true;
+  resolveAuthStateReady?.(user || null);
+}
 
 function openCache() {
   return new Promise((resolve, reject) => {
@@ -433,7 +442,11 @@ async function getPlaybackHistory({ days = 90, forceFlush = true } = {}) {
     .filter(event => event?.eventId && Number.isFinite(new Date(event.playedAt).getTime()))
     .filter(event => new Date(event.playedAt).getTime() >= sinceAt);
 
-  if (!currentUser || currentUser.uid !== FIREBASE_OWNER_UID || !window.CmsWebPlayer?.getUseFirebase?.()) {
+  if (!authStateReadyResolved) {
+    await Promise.race([authStateReady, new Promise(resolve => setTimeout(resolve, 3500))]);
+  }
+
+  if (!currentUser || currentUser.uid !== FIREBASE_OWNER_UID) {
     return { events: normalizeEvents(pendingEvents).sort((a, b) => new Date(b.playedAt) - new Date(a.playedAt)), source: 'local', days: safeDays };
   }
 
@@ -442,7 +455,9 @@ async function getPlaybackHistory({ days = 90, forceFlush = true } = {}) {
   }
 
   const sinceBucket = new Date(sinceAt).toISOString().slice(0, 13).replace(/[-T]/g, '');
-  const maxBuckets = Math.min(2400, safeDays * 24 + 24);
+  // One document represents one active hour. Keep the limit large enough for
+  // the full one-year statistics window without truncating older active days.
+  const maxBuckets = Math.min(9000, safeDays * 24 + 24);
   const snapshot = await getDocs(query(
     collection(firestore, 'users', currentUser.uid, 'playbackHistory'),
     where(documentId(), '>=', sinceBucket),
@@ -864,6 +879,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 onAuthStateChanged(auth, async user => {
   currentUser = user;
+  markAuthStateReady(user);
   if (!user) {
     updateStatus('Firebase: 未接続（JSONのみでも利用できます）');
     updateHistoryStatus('再生履歴同期: 未接続', 'warning');
