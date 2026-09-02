@@ -6,8 +6,8 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2026090202">
-    <link rel="stylesheet" href="theme-system.css?v=2026090202">
+    <link rel="stylesheet" href="style.css?v=2026090203">
+    <link rel="stylesheet" href="theme-system.css?v=2026090203">
 </head>
 <body class="theme-modern is-pc">
 
@@ -63,6 +63,25 @@
     </div>
 
     <div id="main-app" class="hidden">
+        <header id="pc-appbar" class="panel-glass" aria-label="CMSメインツールバー">
+            <div class="pc-appbar-brand">
+                <strong>TUBENICO</strong>
+                <span>MEDIA LIBRARY</span>
+            </div>
+            <div class="pc-appbar-context" aria-live="polite">
+                <span>LIBRARY</span>
+                <strong id="pc-current-folder-name">すべてのアイテム</strong>
+                <small id="pc-current-folder-count">--件</small>
+            </div>
+            <div class="pc-appbar-actions">
+                <label class="pc-search-field">
+                    <i class="fas fa-search" aria-hidden="true"></i>
+                    <input id="pc-search-box" type="search" placeholder="曲名・投稿者・タグを検索" aria-label="曲名・投稿者・タグを検索">
+                </label>
+                <button id="pc-stats-button" type="button" aria-label="履歴・統計を開く" title="履歴・統計"><i class="fas fa-chart-column"></i></button>
+                <button id="pc-settings-button" type="button" aria-label="設定を開く" title="設定"><i class="fas fa-cog"></i></button>
+            </div>
+        </header>
         <div class="widget-container" id="widget-container">
             <!-- 左ペイン: PC固定レイアウト用 -->
             <div id="left-pane" class="pc-column">
@@ -112,6 +131,14 @@
                         </div>
                     </div>
                 </div>
+
+                <div id="widget-folder-list-wrapper" class="panel-glass">
+                    <div class="pc-section-heading">
+                        <span>LIBRARY CHANNELS</span>
+                        <small>フォルダを選択</small>
+                    </div>
+                    <div class="w-folder-list" id="widget-folder-list"></div>
+                </div>
             </div>
 
             <!-- 右ペイン: ライブラリ -->
@@ -151,8 +178,14 @@
                     </div>
 
                     <div class="library-lists-container">
-                        <div id="widget-folder-list-wrapper" class="panel-glass"><div class="w-folder-list" id="widget-folder-list"></div></div>
-                        <div id="widget-track-list-wrapper" class="panel-glass"><div class="w-track-list" id="widget-track-list"></div></div>
+                        <div id="widget-track-list-wrapper" class="panel-glass">
+                            <div class="pc-track-heading">
+                                <span>SELECTED CHANNEL</span>
+                                <strong id="current-folder-title">すべてのアイテム</strong>
+                                <small id="pc-track-folder-count">--件のアイテム</small>
+                            </div>
+                            <div class="w-track-list" id="widget-track-list"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -406,8 +439,8 @@
     </div>
 
     <script src="cms-icons.js?v=2026072502"></script>
-    <script src="ui-feedback.js?v=2026090202"></script>
-    <script type="module" src="firebase-web.js?v=2026090202"></script>
-    <script src="script.js?v=2026090202"></script>
+    <script src="ui-feedback.js?v=2026090203"></script>
+    <script type="module" src="firebase-web.js?v=2026090203"></script>
+    <script src="script.js?v=2026090203"></script>
 </body>
 </html>
