@@ -6,8 +6,8 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2026090301">
-    <link rel="stylesheet" href="theme-system.css?v=2026090301">
+    <link rel="stylesheet" href="style.css?v=2026090601">
+    <link rel="stylesheet" href="theme-system.css?v=2026090601">
 </head>
 <body class="theme-modern is-pc">
 
@@ -156,7 +156,7 @@
                                 <span id="current-folder-name">All <i class="fas fa-chevron-down" style="font-size: 0.8rem; opacity: 0.7; margin-left: 5px;"></i></span>
                                 <span id="current-folder-count">--件のアイテム</span>
                             </div>
-                            <button id="btn-toggle-mobile-nav"><i class="fas fa-filter"></i></button>
+                            <button id="btn-toggle-mobile-nav" type="button" aria-label="検索・並び替え・統計を表示" title="検索・並び替え・統計"><i class="fas fa-filter"></i></button>
                         </div>
                     </div>
 
@@ -234,11 +234,14 @@
             </header>
             <div class="stats-scroll-area">
                 <div id="stats-summary-grid" class="stats-summary-grid"></div>
+                <div id="stats-highlight-grid" class="stats-highlight-grid"></div>
                 <div class="stats-layout-grid">
-                    <section class="stats-panel"><h3>直近14日の再生</h3><div id="stats-daily-chart" class="stats-daily-chart"></div></section>
+                    <section class="stats-panel stats-activity-panel"><h3>直近14日の再生推移</h3><div id="stats-daily-chart" class="stats-daily-chart"></div></section>
                     <section class="stats-panel"><h3>サイト別</h3><div id="stats-site-list" class="stats-ranked-list"></div></section>
                     <section class="stats-panel"><h3>フォルダ別 上位10件</h3><div id="stats-folder-list" class="stats-ranked-list"></div></section>
                     <section class="stats-panel"><h3>投稿者・チャンネル別 上位10件</h3><div id="stats-channel-list" class="stats-ranked-list"></div></section>
+                    <section class="stats-panel"><h3>曜日 × 時間帯</h3><div id="stats-heatmap" class="stats-heatmap" role="img" aria-label="曜日と時間帯別の再生回数"></div></section>
+                    <section class="stats-panel"><h3>よく再生した動画</h3><div id="stats-top-list" class="stats-top-list"></div></section>
                     <section class="stats-panel stats-recent-panel"><h3>最近の再生履歴</h3><div id="stats-recent-list" class="stats-recent-list"></div></section>
                 </div>
             </div>
@@ -429,8 +432,8 @@
     </div>
 
     <script src="cms-icons.js?v=2026072502"></script>
-    <script src="ui-feedback.js?v=2026090301"></script>
-    <script type="module" src="firebase-web.js?v=2026090301"></script>
-    <script src="script.js?v=2026090301"></script>
+    <script src="ui-feedback.js?v=2026090601"></script>
+    <script type="module" src="firebase-web.js?v=2026090601"></script>
+    <script src="script.js?v=2026090601"></script>
 </body>
 </html>
