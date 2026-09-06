@@ -186,6 +186,9 @@ body:not(.performance-mode) .panel-glass {
     background: rgba(var(--panel-rgb), var(--panel-alpha));
 }
 
+body:not(.performance-mode) { --stats-panel-bg: rgba(var(--panel-rgb), var(--panel-alpha)); }
+body.performance-mode { --stats-panel-bg: var(--theme-surface); }
+
 body.performance-mode .panel-glass {
     background: var(--theme-surface);
 }
@@ -941,6 +944,41 @@ body.theme-niconico.theme-light .list-header,
 body.theme-niconico.theme-light #library-nav-wrapper { color: #1b1b1b; background: linear-gradient(#f7f7f7,#d8d8d8); border-bottom-color: #aaa; }
 body.theme-niconico.theme-light .theme-btn { color: #1b1b1b; background: linear-gradient(#fff,#dcdcdc); border-color: #999; }
 body.theme-niconico.theme-light .widget-search { color: #111; background: #fff; border-color: #888; }
+
+/* P2/P4 dark modes use explicit palettes; never dim the complete application. */
+body.theme-nerv.theme-dark,
+body.theme-niconico.theme-dark { filter: none !important; }
+
+/* Statistics keep the existing opacity while adopting each pattern's visual language. */
+body.theme-modern .stats-summary-card,
+body.theme-modern .stats-highlight-card,
+body.theme-modern .stats-panel { border-radius: 3px; }
+body.theme-modern .stats-bar-track > span,
+body.theme-modern .stats-day-bar { background: linear-gradient(180deg, var(--theme-accent-secondary), var(--theme-accent)); }
+body.theme-nerv .stats-window { clip-path: none; }
+body.theme-nerv .stats-summary-card,
+body.theme-nerv .stats-highlight-card,
+body.theme-nerv .stats-panel {
+    border-left-color: var(--theme-border);
+    box-shadow: inset 0 1px rgba(255,255,255,.48), 0 2px 7px rgba(27,57,83,.18);
+}
+body.theme-nerv .stats-bar-track > span,
+body.theme-nerv .stats-day-bar { background: linear-gradient(180deg, #78cef8, #197fbd); }
+body.theme-toyota .stats-summary-card,
+body.theme-toyota .stats-highlight-card,
+body.theme-toyota .stats-panel { border-radius: 0; border-color: var(--theme-border); }
+body.theme-toyota .stats-summary-card,
+body.theme-toyota .stats-highlight-card { border-left-color: var(--theme-warning); }
+body.theme-toyota .stats-panel h3,
+body.theme-toyota .stats-top-rank { color: var(--theme-warning); letter-spacing: .06em; }
+body.theme-toyota .stats-bar-track > span,
+body.theme-toyota .stats-day-bar { background: repeating-linear-gradient(135deg, var(--theme-warning) 0 6px, #b84a20 6px 10px); }
+body.theme-toyota .stats-heat-cell[data-level="4"] { background: var(--theme-warning); }
+body.theme-niconico .stats-summary-card,
+body.theme-niconico .stats-highlight-card,
+body.theme-niconico .stats-panel { border-radius: 0; box-shadow: 1px 1px 0 rgba(0,0,0,.28); }
+body.theme-niconico .stats-bar-track > span,
+body.theme-niconico .stats-day-bar { background: var(--theme-accent); }
 
 /* Wallpaper -> scrim -> panel -> content. Opacity remains the existing user value. */
 body.has-custom-background.theme-light { --bg-scrim: linear-gradient(rgba(255,255,255,.12), rgba(238,244,250,.32)); }
