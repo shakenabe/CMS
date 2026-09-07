@@ -2161,6 +2161,8 @@ function renderTrackWindow({ force = false } = {}) {
     }
     for (let i = start; i < end; i++) {
         const s = currentRenderSongs[i]; const div = document.createElement('div'); div.className = 'w-t-item'; div.title = s.title; div.dataset.index = i;
+        div.dataset.siteLabel = s.site === 'niconico' ? 'ニコニコ' : s.site === 'youtube' ? 'YouTube' : (s.site || 'その他');
+        div.dataset.kind = s.site === 'niconico' ? '埋め込み動画' : 'Web 動画';
         const isChecked = selectedItems.has(s.originalIndex);
         
         div.innerHTML = `
