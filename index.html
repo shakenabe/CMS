@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="style.css?v=2026090701">
     <link rel="stylesheet" href="theme-system.css?v=2026090701">
     <link rel="stylesheet" href="desktop-reference-v4.css?v=2026090701">
+    <link rel="stylesheet" href="desktop-large-ui-v2.css?v=2026091301">
 </head>
 <body class="theme-modern is-pc">
 
@@ -18,6 +19,7 @@
         <div class="pocket-content" id="pocket-content">
             <div id="pocket-clock-container" style="margin-bottom: 20px;">
                 <div id="pocket-clock-text" class="theme-text digital1" style="font-size: 4rem;">00:00</div>
+                <div id="pocket-date-text" class="pocket-date-text">----/--/--</div>
                 <div id="pocket-analog-clock" class="analog-clock hidden">
                     <div class="hand hour-hand"></div>
                     <div class="hand minute-hand"></div>
@@ -27,7 +29,11 @@
             </div>
             
             <img id="pocket-art" src="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'/>">
-            <h2 id="pocket-title" class="theme-text" style="text-align: center; margin-top: 15px; font-size: 1.2rem; padding: 0 20px;">未再生</h2>
+            <div id="pocket-title-group" class="pocket-title-group">
+                <span class="pocket-now-label">NOW PLAYING</span>
+                <h2 id="pocket-title" class="theme-text" style="text-align: center; margin-top: 15px; font-size: 1.2rem; padding: 0 20px;">未再生</h2>
+                <p id="pocket-artist" class="pocket-artist">---</p>
+            </div>
             
             <div class="progress-area" id="pocket-progress-area" style="width: 80%; max-width: 300px; margin-top: 15px;">
                 <span id="pocket-time-current" class="time-text">0:00</span>
@@ -39,6 +45,17 @@
                 <button id="pocket-btn-play" type="button" class="pocket-play-btn" aria-label="再生・一時停止"><i class="fas fa-play" id="pocket-play-icon"></i></button>
                 <button id="pocket-btn-next" type="button" aria-label="次の曲"><i class="fas fa-forward-step"></i></button>
             </div>
+            <aside id="pocket-next-panel" class="pocket-next-panel" aria-label="次に再生する曲">
+                <div class="pocket-next-heading">NEXT</div>
+                <button id="pocket-next-item-1" type="button" class="pocket-next-item" data-queue-offset="1">
+                    <img alt="" loading="lazy"><span><strong>次の曲はありません</strong><small>---</small></span>
+                </button>
+                <button id="pocket-next-item-2" type="button" class="pocket-next-item" data-queue-offset="2">
+                    <img alt="" loading="lazy"><span><strong>次の曲はありません</strong><small>---</small></span>
+                </button>
+                <label class="pocket-quick-slider" for="pocket-volume-slider"><i class="fas fa-volume-high" aria-hidden="true"></i><input id="pocket-volume-slider" type="range" min="0" max="100" step="1" value="100" aria-label="音量"><output id="pocket-volume-value">100%</output></label>
+                <label class="pocket-quick-slider" for="pocket-panel-opacity-slider"><i class="fas fa-layer-group" aria-hidden="true"></i><input id="pocket-panel-opacity-slider" type="range" min="45" max="95" step="1" value="72" aria-label="操作パネルの透明度"><output id="pocket-panel-opacity-value">72%</output></label>
+            </aside>
             <button id="pocket-unlock-btn" type="button" class="pocket-unlock-btn"><i class="fas fa-unlock"></i> ロック解除</button>
         </div>
         <button id="pocket-layout-done" type="button" class="theme-btn hidden"><i class="fas fa-check"></i> 配置を保存して終了</button>
@@ -141,6 +158,8 @@
                     <div class="w-folder-list" id="widget-folder-list"></div>
                 </div>
             </div>
+
+            <div id="desktop-pane-resizer" role="separator" tabindex="0" aria-label="動画・フォルダ領域の幅を調整" aria-orientation="vertical" aria-valuemin="28" aria-valuemax="52" aria-valuenow="36"></div>
 
             <!-- 右ペイン: ライブラリ -->
             <div id="right-pane" class="pc-column">
@@ -304,6 +323,13 @@
                     <div class="setting-section-label"><strong>画面モード</strong><span>端末別レイアウトとウィンドウ配置</span></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-pocket-always-on"> <cms-icon name="mobile"></cms-icon>ポケットモードの情報を常時表示</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-pocket-swipe-unlock"> <cms-icon name="mobile"></cms-icon>ポケットモード上スワイプ解除を有効</label></div>
+                    <div class="setting-row">
+                        <label>ロック画面の表示方法</label>
+                        <select id="set-pocket-fullscreen-mode" class="widget-search">
+                            <option value="browser">ブラウザ全画面</option>
+                            <option value="overlay">画面内フル表示</option>
+                        </select>
+                    </div>
                     <div class="setting-row"><label><input type="checkbox" id="set-force-pc-layout"> <cms-icon name="desktop"></cms-icon>モバイル版レイアウトを無効化 (常にPC表示)</label></div>
                     <div class="setting-row">
                         <label><input type="checkbox" id="set-window-mode"> <cms-icon name="window"></cms-icon>ウィンドウモード (パネル自由配置・サイズ変更)</label>
@@ -343,7 +369,7 @@
                     </div>
                     <div class="setting-row" style="display: flex; flex-direction: row; gap: 15px; margin-top: 10px;">
                         <div style="flex:1;"><label>文字サイズ: <span id="font-val">100</span>%</label><input type="range" id="set-font-size" min="80" max="150" step="5" value="100"></div>
-                        <div style="flex:1;"><label>PC左パネル幅: <span id="pc-width-val">350</span>px</label><input type="range" id="set-pc-left-width" min="250" max="600" step="10" value="350"></div>
+                        <span style="flex:1; font-size:0.75rem; opacity:0.8;">PC版の左右幅は、画面中央の境界をドラッグして調整します。</span>
                     </div>
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
                         <label>背景画像 (写真等)</label>
@@ -435,6 +461,7 @@
     <script src="cms-icons.js?v=2026072502"></script>
     <script src="ui-feedback.js?v=2026090601"></script>
     <script type="module" src="firebase-web.js?v=2026090601"></script>
-    <script src="script.js?v=2026090701"></script>
+    <script src="script.js?v=2026091301"></script>
+    <script src="desktop-large-ui-v2.js?v=2026091301"></script>
 </body>
 </html>

@@ -1,0 +1,496 @@
+/* CMS desktop large UI v2: desktop/tablet only. Mobile and window mode stay unchanged. */
+/* The wrapper is also present on the preserved mobile layout. */
+.pocket-title-group {
+    width: 100%;
+    min-width: 0;
+    text-align: center;
+}
+
+@media (min-width: 721px) {
+    body.is-pc:not(.window-mode) {
+        --desktop-left-ratio: 36%;
+        --desktop-divider-size: 10px;
+    }
+
+    body.is-pc:not(.window-mode).theme-modern {
+        font-family: "Yu Gothic UI", "BIZ UDPGothic", "Noto Sans JP", sans-serif;
+    }
+    body.is-pc:not(.window-mode).theme-nerv {
+        font-family: "Meiryo UI", "Yu Gothic UI", sans-serif;
+    }
+    body.is-pc:not(.window-mode).theme-toyota {
+        font-family: "Share Tech Mono", "BIZ UDPGothic", monospace;
+    }
+    body.is-pc:not(.window-mode).theme-niconico {
+        font-family: "MS PGothic", "Yu Gothic UI", sans-serif;
+    }
+
+    body.is-pc:not(.window-mode) .widget-container,
+    body.is-pc:not(.window-mode).theme-modern .widget-container,
+    body.is-pc:not(.window-mode).theme-nerv .widget-container,
+    body.is-pc:not(.window-mode).theme-toyota .widget-container,
+    body.is-pc:not(.window-mode).theme-niconico .widget-container {
+        display: grid !important;
+        grid-template-areas: "left divider right" !important;
+        grid-template-columns: minmax(320px, var(--desktop-left-ratio)) var(--desktop-divider-size) minmax(0, 1fr) !important;
+        grid-template-rows: minmax(0, 1fr) !important;
+        gap: 0 !important;
+        min-height: 0;
+        overflow: hidden;
+        background: var(--desktop-line);
+    }
+
+    body.is-pc:not(.window-mode) #left-pane,
+    body.is-pc:not(.window-mode) #right-pane {
+        display: flex !important;
+        position: relative !important;
+        width: auto !important;
+        height: 100% !important;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        background: var(--desktop-panel);
+    }
+    body.is-pc:not(.window-mode) #left-pane {
+        grid-area: left;
+        flex-direction: column;
+        border-right: 0;
+    }
+    body.is-pc:not(.window-mode) #right-pane {
+        grid-area: right;
+        flex-direction: column;
+    }
+    body.is-pc:not(.window-mode) #widget-library,
+    body.is-pc:not(.window-mode) .library-lists-container {
+        display: flex !important;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-width: 0;
+        min-height: 0;
+    }
+
+    body.is-pc:not(.window-mode) #desktop-pane-resizer {
+        grid-area: divider;
+        position: relative;
+        z-index: 5;
+        display: block;
+        width: var(--desktop-divider-size);
+        min-width: var(--desktop-divider-size);
+        cursor: col-resize;
+        touch-action: none;
+        background: color-mix(in srgb, var(--desktop-line) 72%, var(--desktop-accent) 28%);
+    }
+    body.is-pc:not(.window-mode) #desktop-pane-resizer::after {
+        content: "";
+        position: absolute;
+        top: calc(50% - 38px);
+        left: 3px;
+        width: 4px;
+        height: 76px;
+        border-radius: 4px;
+        background: var(--desktop-accent);
+        opacity: .8;
+    }
+    body.is-pc:not(.window-mode) #desktop-pane-resizer:hover,
+    body.is-pc:not(.window-mode) #desktop-pane-resizer:focus-visible,
+    body.is-pc:not(.window-mode).desktop-pane-resizing #desktop-pane-resizer {
+        background: color-mix(in srgb, var(--desktop-accent) 52%, var(--desktop-line));
+        outline: none;
+    }
+
+    body.is-pc:not(.window-mode) #widget-player,
+    body.is-pc:not(.window-mode).theme-modern #widget-player,
+    body.is-pc:not(.window-mode).theme-nerv #widget-player,
+    body.is-pc:not(.window-mode).theme-toyota #widget-player,
+    body.is-pc:not(.window-mode).theme-niconico #widget-player {
+        order: 1;
+        position: relative;
+        display: block !important;
+        flex: 0 0 auto;
+        width: 100% !important;
+        min-height: clamp(230px, 24vw, 430px) !important;
+        aspect-ratio: 16 / 9 !important;
+        padding-top: 0 !important;
+        background: #000;
+        border-bottom: 1px solid var(--desktop-line);
+    }
+    body.is-pc:not(.window-mode) #widget-player::before { display: none !important; }
+    body.is-pc:not(.window-mode) #player-container,
+    body.is-pc:not(.window-mode) #player-container iframe { min-height: 100%; }
+
+    body.is-pc:not(.window-mode) #widget-controls,
+    body.is-pc:not(.window-mode).theme-modern #widget-controls,
+    body.is-pc:not(.window-mode).theme-nerv #widget-controls,
+    body.is-pc:not(.window-mode).theme-toyota #widget-controls,
+    body.is-pc:not(.window-mode).theme-niconico #widget-controls {
+        order: 2;
+        position: relative;
+        display: flex !important;
+        flex: 0 0 auto;
+        min-height: 150px;
+        padding: 13px 15px !important;
+        border-bottom: 1px solid var(--desktop-line);
+    }
+    body.is-pc:not(.window-mode) #widget-controls::before { display: none !important; }
+    body.is-pc:not(.window-mode) #widget-controls .player-controls-inner {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        width: 100%;
+    }
+    body.is-pc:not(.window-mode) #widget-controls .widget-art {
+        display: block !important;
+        flex: 0 0 auto;
+        width: clamp(82px, 8vw, 126px);
+        height: clamp(82px, 8vw, 126px);
+        object-fit: cover;
+    }
+    body.is-pc:not(.window-mode) #widget-controls .widget-info-container {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    body.is-pc:not(.window-mode) #widget-folder-list-wrapper,
+    body.is-pc:not(.window-mode).theme-modern #widget-folder-list-wrapper,
+    body.is-pc:not(.window-mode).theme-nerv #widget-folder-list-wrapper,
+    body.is-pc:not(.window-mode).theme-toyota #widget-folder-list-wrapper,
+    body.is-pc:not(.window-mode).theme-niconico #widget-folder-list-wrapper {
+        order: 3;
+        position: relative;
+        display: flex !important;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-height: 210px;
+        padding-top: 0 !important;
+        overflow: hidden;
+    }
+    body.is-pc:not(.window-mode) #widget-folder-list-wrapper::before { display: none !important; }
+    body.is-pc:not(.window-mode) .w-folder-list,
+    body.is-pc:not(.window-mode).theme-modern .w-folder-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-auto-rows: minmax(46px, max-content);
+        align-content: start;
+        gap: 5px;
+        padding: 8px;
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+    }
+    body.is-pc:not(.window-mode) .w-f-item {
+        min-height: 46px;
+        padding: 8px 9px;
+    }
+
+    body.is-pc:not(.window-mode) #widget-clock {
+        position: absolute;
+        z-index: 4;
+        top: 8px;
+        left: 8px;
+        order: 0;
+        display: none;
+        width: auto;
+        min-width: 104px;
+        min-height: 0;
+        padding: 6px 9px;
+        pointer-events: none;
+        background: color-mix(in srgb, var(--desktop-panel) 88%, transparent);
+        border: 1px solid var(--desktop-line);
+        backdrop-filter: blur(7px);
+    }
+    body.is-pc:not(.window-mode).show-clock #widget-clock { display: block; }
+    body.is-pc:not(.window-mode) #widget-clock #list-toggle-wrapper,
+    body.is-pc:not(.window-mode) #widget-clock #clock-date { display: none; }
+    body.is-pc:not(.window-mode) #widget-clock #clock-time { font-size: .9rem; }
+
+    body.is-pc:not(.window-mode) #library-nav-wrapper {
+        flex: 0 0 auto;
+        min-height: 58px;
+        padding: 9px 13px;
+    }
+    body.is-pc:not(.window-mode) #widget-track-list-wrapper,
+    body.is-pc:not(.window-mode).theme-modern #widget-track-list-wrapper,
+    body.is-pc:not(.window-mode).theme-nerv #widget-track-list-wrapper,
+    body.is-pc:not(.window-mode).theme-toyota #widget-track-list-wrapper,
+    body.is-pc:not(.window-mode).theme-niconico #widget-track-list-wrapper {
+        position: relative;
+        display: flex !important;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-height: 0;
+        padding-top: 0 !important;
+    }
+    body.is-pc:not(.window-mode) #widget-track-list-wrapper::before { display: none !important; }
+    body.is-pc:not(.window-mode) .w-track-list { flex: 1 1 auto; min-height: 0; }
+    body.is-pc:not(.window-mode) .w-t-item { min-height: 70px; padding-block: 9px; }
+    body.is-pc:not(.window-mode) .track-title-text { font-size: max(1rem, calc(var(--base-font-size) * .98)); }
+    body.is-pc:not(.window-mode) .track-artist-text { font-size: max(.86rem, calc(var(--base-font-size) * .82)); }
+
+    /* Theme-specific transport shapes. */
+    body.is-pc:not(.window-mode).theme-modern .controls-main .play-btn { border-radius: 8px; }
+    body.is-pc:not(.window-mode).theme-nerv .controls-main .play-btn { border-radius: 50%; }
+    body.is-pc:not(.window-mode).theme-toyota .controls-main .play-btn {
+        border-radius: 0;
+        clip-path: polygon(20% 0, 80% 0, 100% 20%, 100% 80%, 80% 100%, 20% 100%, 0 80%, 0 20%);
+    }
+    body.is-pc:not(.window-mode).theme-niconico .controls-main .play-btn { border-radius: 0; border-width: 2px; }
+
+    /* P2/P3 light modes use explicit readable surfaces, never whole-screen brightness filters. */
+    body.is-pc:not(.window-mode).theme-nerv.theme-light #left-pane,
+    body.is-pc:not(.window-mode).theme-nerv.theme-light #right-pane,
+    body.is-pc:not(.window-mode).theme-nerv.theme-light #widget-controls,
+    body.is-pc:not(.window-mode).theme-nerv.theme-light #widget-folder-list-wrapper,
+    body.is-pc:not(.window-mode).theme-nerv.theme-light #widget-track-list-wrapper,
+    body.is-pc:not(.window-mode).theme-toyota.theme-light #left-pane,
+    body.is-pc:not(.window-mode).theme-toyota.theme-light #right-pane,
+    body.is-pc:not(.window-mode).theme-toyota.theme-light #widget-controls,
+    body.is-pc:not(.window-mode).theme-toyota.theme-light #widget-folder-list-wrapper,
+    body.is-pc:not(.window-mode).theme-toyota.theme-light #widget-track-list-wrapper {
+        color: var(--theme-text);
+        background: color-mix(in srgb, var(--theme-surface) 94%, #fff 6%);
+        filter: none !important;
+    }
+
+    /* Desktop music mode remains operable: artwork/control card + full track list. */
+    body.is-pc:not(.window-mode).music-mode #widget-player { display: none !important; }
+    body.is-pc:not(.window-mode).music-mode #widget-controls {
+        position: relative !important;
+        inset: auto !important;
+        width: auto !important;
+        height: auto !important;
+        min-height: clamp(300px, 38vh, 470px) !important;
+        opacity: 1 !important;
+        overflow: hidden !important;
+        pointer-events: auto !important;
+        z-index: auto !important;
+    }
+    body.is-pc:not(.window-mode).music-mode #widget-controls .player-controls-inner {
+        display: grid;
+        grid-template-columns: minmax(150px, 42%) minmax(0, 1fr);
+        align-items: center;
+        gap: clamp(16px, 2vw, 30px);
+    }
+    body.is-pc:not(.window-mode).music-mode #widget-controls .widget-art {
+        width: min(100%, 280px);
+        height: auto;
+        margin-inline: auto;
+    }
+    body.is-pc:not(.window-mode).music-mode #widget-controls .widget-info-container {
+        width: 100%;
+        padding: 0;
+    }
+
+    @media (max-width: 1100px) {
+        body.is-pc:not(.window-mode) {
+            --desktop-left-ratio: min(44%, 430px);
+        }
+        body.is-pc:not(.window-mode) .widget-container,
+        body.is-pc:not(.window-mode).theme-modern .widget-container,
+        body.is-pc:not(.window-mode).theme-nerv .widget-container,
+        body.is-pc:not(.window-mode).theme-toyota .widget-container,
+        body.is-pc:not(.window-mode).theme-niconico .widget-container {
+            grid-template-columns: minmax(300px, var(--desktop-left-ratio)) 8px minmax(0, 1fr) !important;
+        }
+        body.is-pc:not(.window-mode) .w-folder-list,
+        body.is-pc:not(.window-mode).theme-modern .w-folder-list { grid-template-columns: 1fr; }
+        body.is-pc:not(.window-mode) #widget-player { min-height: 210px !important; }
+        body.is-pc:not(.window-mode) #widget-controls { min-height: 132px; padding: 9px !important; }
+        body.is-pc:not(.window-mode) #widget-controls .widget-art { width: 72px; height: 72px; }
+    }
+}
+
+/* Desktop lock/player screen. Mobile keeps the existing pocket layout. */
+@media (min-width: 721px) {
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) {
+        align-items: stretch;
+        justify-content: stretch;
+        padding: 0;
+    }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) .pocket-hint {
+        top: 24px;
+        right: 28px;
+        left: auto;
+        width: auto;
+        padding: 10px 14px;
+        opacity: 1;
+        background: rgba(6, 12, 24, .58);
+        border: 1px solid rgba(255,255,255,.25);
+        border-radius: 8px;
+        backdrop-filter: blur(9px);
+    }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) .pocket-content {
+        position: absolute;
+        right: 24px;
+        bottom: 24px;
+        left: 24px;
+        display: grid;
+        grid-template-columns: minmax(140px, 190px) minmax(340px, 1fr) minmax(260px, .55fr);
+        grid-template-rows: auto auto auto auto;
+        gap: 10px 22px;
+        width: auto;
+        max-width: none;
+        max-height: none;
+        padding: 20px;
+        color: #fff;
+        background: rgba(var(--panel-rgb), var(--pocket-panel-alpha, .72));
+        border: 1px solid var(--theme-border-active, rgba(255,255,255,.34));
+        border-radius: 20px;
+        box-shadow: 0 18px 48px rgba(0,0,0,.45);
+        backdrop-filter: blur(16px) saturate(1.08);
+        -webkit-backdrop-filter: blur(16px) saturate(1.08);
+    }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) #pocket-clock-container {
+        position: fixed;
+        top: 30px;
+        left: 34px;
+        margin: 0 !important;
+        text-align: left;
+        text-shadow: 0 2px 14px rgba(0,0,0,.8);
+        transform: scale(var(--pocket-item-scale, 1));
+        transform-origin: top left;
+    }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) #pocket-clock-text {
+        font-size: clamp(4.4rem, 7vw, 7.2rem) !important;
+        line-height: .95;
+        font-weight: 400;
+    }
+    .pocket-date-text { margin-top: 8px; font-size: 1.15rem; color: rgba(255,255,255,.9); }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) #pocket-art {
+        grid-column: 1;
+        grid-row: 1 / 5;
+        align-self: center;
+        width: 100%;
+        max-width: 190px;
+        aspect-ratio: 1;
+        margin: 0;
+        transform: none;
+        border-radius: 9px;
+    }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) .pocket-title-group {
+        grid-column: 2;
+        grid-row: 1;
+        min-width: 0;
+        transform: none;
+    }
+    .pocket-now-label { display: block; margin-bottom: 6px; color: var(--theme-accent, #45c7ff); font-weight: 700; letter-spacing: .12em; }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) #pocket-title {
+        overflow: hidden;
+        margin: 0 !important;
+        padding: 0 !important;
+        max-height: none;
+        color: #fff;
+        font-size: clamp(1.3rem, 2.2vw, 2rem) !important;
+        line-height: 1.25;
+        text-align: left !important;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .pocket-artist { overflow: hidden; margin: 7px 0 0; color: rgba(255,255,255,.76); text-overflow: ellipsis; white-space: nowrap; }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) #pocket-progress-area {
+        grid-column: 2;
+        grid-row: 2;
+        width: 100% !important;
+        max-width: none !important;
+        margin: 0 !important;
+        transform: none;
+    }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) #pocket-controls {
+        grid-column: 2;
+        grid-row: 3 / 5;
+        align-self: center;
+        margin: 0;
+        transform: none;
+    }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) .pocket-controls button {
+        width: 52px;
+        height: 52px;
+        border-radius: 8px;
+    }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) .pocket-controls .pocket-play-btn {
+        width: 72px;
+        height: 64px;
+        border-radius: 8px;
+        color: var(--theme-text-on-accent, #071018);
+        background: var(--theme-accent, #45c7ff);
+    }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) .pocket-next-panel {
+        grid-column: 3;
+        grid-row: 1 / 5;
+        display: grid;
+        align-content: center;
+        gap: 9px;
+        min-width: 0;
+        padding-left: 18px;
+        border-left: 1px solid rgba(255,255,255,.18);
+    }
+    .pocket-next-heading { color: var(--theme-accent, #45c7ff); font-weight: 700; letter-spacing: .12em; }
+    .pocket-next-item {
+        display: grid;
+        grid-template-columns: 46px minmax(0, 1fr);
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+        padding: 5px;
+        color: #fff;
+        background: transparent;
+        border: 1px solid transparent;
+        text-align: left;
+        cursor: pointer;
+    }
+    .pocket-next-item:hover,
+    .pocket-next-item:focus-visible { border-color: var(--theme-border-active, rgba(255,255,255,.42)); background: rgba(255,255,255,.08); }
+    .pocket-next-item:disabled { opacity: .48; cursor: default; }
+    .pocket-next-item img { width: 44px; height: 44px; object-fit: cover; background: rgba(255,255,255,.08); }
+    .pocket-next-item span,
+    .pocket-next-item strong,
+    .pocket-next-item small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pocket-next-item small { margin-top: 3px; color: rgba(255,255,255,.7); }
+    .pocket-quick-slider { display: grid; grid-template-columns: 24px minmax(0, 1fr) 42px; align-items: center; gap: 7px; }
+    .pocket-quick-slider input { width: 100%; accent-color: var(--theme-accent, #45c7ff); }
+    .pocket-quick-slider output { font-variant-numeric: tabular-nums; text-align: right; }
+    #pocket-overlay:not(.layout-editing):not(.pocket-layout-custom) #pocket-unlock-btn {
+        position: fixed;
+        bottom: 5px;
+        left: 30px;
+        margin: 0;
+        transform: none;
+        border-radius: 999px;
+    }
+    body.theme-nerv #pocket-overlay .pocket-controls button,
+    body.theme-nerv #pocket-overlay .pocket-controls .pocket-play-btn { border-radius: 50%; }
+    body.theme-toyota #pocket-overlay .pocket-content {
+        border-color: #ff9e19;
+        border-radius: 0;
+        clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 18px 100%, 0 calc(100% - 18px));
+    }
+    body.theme-toyota #pocket-overlay .pocket-controls button {
+        border-radius: 0;
+        border-color: #ff9e19;
+        clip-path: polygon(20% 0, 80% 0, 100% 20%, 100% 80%, 80% 100%, 20% 100%, 0 80%, 0 20%);
+    }
+    body.theme-toyota #pocket-overlay .pocket-controls .pocket-play-btn { color: #111807; background: #9cff57; }
+    body.theme-niconico #pocket-overlay .pocket-content { border: 3px double #ff9800; border-radius: 0; }
+    body.theme-niconico #pocket-overlay .pocket-controls button,
+    body.theme-niconico #pocket-overlay .pocket-controls .pocket-play-btn,
+    body.theme-niconico #pocket-overlay #pocket-unlock-btn { border-radius: 0; }
+    body.theme-niconico #pocket-overlay .pocket-controls .pocket-play-btn { color: #151515; background: #ff9800; }
+    body.performance-mode #pocket-overlay .pocket-content,
+    body.performance-mode #pocket-overlay .pocket-hint {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        box-shadow: none;
+        background-color: rgba(var(--panel-rgb), .94);
+    }
+}
+
+@media (max-width: 720px) {
+    #desktop-pane-resizer,
+    .pocket-next-panel,
+    .pocket-date-text,
+    .pocket-now-label,
+    .pocket-artist { display: none !important; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #desktop-pane-resizer,
+    #pocket-overlay * { animation: none !important; transition: none !important; }
+}
