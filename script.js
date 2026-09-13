@@ -1,9 +1,9 @@
 const defaultSettings = {
     theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, nicoBoost: 1.0,
-    baseFontSize: 100, pcLeftWidth: 350, showClock: true, clockFeatureV1: true, clockType: 'digital1', pocketClockType: 'digital1', showThumbnails: true,
+    baseFontSize: 100, pcLeftWidth: 350, desktopLeftRatio: 36, showClock: true, clockFeatureV1: true, clockType: 'digital1', pocketClockType: 'digital1', showThumbnails: true,
     performanceMode: false, dataSaverMode: false, colorMode: 'system',
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff', blurBaseColor: '#000000',
-    pocketAlwaysOn: false, pocketSwipeUnlock: true, pocketUseBackground: false, pocketBgDim: 35,
+    pocketAlwaysOn: false, pocketSwipeUnlock: true, pocketUseBackground: false, pocketBgDim: 35, pocketFullscreenMode: 'browser', pocketVolume: 100, pocketPanelOpacity: 72,
     pocketBgManual: false, pocketBgX: 50, pocketBgY: 50, pocketBgScale: 100,
     pocketShowClock: true, pocketShowArt: true, pocketShowTitle: true, pocketShowProgress: true, pocketShowControls: true, pocketShowUnlock: true,
     pocketLayout: {}, pocketLayoutScale: {}, forcePcLayout: false,
@@ -1096,7 +1096,7 @@ function applyThemeSettings() {
     document.body.classList.toggle('show-clock', Boolean(appSettings.showClock) && document.body.classList.contains('is-pc'));
     
     document.documentElement.style.setProperty('--base-font-size', `${appSettings.baseFontSize}%`); 
-    document.documentElement.style.setProperty('--pc-left-width', `${appSettings.pcLeftWidth}px`);
+    document.documentElement.style.setProperty('--desktop-left-ratio', `${Math.max(28, Math.min(52, Number(appSettings.desktopLeftRatio) || 36))}%`);
     document.documentElement.style.setProperty('--bg-position', appSettings.bgPosition); document.documentElement.style.setProperty('--bg-size', appSettings.bgSize);
     
     document.body.classList.toggle('custom-color-enabled', Boolean(appSettings.customColorEnabled));
@@ -1137,7 +1137,7 @@ function applyThemeSettings() {
 }
 
 const POCKET_LAYOUT_ELEMENTS = {
-    clock: 'pocket-clock-container', art: 'pocket-art', title: 'pocket-title', progress: 'pocket-progress-area', controls: 'pocket-controls', unlock: 'pocket-unlock-btn'
+    clock: 'pocket-clock-container', art: 'pocket-art', title: 'pocket-title-group', progress: 'pocket-progress-area', controls: 'pocket-controls', unlock: 'pocket-unlock-btn'
 };
 
 function applyPocketAppearance() {
@@ -1146,6 +1146,7 @@ function applyPocketAppearance() {
     overlay.style.setProperty('--pocket-dim', String(Math.max(0, Math.min(90, Number(appSettings.pocketBgDim))) / 100));
     overlay.style.setProperty('--pocket-bg-position', appSettings.bgPosition);
     overlay.style.setProperty('--pocket-bg-size', appSettings.bgSize);
+    overlay.style.setProperty('--pocket-panel-alpha', String(Math.max(45, Math.min(95, Number(appSettings.pocketPanelOpacity) || 72)) / 100));
     const visibility = { clock: appSettings.pocketShowClock, art: appSettings.pocketShowArt, title: appSettings.pocketShowTitle, progress: appSettings.pocketShowProgress, controls: appSettings.pocketShowControls, unlock: appSettings.pocketShowUnlock };
     const custom = appSettings.pocketLayout && Object.keys(appSettings.pocketLayout).length > 0;
     overlay.classList.toggle('pocket-layout-custom', custom && !overlay.classList.contains('layout-editing'));
@@ -1328,7 +1329,6 @@ function setupSettingsModal() {
     document.getElementById('btn-open-settings').onclick = () => {
         settingsOpenSnapshot = JSON.parse(JSON.stringify(appSettings));
         document.getElementById('set-theme').value = appSettings.theme; document.getElementById('set-color-mode').value = appSettings.colorMode; document.getElementById('set-font-size').value = appSettings.baseFontSize; document.getElementById('font-val').textContent = appSettings.baseFontSize;
-        document.getElementById('set-pc-left-width').value = appSettings.pcLeftWidth; document.getElementById('pc-width-val').textContent = appSettings.pcLeftWidth;
         document.getElementById('set-bg-position').value = appSettings.bgPosition; document.getElementById('set-bg-size').value = appSettings.bgSize;
         document.getElementById('set-opacity').value = appSettings.bgOpacity; document.getElementById('op-val').textContent = appSettings.bgOpacity;
         document.getElementById('set-nico-boost').value = appSettings.nicoBoost || 1.0; document.getElementById('boost-val').textContent = parseFloat(appSettings.nicoBoost || 1.0).toFixed(1);
@@ -1343,6 +1343,7 @@ function setupSettingsModal() {
         document.getElementById('set-clock-type').value = appSettings.clockType || 'digital1';
         document.getElementById('set-pocket-clock-type').value = appSettings.pocketClockType || 'digital1';
         document.getElementById('set-pocket-always-on').checked = appSettings.pocketAlwaysOn; document.getElementById('set-pocket-swipe-unlock').checked = appSettings.pocketSwipeUnlock;
+        document.getElementById('set-pocket-fullscreen-mode').value = appSettings.pocketFullscreenMode || 'browser';
         document.getElementById('set-force-pc-layout').checked = appSettings.forcePcLayout; document.getElementById('set-window-mode').checked = appSettings.windowMode;
         document.getElementById('set-use-firebase').checked = Boolean(appSettings.useFirebase);
         document.getElementById('set-use-custom-color').checked = appSettings.customColorEnabled; document.getElementById('set-accent-color').value = appSettings.customAccentColor; document.getElementById('set-border-color').value = appSettings.customBorderColor; document.getElementById('set-blur-base-color').value = appSettings.blurBaseColor || '#000000';
@@ -1370,7 +1371,7 @@ function setupSettingsModal() {
         window.CmsUI?.openDialog(modal, { labelledBy: 'settings-title', initialFocus: document.getElementById('set-theme'), onEscape: () => closeSettings({ restore: true }) });
     };
 
-    document.getElementById('set-font-size').oninput = (e) => document.getElementById('font-val').textContent = e.target.value; document.getElementById('set-pc-left-width').oninput = (e) => document.getElementById('pc-width-val').textContent = e.target.value;
+    document.getElementById('set-font-size').oninput = (e) => document.getElementById('font-val').textContent = e.target.value;
     document.getElementById('set-opacity').oninput = (e) => document.getElementById('op-val').textContent = e.target.value; document.getElementById('set-nico-boost').oninput = (e) => document.getElementById('boost-val').textContent = parseFloat(e.target.value).toFixed(1);
     document.getElementById('set-window-panel-alpha').oninput = (e) => document.getElementById('window-panel-alpha-val').textContent = e.target.value;
     const windowTitleAlphaInput = document.getElementById('set-window-title-alpha');
@@ -1414,8 +1415,8 @@ function setupSettingsModal() {
 
     document.getElementById('btn-save-settings').onclick = async () => {
         const previousVocaloidCollectionEnabled = Boolean(appSettings.vocaloidCollectionEnabled);
-        appSettings.theme = document.getElementById('set-theme').value; appSettings.colorMode = document.getElementById('set-color-mode').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.pcLeftWidth = document.getElementById('set-pc-left-width').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
-        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.vocaloidCollectionEnabled = document.getElementById('set-vocaloid-collection').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
+        appSettings.theme = document.getElementById('set-theme').value; appSettings.colorMode = document.getElementById('set-color-mode').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
+        appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.vocaloidCollectionEnabled = document.getElementById('set-vocaloid-collection').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.pocketFullscreenMode = document.getElementById('set-pocket-fullscreen-mode').value; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         appSettings.windowColorsLinked = true; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = appSettings.windowPanelColor; appSettings.windowTitleAlpha = appSettings.windowPanelAlpha;
         appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value); appSettings.pocketBgManual = document.getElementById('set-pocket-bg-manual').checked; appSettings.pocketBgX = Number(document.getElementById('set-pocket-bg-x').value); appSettings.pocketBgY = Number(document.getElementById('set-pocket-bg-y').value); appSettings.pocketBgScale = Number(document.getElementById('set-pocket-bg-scale').value); appSettings.pocketShowClock = document.getElementById('set-pocket-show-clock').checked; appSettings.pocketShowArt = document.getElementById('set-pocket-show-art').checked; appSettings.pocketShowTitle = document.getElementById('set-pocket-show-title').checked; appSettings.pocketShowProgress = document.getElementById('set-pocket-show-progress').checked; appSettings.pocketShowControls = document.getElementById('set-pocket-show-controls').checked; appSettings.pocketShowUnlock = document.getElementById('set-pocket-show-unlock').checked;
         appSettings.pocketLayoutScale = appSettings.pocketLayoutScale || {};
@@ -2540,9 +2541,10 @@ function setupPlayerControls() {
 function toggleFullscreen() { const pw = document.getElementById('widget-player'); if (!document.fullscreenElement && !document.webkitFullscreenElement) { if (pw.requestFullscreen) pw.requestFullscreen(); else if (pw.webkitRequestFullscreen) pw.webkitRequestFullscreen(); else document.body.classList.toggle('pseudo-fullscreen'); } else { if (document.exitFullscreen) document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); else document.body.classList.remove('pseudo-fullscreen'); } }
 
 function applyVolume() {
-    let boost = parseFloat(appSettings.nicoBoost) || 1.0; let ytVol = Math.max(10, Math.floor(100 / boost)); 
+    const requestedVolume = Math.max(0, Math.min(100, Number(appSettings.pocketVolume) || 0));
+    let boost = parseFloat(appSettings.nicoBoost) || 1.0; let ytVol = Math.max(0, Math.min(100, Math.floor(requestedVolume / boost)));
     if (currentPlayingItem && currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.setVolume === 'function') ytPlayer.setVolume(ytVol);
-    if (currentPlayingItem && currentPlayingItem.site === 'niconico') { const nIframe = document.getElementById('nico-player'); if (nIframe && nIframe.contentWindow) nIframe.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: "volumeChange", data: { volume: 1 } }, 'https://embed.nicovideo.jp'); }
+    if (currentPlayingItem && currentPlayingItem.site === 'niconico') { const nIframe = document.getElementById('nico-player'); if (nIframe && nIframe.contentWindow) nIframe.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: "volumeChange", data: { volume: requestedVolume / 100 } }, 'https://embed.nicovideo.jp'); }
 }
 
 function startProgressTimer() { clearInterval(progressInterval); progressInterval = setInterval(updateProgress, 1000); armPlaybackWatchdog(true); }
@@ -2742,8 +2744,9 @@ function togglePlay(fPlay) {
 
 function updatePlayerUI(i) {
     document.getElementById('widget-title').textContent = i.title; document.getElementById('widget-artist').textContent = i.channelName || i.site; document.getElementById('pocket-title').textContent = i.title;
+    const pocketArtist = document.getElementById('pocket-artist'); if (pocketArtist) pocketArtist.textContent = i.channelName || i.uploader || i.site || '---';
     const t = i.thumbnail || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'/>"; document.getElementById('widget-art').src = t; document.getElementById('pocket-art').src = t;
-    updatePlayPauseIcon(); scheduleMarqueeUpdate(); 
+    updatePlayPauseIcon(); scheduleMarqueeUpdate(); window.CmsDesktopLargeUI?.updatePocketQueue?.();
     if ('mediaSession' in navigator) { navigator.mediaSession.metadata = new MediaMetadata({ title: i.title, artist: i.channelName || i.site, artwork:[{ src: t, sizes: '512x512', type: 'image/jpeg' }] }); navigator.mediaSession.setActionHandler('play', () => togglePlay(true)); navigator.mediaSession.setActionHandler('pause', () => togglePlay(false)); navigator.mediaSession.setActionHandler('previoustrack', playPrevVideo); navigator.mediaSession.setActionHandler('nexttrack', playNextVideo); }
 }
 
@@ -2786,6 +2789,7 @@ function setupClockUI() {
         const pocketType = appSettings.pocketClockType || 'digital1';
         if (pocketContainer) pocketContainer.classList.toggle('hidden', pocketType === 'none');
         if (pocketClock) { pocketClock.textContent = shortTime; pocketClock.className = `theme-text ${pocketType}`; pocketClock.classList.toggle('hidden', pocketType === 'analog' || pocketType === 'none'); }
+        const pocketDate = document.getElementById('pocket-date-text'); if (pocketDate) pocketDate.textContent = new Intl.DateTimeFormat('ja-JP', { month: 'long', day: 'numeric', weekday: 'short' }).format(now);
         if (pocketAnalog) pocketAnalog.classList.toggle('hidden', pocketType !== 'analog');
         setHands(analogClock, now); setHands(pocketAnalog, now);
     };
@@ -2798,8 +2802,10 @@ function setupPocketMode() {
     let holdTimer = null; let startY = null; let activePointer = null;
     const open = () => {
         applyPocketAppearance(); pOverlay.classList.remove('hidden'); document.body.classList.add('pocket-active');
-        const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
-        if (request) { try { const result = request.call(document.documentElement); if (result?.catch) result.catch(() => {}); } catch (_) {} }
+        if ((appSettings.pocketFullscreenMode || 'browser') === 'browser') {
+            const request = document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen;
+            if (request) { try { const result = request.call(document.documentElement); if (result?.catch) result.catch(() => {}); } catch (_) {} }
+        }
     };
     const cancelHold = () => {
         const wasHolding = pOverlay.classList.contains('touch-holding');
