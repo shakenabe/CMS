@@ -145,7 +145,7 @@ body.is-mobile { height: 100dvh; overflow: hidden; }
     background: rgba(var(--panel-rgb), var(--panel-alpha)); backdrop-filter: blur(var(--panel-blur)); -webkit-backdrop-filter: blur(var(--panel-blur));
     border: 1px solid var(--border-color); border-radius: var(--border-radius); box-shadow: var(--panel-shadow);
 }
-body.performance-mode .panel-glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; background: var(--bg-color) !important; border: 1px solid var(--border-color); }
+body.performance-mode .panel-glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; background: rgba(var(--panel-rgb), var(--panel-alpha)) !important; border: 1px solid var(--border-color); }
 body.performance-mode .is-marquee { animation: none !important; transform: none !important; }
 body.performance-mode .w-t-playing-icon { animation: none !important; }
 body.performance-mode .w-track-list,

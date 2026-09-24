@@ -603,6 +603,9 @@ async function saveLibrarySnapshot(data = {}) {
     baseline = { ...full, ...baselineState, initialized: true };
   }
 
+  // Device preferences never become shared state when saving a library.
+  // Preserve legacy cloud settings for old clients without publishing this device's UI.
+  data = { ...data, webSettings: baseline.webSettings || {} };
   const localIds = new Set(mediaItems.map(item => item.id));
   const baselineById = new Map((baseline.mediaItems || []).map(item => [item.id, item]));
   const changedItems = mediaItems.filter(item => {

@@ -3,14 +3,14 @@ const defaultSettings = {
     baseFontSize: 100, pcLeftWidth: 350, desktopLeftRatio: 36, showClock: true, clockFeatureV1: true, clockType: 'digital1', pocketClockType: 'digital1', showThumbnails: true,
     performanceMode: false, dataSaverMode: false, colorMode: 'system',
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff', blurBaseColor: '#000000',
-    pocketAlwaysOn: false, pocketSwipeUnlock: true, pocketUseBackground: false, pocketBgDim: 35, pocketFullscreenMode: 'browser', pocketVolume: 100, pocketPanelOpacity: 72,
+    pocketAlwaysOn: false, pocketSwipeUnlock: true, pocketUseBackground: false, pocketBgDim: 35, pocketFullscreenMode: 'browser', pocketVolume: 100, pocketPanelOpacity: 28, settingsSchemaVersion: 2,
     pocketBgManual: false, pocketBgX: 50, pocketBgY: 50, pocketBgScale: 100,
     pocketShowClock: true, pocketShowArt: true, pocketShowTitle: true, pocketShowProgress: true, pocketShowControls: true, pocketShowUnlock: true,
     pocketLayout: {}, pocketLayoutScale: {}, forcePcLayout: false,
     musicMode: false, autoScrollActiveTrack: true, vocaloidCollectionEnabled: false, vocaloidGroupMode: 'videos',
     windowMode: false, windowPositions: {}, windowStates: {}, windowColorsLinked: true,
     windowPanelColor: '#000000', windowPanelAlpha: 55, windowTitleColor: '#1f4f8f', windowTitleAlpha: 100,
-    defaultSortOrder: 'custom', useFirebase: false, resumeLastPlayback: true
+    defaultSortOrder: 'custom', useFirebase: false, resumeLastPlayback: true, desktopPanelHeights: {}
 };
 const MOBILE_LAYOUT_MAX = 720;
 const TABLET_LAYOUT_MAX = 1100;
@@ -32,6 +32,7 @@ let isPlaying = false;
 let playbackIntent = 'stopped';
 let playbackMediaState = 'idle';
 let currentPlayingItem = null;
+let currentPlaybackContext = null;
 
 let ytPlayer = null;
 let isTransitioning = false;
@@ -483,8 +484,8 @@ function loadSettings() {
     try {
         const saved = localStorage.getItem('cms_player_settings_v23');
         if (saved) {
-            const parsed = JSON.parse(saved); appSettings = { ...defaultSettings, ...parsed };
-            if (!parsed.clockFeatureV1) { appSettings.showClock = true; appSettings.clockFeatureV1 = true; saveSettings(); }
+            const parsed = CmsStatePolicy.migrateSettings(JSON.parse(saved)); appSettings = { ...defaultSettings, ...parsed };
+            appSettings.clockFeatureV1 = true;
         } else {
             const isMobile = window.innerWidth <= 900; if (isMobile) appSettings.performanceMode = true;
         }
@@ -495,7 +496,7 @@ function loadSettings() {
         delete appSettings.motionMode;
     } catch (e) {}
 }
-function saveSettings() { localStorage.setItem('cms_player_settings_v23', JSON.stringify(appSettings)); }
+function saveSettings() { localStorage.setItem('cms_player_settings_v23', JSON.stringify(appSettings)); window.dispatchEvent(new Event('cms-state-change')); }
 
 function getResolvedColorMode() {
     if (appSettings.colorMode === 'dark' || appSettings.colorMode === 'light') return appSettings.colorMode;
@@ -536,12 +537,13 @@ function saveCurrentSession(extra = {}) {
     if (!extra.force && now - lastPlaybackStateSavedAt < 5000) return;
     lastPlaybackStateSavedAt = now;
     const item = extra.item || currentPlayingItem || null;
-    const folderId = extra.folderId || currentFolderId || '__all';
+    const folderId = extra.folderId || currentPlaybackContext?.folderId || currentFolderId || '__all';
     const itemIndex = item ? currentRenderSongs.findIndex(song => isSameMediaItem(song, item)) : -1;
     const playlistIndex = item ? currentPlaylist.findIndex(song => isSameMediaItem(song, item)) : -1;
     localStorage.setItem(CMS_PLAYER_SESSION_KEY, JSON.stringify({
         folderId,
-        targetFolderId: folderId,
+        targetFolderId: currentFolderId || folderId,
+        playbackContext: currentPlaybackContext,
         itemId: item?.id || null,
         url: item?.url || null,
         site: item?.site || null,
@@ -571,10 +573,7 @@ function getSavedPlaybackState() {
 }
 
 function isSameMediaItem(a, b) {
-    if (!a || !b) return false;
-    if (a === b) return true;
-    if (a.id && b.id && a.id === b.id) return true;
-    return Boolean(a.url && b.url && a.url === b.url);
+    return CmsStatePolicy.sameMedia(a, b);
 }
 
 function findSongIndex(songs, saved) {
@@ -595,8 +594,9 @@ function resolveSavedPlayback(saved) {
     if (!saved || !musicLibrary.length) return null;
     const allFolder = musicLibrary.find(f => f.id === '__all') || musicLibrary[0];
     const candidates = [
-        saved.targetFolderId,
+        saved.playbackContext?.folderId,
         saved.folderId,
+        saved.targetFolderId,
         currentFolderId,
         '__all'
     ].filter(Boolean);
@@ -664,6 +664,7 @@ function updateLayoutMode() {
         document.getElementById('mobile-list-fullscreen-header')?.classList.add('hidden');
         document.body.classList.toggle('show-clock', Boolean(appSettings.showClock));
         updateMobileBackgroundStart();
+        window.dispatchEvent(new Event('cms-state-change'));
         return;
     }
     if (window.innerWidth <= MOBILE_LAYOUT_MAX && !appSettings.forcePcLayout) {
@@ -676,6 +677,7 @@ function updateLayoutMode() {
     }
     document.body.classList.toggle('show-clock', Boolean(appSettings.showClock) && document.body.classList.contains('is-pc'));
     updateMobileBackgroundStart();
+    window.dispatchEvent(new Event('cms-state-change'));
 }
 
 function updateMobileBackgroundStart() {
@@ -768,8 +770,18 @@ function setupMobileTrackListFocus() {
 }
 
 function returnToCurrentTrack() {
-    if (!currentPlayingItem || !currentRenderSongs?.length) return;
-    const index = currentRenderSongs.findIndex(song => song === currentPlayingItem || (song.id && song.id === currentPlayingItem.id));
+    if (!currentPlayingItem || !currentPlaybackContext) return;
+    clearTimeout(pendingTouchTrackTimer); pendingTouchTrackTimer = null;
+    currentSearchQuery = ''; excludeNico = false;
+    document.getElementById('widget-search-box').value = '';
+    document.getElementById('pc-search-box').value = '';
+    document.getElementById('exclude-nico').checked = false;
+    buildLibrary(); renderFolders();
+    const source = musicLibrary.find(folder => folder.id === currentPlaybackContext.folderId);
+    if (!source) { window.CmsUI?.notify?.('再生元フォルダが見つかりません。', { type: 'info' }); return; }
+    if (source.id === '__vocaloid') appSettings.vocaloidGroupMode = 'videos';
+    selectFolder(source.id, { preserveScroll: true });
+    const index = currentRenderSongs.findIndex(song => isSameMediaItem(song, currentPlayingItem));
     if (index < 0) return;
     scrollTrackIndexIntoView(index, { force: true });
     const activeEl = trackListEl.querySelector(`.w-t-item[data-index="${index}"]`);
@@ -791,7 +803,7 @@ function setupTrackListReturnGesture() {
         } else lastTapAt = now;
         start = null;
     }, { passive: true });
-    trackListEl.addEventListener('dblclick', (e) => { e.preventDefault(); returnToCurrentTrack(); });
+    trackListEl.addEventListener('dblclick', (e) => { if (isEditMode || e.target.closest('input, button, a, select')) return; e.preventDefault(); clearTimeout(pendingTouchTrackTimer); pendingTouchTrackTimer = null; returnToCurrentTrack(); });
 }
 
 function setupControlsReturnGesture() {
@@ -930,8 +942,7 @@ function setupWindowPointerDrag(el, handle) {
             const next = clampWindowRect({ top: start.top + ev.clientY - startY, left: start.left + ev.clientX - startX, width: start.width, height: start.height }, el.id);
             el.style.top = `${next.top}px`; el.style.left = `${next.left}px`;
         };
-        const end = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end); saveWindowPanelRect(el); };
-        handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end);
+        trackWindowPointer(e, move, () => saveWindowPanelRect(el));
     });
 }
 
@@ -945,8 +956,7 @@ function setupWindowPointerResize(el, handle) {
             const next = clampWindowRect({ top: start.top, left: start.left, width: start.width + ev.clientX - startX, height: start.height + ev.clientY - startY }, el.id);
             el.style.width = `${next.width}px`; el.style.height = `${next.height}px`;
         };
-        const end = () => { handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end); saveWindowPanelRect(el); };
-        handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end);
+        trackWindowPointer(e, move, () => saveWindowPanelRect(el));
     });
 }
 
@@ -1097,10 +1107,15 @@ function applyThemeSettings() {
     
     document.documentElement.style.setProperty('--base-font-size', `${appSettings.baseFontSize}%`); 
     document.documentElement.style.setProperty('--desktop-left-ratio', `${Math.max(28, Math.min(52, Number(appSettings.desktopLeftRatio) || 36))}%`);
+    document.body.style.setProperty('--desktop-left-ratio', `${Math.max(28, Math.min(52, Number(appSettings.desktopLeftRatio) || 36))}%`);
     document.documentElement.style.setProperty('--bg-position', appSettings.bgPosition); document.documentElement.style.setProperty('--bg-size', appSettings.bgSize);
     
     document.body.classList.toggle('custom-color-enabled', Boolean(appSettings.customColorEnabled));
     if (appSettings.customColorEnabled) {
+        document.body.style.setProperty('--rd-text', appSettings.customAccentColor);
+        document.body.style.setProperty('--rd-accent', appSettings.customAccentColor);
+        document.body.style.setProperty('--rd-border', appSettings.customBorderColor);
+        document.body.style.setProperty('--rd-muted', `color-mix(in srgb, ${appSettings.customAccentColor} 70%, transparent)`);
         document.body.style.setProperty('--text-color', appSettings.customAccentColor);
         document.body.style.setProperty('--sub-text-color', `color-mix(in srgb, ${appSettings.customAccentColor} 70%, transparent)`);
         document.body.style.setProperty('--accent-color', appSettings.customAccentColor);
@@ -1111,14 +1126,19 @@ function applyThemeSettings() {
         document.body.style.setProperty('--theme-border', appSettings.customBorderColor);
         document.body.style.setProperty('--theme-border-active', appSettings.customBorderColor);
     } else {
+        ['--rd-text', '--rd-accent', '--rd-border', '--rd-muted'].forEach(name => document.body.style.removeProperty(name));
         ['--text-color', '--sub-text-color', '--accent-color', '--border-color', '--theme-text', '--theme-text-muted', '--theme-accent', '--theme-border', '--theme-border-active'].forEach(name => document.body.style.removeProperty(name));
     }
     const baseColor = appSettings.blurBaseColor || '#000000';
     if (hasCustomBackgroundImage) {
+        document.body.style.setProperty('--rd-panel', hexToRgbString(baseColor));
+        document.body.style.setProperty('--rd-bg', baseColor);
         document.body.style.setProperty('--panel-rgb', hexToRgbString(baseColor));
         document.body.style.setProperty('--bg-color', baseColor);
         document.documentElement.style.setProperty('--bg-gradient', makeAdaptiveGradient(baseColor));
     } else {
+        document.body.style.removeProperty('--rd-panel');
+        document.body.style.removeProperty('--rd-bg');
         document.body.style.removeProperty('--panel-rgb');
         document.body.style.removeProperty('--bg-color');
         document.documentElement.style.removeProperty('--bg-gradient');
@@ -1134,10 +1154,12 @@ function applyThemeSettings() {
     updateMobileBackgroundStart();
     const pOverlay = document.getElementById('pocket-overlay'); if (appSettings.pocketAlwaysOn) pOverlay.classList.add('always-on'); else pOverlay.classList.remove('always-on');
     applyPocketAppearance();
+    applyDesktopPanelHeights();
+    window.dispatchEvent(new Event('cms-state-change'));
 }
 
 const POCKET_LAYOUT_ELEMENTS = {
-    clock: 'pocket-clock-container', art: 'pocket-art', title: 'pocket-title-group', progress: 'pocket-progress-area', controls: 'pocket-controls', unlock: 'pocket-unlock-btn'
+    clock: 'pocket-clock-container', art: 'pocket-art', title: 'pocket-title-group', progress: 'pocket-progress-area', controls: 'pocket-controls', next: 'pocket-next-panel', unlock: 'pocket-unlock-btn'
 };
 
 function applyPocketAppearance() {
@@ -1146,16 +1168,16 @@ function applyPocketAppearance() {
     overlay.style.setProperty('--pocket-dim', String(Math.max(0, Math.min(90, Number(appSettings.pocketBgDim))) / 100));
     overlay.style.setProperty('--pocket-bg-position', appSettings.bgPosition);
     overlay.style.setProperty('--pocket-bg-size', appSettings.bgSize);
-    overlay.style.setProperty('--pocket-panel-alpha', String(Math.max(45, Math.min(95, Number(appSettings.pocketPanelOpacity) || 72)) / 100));
+    overlay.style.setProperty('--pocket-panel-alpha', String(1 - CmsStatePolicy.clamp(appSettings.pocketPanelOpacity, 28) / 100));
     const visibility = { clock: appSettings.pocketShowClock, art: appSettings.pocketShowArt, title: appSettings.pocketShowTitle, progress: appSettings.pocketShowProgress, controls: appSettings.pocketShowControls, unlock: appSettings.pocketShowUnlock };
     const custom = appSettings.pocketLayout && Object.keys(appSettings.pocketLayout).length > 0;
-    overlay.classList.toggle('pocket-layout-custom', custom && !overlay.classList.contains('layout-editing'));
+    overlay.classList.toggle('pocket-layout-custom', Boolean(custom));
     Object.entries(POCKET_LAYOUT_ELEMENTS).forEach(([key, id]) => {
         const el = document.getElementById(id); if (!el) return;
         el.classList.add('pocket-layout-item');
         const visible = visibility[key] !== false;
         el.classList.toggle('pocket-layout-hidden', !visible);
-        const scale = Math.max(50, Math.min(180, Number(appSettings.pocketLayoutScale?.[key]) || 100)) / 100;
+        const scale = Math.max(50, Math.min(220, Number(appSettings.pocketLayoutScale?.[key]) || 100)) / 100;
         el.style.setProperty('--pocket-item-scale', String(scale));
         const pos = appSettings.pocketLayout?.[key];
         if (pos && custom) { el.style.left = `${pos.x}%`; el.style.top = `${pos.y}%`; }
@@ -1166,18 +1188,25 @@ function applyPocketAppearance() {
 function beginPocketLayoutEditor() {
     const modal = document.getElementById('settings-modal'); const overlay = document.getElementById('pocket-overlay');
     modal.classList.add('hidden'); overlay.classList.remove('hidden'); document.body.classList.add('pocket-active'); applyPocketAppearance();
-    if (!Object.keys(appSettings.pocketLayout || {}).length) {
-        const rect = overlay.getBoundingClientRect(); appSettings.pocketLayout = {};
-        Object.entries(POCKET_LAYOUT_ELEMENTS).forEach(([key, id]) => {
-            const box = document.getElementById(id)?.getBoundingClientRect();
-            if (box && rect.width && rect.height) appSettings.pocketLayout[key] = { x: Number((((box.left + box.width / 2) - rect.left) / rect.width * 100).toFixed(2)), y: Number((((box.top + box.height / 2) - rect.top) / rect.height * 100).toFixed(2)) };
-        });
+    if (Object.keys(POCKET_LAYOUT_ELEMENTS).some(key => !appSettings.pocketLayout?.[key])) {
+        // Normal desktop mode uses a bottom grid; its box sizes differ from free layout.
+        // Seed free-layout coordinates directly instead of copying incompatible grid boxes.
+        const points = window.innerWidth > 720
+            ? { clock: [25, 16], art: [25, 44], title: [65, 24], progress: [65, 38], controls: [65, 50], next: [65, 73], unlock: [25, 80] }
+            : { clock: [50, 9], art: [50, 27], title: [50, 46], progress: [50, 56], controls: [50, 65], next: [50, 81], unlock: [50, 96] };
+        appSettings.pocketLayout ||= {};
+        Object.entries(points).forEach(([key, [x, y]]) => { appSettings.pocketLayout[key] ||= { x, y }; });
     }
     overlay.classList.add('layout-editing', 'pocket-layout-custom'); document.getElementById('pocket-layout-done').classList.remove('hidden'); applyPocketAppearance();
 }
 
 function setupPocketLayoutDrag() {
     const overlay = document.getElementById('pocket-overlay');
+    overlay.addEventListener('click', event => {
+        if (overlay.classList.contains('layout-editing') && event.target.closest('.pocket-layout-item')) {
+            event.preventDefault(); event.stopImmediatePropagation();
+        }
+    }, true);
     Object.entries(POCKET_LAYOUT_ELEMENTS).forEach(([key, id]) => {
         const el = document.getElementById(id); if (!el || el.dataset.layoutDragReady === '1') return;
         el.dataset.layoutDragReady = '1';
@@ -1214,10 +1243,13 @@ function setupPocketLayoutDrag() {
             if (e.target?.classList?.contains('pocket-resize-handle')) return;
             e.preventDefault(); e.stopPropagation();
             try { el.setPointerCapture(e.pointerId); } catch (_) {}
+            const startBox = el.getBoundingClientRect();
+            const offsetX = e.clientX - (startBox.left + startBox.width / 2);
+            const offsetY = e.clientY - (startBox.top + startBox.height / 2);
             const move = (ev) => {
                 const rect = overlay.getBoundingClientRect(); const box = el.getBoundingClientRect();
-                const safeX = Math.min(rect.width - box.width / 2 - 8, Math.max(box.width / 2 + 8, ev.clientX - rect.left));
-                const safeY = Math.min(rect.height - box.height / 2 - 8, Math.max(box.height / 2 + 8, ev.clientY - rect.top));
+                const safeX = Math.min(rect.width - box.width / 2 - 8, Math.max(box.width / 2 + 8, ev.clientX - rect.left - offsetX));
+                const safeY = Math.min(rect.height - box.height / 2 - 8, Math.max(box.height / 2 + 8, ev.clientY - rect.top - offsetY));
                 const x = Math.max(0, Math.min(100, safeX / rect.width * 100)); const y = Math.max(0, Math.min(100, safeY / rect.height * 100));
                 el.style.left = `${x}%`; el.style.top = `${y}%`; appSettings.pocketLayout[key] = { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) };
             };
@@ -1526,19 +1558,18 @@ function setupMarqueeResizeObserver() {
 }
 
 function handleFileImport(e) { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { const data = JSON.parse(ev.target.result); processImportData(data); window.CmsWebFirebase?.cacheImportedData(data); importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden'); } catch (err) { alert('JSON解析失敗'); } }; reader.readAsText(file); }
-function processImportData(data) {
+function processImportData(data, { restoreSettings = false } = {}) {
     const items = Array.isArray(data) ? data : (data.mediaItems || []);
     const saved = appSettings.resumeLastPlayback ? getSavedPlaybackState() : null;
-    if (!Array.isArray(data) && data.webSettings && typeof data.webSettings === 'object') {
-        Object.keys(defaultSettings).forEach(key => {
-            if (Object.prototype.hasOwnProperty.call(data.webSettings, key)) appSettings[key] = data.webSettings[key];
-        });
+    if (restoreSettings && !Array.isArray(data) && data.webSettings && typeof data.webSettings === 'object') {
+        const known = Object.fromEntries(Object.keys(defaultSettings).filter(key => Object.hasOwn(data.webSettings, key)).map(key => [key, data.webSettings[key]]));
+        appSettings = CmsStatePolicy.mergeSettings(defaultSettings, appSettings, known, true);
         saveSettings();
         currentSortOrder = appSettings.defaultSortOrder || 'custom';
         updateLayoutMode();
         applyThemeSettings();
     }
-    restoreViewStateFromSession(saved);
+    if (!currentPlayingItem) restoreViewStateFromSession(saved);
     allItems = items.filter(i => i.site !== 'system').map((item, idx) => ({
         ...item,
         originalIndex: idx,
@@ -1549,9 +1580,10 @@ function processImportData(data) {
     folderSettingsByName = new Map(folderSettings.map(setting => [setting.folderName, setting]));
     if (allItems.length > 0) {
         buildLibrary(); renderFolders();
-        const restored = resolveSavedPlaybackWithFallback(saved);
-        selectFolder(restored?.folder?.id || saved?.targetFolderId || saved?.folderId || musicLibrary[0]?.id || '__all', { preserveScroll: true, skipSave: true });
-        if (restored) {
+        const restored = currentPlayingItem ? null : resolveSavedPlaybackWithFallback(saved);
+        const viewed = currentPlayingItem ? currentFolderId : (saved?.targetFolderId || restored?.folder?.id || saved?.folderId);
+        selectFolder(musicLibrary.find(folder => folder.id === viewed)?.id || musicLibrary[0]?.id || '__all', { preserveScroll: true, skipSave: true });
+        if (restored && currentFolderId === restored.folder.id) {
             scrollTrackIndexIntoView(restored.index, { force: true });
             const activeEl = trackListEl.querySelector(`.w-t-item[data-index="${restored.index}"]`);
             if (activeEl) setTimeout(() => scrollActiveTrackInList(activeEl), 120);
@@ -1593,7 +1625,7 @@ function startPlaybackFromCurrentLibrary() {
     if (!f?.songs?.length) return false;
     const index = restored ? restored.index : 0;
     if (f.id && f.id !== currentFolderId) selectFolder(f.id, { preserveScroll: true, skipSave: true });
-    startPlaylist(f.songs, Math.min(Math.max(index, 0), f.songs.length - 1));
+    startPlaylist(f.songs, Math.min(Math.max(index, 0), f.songs.length - 1), { folderId: f.id });
     if (saved?.currentTime) saveCurrentSession({ force: true, currentTime: Number(saved.currentTime) || 0 });
     seekSavedPlaybackTime(saved);
     return true;
@@ -1823,7 +1855,8 @@ function selectFolder(id, options = {}) {
     } else {
         renderTracks(f ? f.songs :[], { preserveScroll: Boolean(options.preserveScroll) });
     }
-    if (!options.skipSave) saveCurrentSession({ force: true, folderId: id });
+    if (!options.skipSave) saveCurrentSession({ force: true, currentTime: getPlaybackClock()?.currentTime || 0 });
+    window.dispatchEvent(new Event('cms-state-change'));
 }
 
 function escapeHTML(str) { return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
@@ -2109,7 +2142,7 @@ function setupStatsModal() {
         const index = Number(row.dataset.historyPlayIndex);
         if (!Number.isInteger(index) || index < 0 || index >= statsHistoryPlaylist.length) return;
         close();
-        startPlaylist(statsHistoryPlaylist, index);
+        startPlaylist(statsHistoryPlaylist, index, { folderId: '__history', source: 'history' });
         window.CmsUI?.notify('再生履歴の並び順で再生を開始しました。', { type: 'success', title: '履歴から再生' });
     });
     modal?.addEventListener('click', event => { if (event.target === modal) close(); });
@@ -2188,15 +2221,20 @@ function renderTrackWindow({ force = false } = {}) {
             } else if (suppressNextTouchTrackClick) {
                 suppressNextTouchTrackClick = false;
             } else if (e.sourceCapabilities?.firesTouchEvents || lastTrackPointerType === 'touch' || lastTrackPointerType === 'pen') {
-                clearTimeout(pendingTouchTrackTimer); pendingTouchTrackTimer = setTimeout(() => { pendingTouchTrackTimer = null; startPlaylist(currentRenderSongs, i); }, 350);
-            } else {
+                const queue = currentRenderSongs.slice(); const folderId = currentFolderId;
+                clearTimeout(pendingTouchTrackTimer); pendingTouchTrackTimer = setTimeout(() => { pendingTouchTrackTimer = null; startPlaylist(queue, i, { folderId }); }, 350);
+            } else if (e.detail === 0) {
                 startPlaylist(currentRenderSongs, i);
+            } else {
+                const queue = currentRenderSongs.slice(); const folderId = currentFolderId;
+                clearTimeout(pendingTouchTrackTimer);
+                if (e.detail === 1) pendingTouchTrackTimer = setTimeout(() => { pendingTouchTrackTimer = null; startPlaylist(queue, i, { folderId }); }, 350);
             }
         }; 
         window.CmsUI?.makeInteractive(div, {
             role: 'option',
             label: `${s.title}、${s.channelName || s.site || '投稿者不明'}`,
-            current: isSameMediaItem(s, currentPlayingItem)
+            current: currentPlaybackContext?.folderId === currentFolderId && isSameMediaItem(s, currentPlayingItem)
         });
         frag.appendChild(div);
     }
@@ -2224,13 +2262,15 @@ function scrollTrackIndexIntoView(index, { force = false } = {}) {
 }
 
 function updateActiveTrackUI({ ensureVisible = true } = {}) {
-    if (!currentRenderSongs) return; const tIdx = currentRenderSongs.findIndex(s => isSameMediaItem(s, currentPlayingItem)); if (tIdx < 0) return;
+    if (!currentRenderSongs) return;
+    const tIdx = CmsStatePolicy.activeIndex(currentRenderSongs, currentPlayingItem, currentPlaybackContext, currentFolderId);
     document.querySelectorAll('.w-t-item').forEach(el => {
         el.classList.remove('active');
         el.removeAttribute('aria-current');
         el.querySelector('.w-t-idx')?.classList.remove('hidden');
         el.querySelector('.w-t-playing-icon')?.classList.add('hidden');
     });
+    if (tIdx < 0) return;
     let activeEl = trackListEl.querySelector(`.w-t-item[data-index="${tIdx}"]`);
     if (!activeEl && ensureVisible && canAutoScrollActiveTrack()) {
         scrollTrackIndexIntoView(tIdx);
@@ -2239,8 +2279,8 @@ function updateActiveTrackUI({ ensureVisible = true } = {}) {
     if (activeEl) {
         activeEl.classList.add('active'); activeEl.setAttribute('aria-current', 'true'); activeEl.querySelector('.w-t-idx').classList.add('hidden'); activeEl.querySelector('.w-t-playing-icon').classList.remove('hidden');
         
-        if (canAutoScrollActiveTrack()) setTimeout(() => {
-            if (canAutoScrollActiveTrack()) scrollActiveTrackInList(activeEl);
+        if (ensureVisible && canAutoScrollActiveTrack()) setTimeout(() => {
+            if (activeEl.isConnected && currentPlaybackContext?.folderId === currentFolderId && canAutoScrollActiveTrack()) scrollActiveTrackInList(activeEl);
         }, 100);
     }
 }
@@ -2638,7 +2678,11 @@ function handleProgressClick(e) {
     }
 }
 
-function startPlaylist(items, idx = 0) { if (items.length === 0) return; playbackIntent = 'playing'; playbackMediaState = 'loading'; currentPlaylist = items; currentIndex = idx; loadVideo(currentIndex); }
+function startPlaylist(items, idx = 0, context = {}) {
+    if (!items.length) return;
+    currentPlaybackContext = { folderId: context.folderId ?? currentFolderId ?? '__all', source: context.source || 'library' };
+    playbackIntent = 'playing'; playbackMediaState = 'loading'; currentPlaylist = items.slice(); currentIndex = idx; loadVideo(currentIndex);
+}
 function playNextVideo() { if (currentPlaylist.length === 0 || isTransitioning) return; cancelPlaybackWatchdog(); playbackIntent = 'playing'; playbackMediaState = 'loading'; isTransitioning = true; setTimeout(() => { isTransitioning = false; }, 1000); currentIndex = (currentIndex + 1) % currentPlaylist.length; loadVideo(currentIndex); }
 function playPrevVideo() { if (currentPlaylist.length === 0 || isTransitioning) return; cancelPlaybackWatchdog(); playbackIntent = 'playing'; playbackMediaState = 'loading'; isTransitioning = true; setTimeout(() => { isTransitioning = false; }, 1000); currentIndex = (currentIndex - 1 + currentPlaylist.length) % currentPlaylist.length; loadVideo(currentIndex); }
 
@@ -2692,6 +2736,7 @@ function loadVideo(idx) {
     playbackWatchdogToken = `${Date.now()}:${idx}:${currentPlayingItem.id || currentPlayingItem.url || currentPlayingItem.title || ''}`;
     savePlaybackState({ force: true, currentTime: 0 });
     updatePlayerUI(currentPlayingItem); updateActiveTrackUI();
+    window.dispatchEvent(new Event('cms-state-change'));
     document.getElementById('progress-bar').style.width = '0%'; document.getElementById('pocket-progress-bar').style.width = '0%'; document.getElementById('time-current').textContent = '0:00'; document.getElementById('time-duration').textContent = '0:00'; stopProgressTimer();
     const c = document.getElementById('player-container');
     if (currentPlayingItem.site === 'youtube') {

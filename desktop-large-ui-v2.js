@@ -7,6 +7,7 @@
         if (typeof appSettings !== 'object' || !appSettings) return;
         appSettings.desktopLeftRatio = Math.round(clamp(ratio, 28, 52) * 10) / 10;
         document.documentElement.style.setProperty('--desktop-left-ratio', `${appSettings.desktopLeftRatio}%`);
+        document.body.style.setProperty('--desktop-left-ratio', `${appSettings.desktopLeftRatio}%`);
         if (typeof saveSettings === 'function') saveSettings();
     }
 
@@ -19,21 +20,23 @@
         const setFromClientX = clientX => {
             const rect = workspace.getBoundingClientRect();
             if (!(rect.width > 0)) return;
-            const ratio = clamp((clientX - rect.left) / rect.width * 100, 28, 52);
+            const scale = window.innerWidth > 1050 && ['nerv', 'niconico'].includes(appSettings.theme) ? .55 : 1;
+            const ratio = clamp((clientX - rect.left) / rect.width * 100 / scale, 28, 52);
             document.documentElement.style.setProperty('--desktop-left-ratio', `${ratio}%`);
+            document.body.style.setProperty('--desktop-left-ratio', `${ratio}%`);
             resizer.setAttribute('aria-valuenow', String(Math.round(ratio)));
         };
         const commit = () => {
-            const rect = workspace.getBoundingClientRect();
-            const left = document.getElementById('left-pane')?.getBoundingClientRect();
-            if (rect.width > 0 && left) saveDesktopRatio(left.width / rect.width * 100);
+            saveDesktopRatio(parseFloat(document.body.style.getPropertyValue('--desktop-left-ratio')) || 36);
         };
         resizer.addEventListener('pointerdown', event => {
             if (!document.body.classList.contains('is-pc') || document.body.classList.contains('window-mode')) return;
             dragging = true;
+            event.preventDefault();
             document.body.classList.add('desktop-pane-resizing');
             try { resizer.setPointerCapture(event.pointerId); } catch (_) {}
             setFromClientX(event.clientX);
+            trackWindowPointer(event, move => setFromClientX(move.clientX), stop);
         });
         resizer.addEventListener('pointermove', event => { if (dragging) setFromClientX(event.clientX); });
         const stop = () => {
@@ -53,6 +56,7 @@
         });
         const initial = clamp(Number(appSettings?.desktopLeftRatio) || 36, 28, 52);
         document.documentElement.style.setProperty('--desktop-left-ratio', `${initial}%`);
+        document.body.style.setProperty('--desktop-left-ratio', `${initial}%`);
         resizer.setAttribute('aria-valuenow', String(Math.round(initial)));
     }
 
@@ -105,18 +109,19 @@
             volume.addEventListener('change', () => { if (typeof saveSettings === 'function') saveSettings(); });
         }
         if (opacity) {
-            opacity.value = String(clamp(Number(appSettings?.pocketPanelOpacity) || 72, 45, 95));
+            opacity.value = String(CmsStatePolicy.clamp(appSettings?.pocketPanelOpacity, 28));
             opacityValue.textContent = `${opacity.value}%`;
             opacity.addEventListener('input', () => {
                 appSettings.pocketPanelOpacity = Number(opacity.value);
                 opacityValue.textContent = `${opacity.value}%`;
-                document.getElementById('pocket-overlay')?.style.setProperty('--pocket-panel-alpha', String(Number(opacity.value) / 100));
+                document.getElementById('pocket-overlay')?.style.setProperty('--pocket-panel-alpha', String(1 - Number(opacity.value) / 100));
             });
             opacity.addEventListener('change', () => { if (typeof saveSettings === 'function') saveSettings(); });
         }
         document.querySelectorAll('.pocket-next-item[data-queue-offset]').forEach(button => {
             button.addEventListener('click', event => {
                 event.stopPropagation();
+                if (document.getElementById('pocket-overlay')?.classList.contains('layout-editing')) return;
                 const index = Number(button.dataset.queueIndex);
                 if (!Number.isInteger(index) || index < 0 || index >= currentPlaylist.length) return;
                 playbackIntent = 'playing';

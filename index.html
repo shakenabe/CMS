@@ -6,10 +6,8 @@
     <title>CMS Web Player</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=2026090701">
-    <link rel="stylesheet" href="theme-system.css?v=2026090701">
-    <link rel="stylesheet" href="desktop-reference-v4.css?v=2026090701">
-    <link rel="stylesheet" href="desktop-large-ui-v2.css?v=2026091301">
+    <link rel="stylesheet" href="legacy-base.css?v=2026092401">
+    <link rel="stylesheet" href="redesign.css?v=2026092401">
 </head>
 <body class="theme-modern is-pc">
 
@@ -53,8 +51,8 @@
                 <button id="pocket-next-item-2" type="button" class="pocket-next-item" data-queue-offset="2">
                     <img alt="" loading="lazy"><span><strong>次の曲はありません</strong><small>---</small></span>
                 </button>
-                <label class="pocket-quick-slider" for="pocket-volume-slider"><i class="fas fa-volume-high" aria-hidden="true"></i><input id="pocket-volume-slider" type="range" min="0" max="100" step="1" value="100" aria-label="音量"><output id="pocket-volume-value">100%</output></label>
-                <label class="pocket-quick-slider" for="pocket-panel-opacity-slider"><i class="fas fa-layer-group" aria-hidden="true"></i><input id="pocket-panel-opacity-slider" type="range" min="45" max="95" step="1" value="72" aria-label="操作パネルの透明度"><output id="pocket-panel-opacity-value">72%</output></label>
+                <label class="pocket-quick-slider" for="pocket-volume-slider"><span>音量</span><input id="pocket-volume-slider" type="range" min="0" max="100" step="1" value="100" aria-label="音量"><output id="pocket-volume-value">100%</output></label>
+                <label class="pocket-quick-slider" for="pocket-panel-opacity-slider"><span>背景透過</span><input id="pocket-panel-opacity-slider" type="range" min="0" max="100" step="1" value="28" aria-label="操作パネルの背景透過"><output id="pocket-panel-opacity-value">28%</output></label>
             </aside>
             <button id="pocket-unlock-btn" type="button" class="pocket-unlock-btn"><i class="fas fa-unlock"></i> ロック解除</button>
         </div>
@@ -81,6 +79,7 @@
     </div>
 
     <div id="main-app" class="hidden">
+        <div id="cms-design-toolbar"></div>
         <header id="pc-appbar" class="panel-glass" aria-label="CMSメインツールバー">
             <div class="pc-appbar-brand">
                 <strong>TUBENICO</strong>
@@ -100,7 +99,7 @@
                 <button id="pc-settings-button" type="button" aria-label="設定を開く" title="設定"><i class="fas fa-cog"></i></button>
             </div>
         </header>
-        <div class="widget-container" id="widget-container">
+        <main class="widget-container" id="widget-container">
             <!-- 左ペイン: PC固定レイアウト用 -->
             <div id="left-pane" class="pc-column">
                 <div id="widget-clock" class="panel-glass">
@@ -209,7 +208,7 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </main>
     </div>
 
     <!-- スマホ用フォルダ選択 -->
@@ -282,7 +281,7 @@
                     <div class="setting-section-label"><strong>表示と並び順</strong><span>日常的に変更する項目です</span></div>
                     <div class="setting-row">
                         <label>テーマ</label>
-                        <select id="set-theme" class="widget-search"><option value="modern">パターン1</option><option value="nerv">パターン2</option><option value="toyota">パターン3</option><option value="niconico">パターン4</option></select>
+                        <select id="set-theme" class="widget-search"><option value="modern">P1 モダンスクエア</option><option value="nerv">P2 ウィンドエアロ</option><option value="toyota">P3 AURA</option><option value="niconico">P4 ニコニコ・クラシック</option></select>
                     </div>
                     <div class="setting-row">
                         <label>カラーモード</label>
@@ -449,6 +448,8 @@
                 </div>
             </div>
 
+            <p class="device-settings-note">表示・背景・音量・配置はこのブラウザに保存され、Firebaseの自動読込では上書きされません。</p>
+            <label class="device-settings-note">JSONからこの端末の設定を復元 <input id="restore-device-settings" type="file" accept=".json"></label>
             <div id="settings-save-status" class="settings-save-status" role="status" aria-live="polite">変更はありません</div>
             <div class="settings-actions">
                 <button id="btn-save-settings" class="theme-btn" style="flex:1;" disabled>保存して適用</button>
@@ -460,8 +461,11 @@
 
     <script src="cms-icons.js?v=2026072502"></script>
     <script src="ui-feedback.js?v=2026090601"></script>
-    <script type="module" src="firebase-web.js?v=2026090601"></script>
-    <script src="script.js?v=2026091301"></script>
-    <script src="desktop-large-ui-v2.js?v=2026091301"></script>
+    <script type="module" src="firebase-web.js?v=2026092401"></script>
+    <script src="state-policy.js?v=2026092401"></script>
+    <script src="ui-runtime.js?v=2026092401"></script>
+    <script src="script.js?v=2026092401"></script>
+    <script src="desktop-large-ui-v2.js?v=2026092401"></script>
+    <script type="module" src="redesign.js?v=2026092401"></script>
 </body>
 </html>
