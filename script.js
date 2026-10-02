@@ -67,6 +67,7 @@ let marqueeUpdateTimer = 0;
 let marqueeResizeObserver = null;
 let marqueeUpdateGeneration = 0;
 let statsHistoryPlaylist = [];
+let latestStatsHistoryData = { events: [], source: 'library', days: 90 };
 let lastPlaybackStateSavedAt = 0;
 let suppressSessionSave = false;
 let hasCustomBackgroundImage = false;
@@ -2018,6 +2019,7 @@ function renderStatsTopList(items) {
 }
 
 function renderStats(historyData = { events: [], source: 'library', days: 90 }) {
+    latestStatsHistoryData = historyData;
     const model = buildStatsModel(allItems, historyData.events || []);
     const coverage = model.totalItems ? Math.round(model.playedItems / model.totalItems * 100) : 0;
     const now = Date.now();
@@ -2125,6 +2127,35 @@ async function refreshStatsHistory() {
     }
 }
 
+async function downloadAnalysisJSON() {
+    const button = document.getElementById('btn-export-analysis-json');
+    const previousHistory = latestStatsHistoryData;
+    let historyData = previousHistory;
+    if (button) button.disabled = true;
+    try {
+        if (window.CmsWebFirebase?.getPlaybackHistory) {
+            historyData = await window.CmsWebFirebase.getPlaybackHistory({ days: 365, forceFlush: appSettings.useFirebase });
+            renderStats(historyData);
+        }
+    } catch (error) {
+        console.warn('[analysis-export] history load failed', error);
+        historyData = previousHistory;
+        window.CmsUI?.notify('履歴の最新取得に失敗したため、現在表示中の履歴・ライブラリで分析用JSONを書き出します。', {
+            type: 'warning',
+            title: '分析用JSON'
+        });
+    } finally {
+        if (button) button.disabled = false;
+    }
+    const payload = createAnalysisExportPayload(historyData);
+    const stamp = formatAnalysisDate(new Date()) || new Date().toISOString().slice(0, 10);
+    downloadJSONFile(payload, `cms_analysis_export_${stamp}.json`);
+    window.CmsUI?.notify(`分析用JSONを書き出しました（動画${payload.videos.length.toLocaleString()}件 / 履歴${payload.history.length.toLocaleString()}件）。`, {
+        type: 'success',
+        title: '分析用JSON'
+    });
+}
+
 function setupStatsModal() {
     const modal = document.getElementById('stats-modal');
     const open = () => {
@@ -2136,6 +2167,7 @@ function setupStatsModal() {
     document.getElementById('btn-open-stats')?.addEventListener('click', open);
     document.getElementById('btn-close-stats')?.addEventListener('click', close);
     document.getElementById('btn-refresh-stats')?.addEventListener('click', refreshStatsHistory);
+    document.getElementById('btn-export-analysis-json')?.addEventListener('click', downloadAnalysisJSON);
     document.getElementById('stats-recent-list')?.addEventListener('click', event => {
         const row = event.target.closest('[data-history-play-index]');
         if (!row || row.disabled) return;
@@ -2484,6 +2516,106 @@ function downloadJSON() {
     document.body.appendChild(dlAnchorElem);
     dlAnchorElem.click();
     document.body.removeChild(dlAnchorElem);
+}
+
+function downloadJSONFile(payload, filename) {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+}
+
+function formatAnalysisDate(value) {
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return null;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function normalizeAnalysisUrl(rawUrl, site = '') {
+    try {
+        const url = new URL(String(rawUrl || '').trim());
+        const host = url.hostname.toLowerCase().replace(/^www\./, '');
+        if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtu.be' || site === 'youtube') {
+            const parts = url.pathname.split('/').filter(Boolean);
+            const id = host === 'youtu.be'
+                ? parts[0]
+                : (url.searchParams.get('v') || (['shorts', 'live', 'embed'].includes(parts[0]) ? parts[1] : ''));
+            return id && /^[A-Za-z0-9_-]{6,20}$/.test(id) ? `https://www.youtube.com/watch?v=${id}` : url.origin + url.pathname;
+        }
+        if (host.endsWith('nicovideo.jp') || host === 'nico.ms' || site === 'niconico') {
+            const match = `${url.pathname}${url.search}`.match(/(?:watch\/)?((?:sm|so|nm)\d+)/i);
+            return match ? `https://www.nicovideo.jp/watch/${match[1]}` : url.origin + url.pathname;
+        }
+        return url.origin + url.pathname;
+    } catch (_) {
+        return String(rawUrl || '').trim();
+    }
+}
+
+function createAnalysisExportPayload(historyData = latestStatsHistoryData) {
+    const mediaItems = (Array.isArray(allItems) ? allItems : []).filter(item => item?.site !== 'system');
+    const videoRefsById = new Map();
+    const videoRefsByUrl = new Map();
+    const videos = mediaItems.map((item, index) => {
+        const videoRef = `v${String(index + 1).padStart(4, '0')}`;
+        const url = normalizeAnalysisUrl(item.url, item.site);
+        if (item.id) videoRefsById.set(String(item.id), videoRef);
+        if (url) videoRefsByUrl.set(url, videoRef);
+        return {
+            videoRef,
+            site: String(item.site || 'other'),
+            title: String(item.title || '無題'),
+            url,
+            playCount: Math.max(0, Math.floor(Number(item.playCount) || 0)),
+            lastPlayedDate: formatAnalysisDate(item.lastPlayedAt)
+        };
+    });
+
+    const omitted = { unmatchedHistoryEvents: 0, invalidHistoryEvents: 0 };
+    const history = (Array.isArray(historyData?.events) ? historyData.events : []).reduce((entries, event) => {
+        const playedAt = new Date(event?.playedAt);
+        if (!Number.isFinite(playedAt.getTime())) {
+            omitted.invalidHistoryEvents += 1;
+            return entries;
+        }
+        const normalizedUrl = normalizeAnalysisUrl(event?.url, event?.site);
+        const videoRef = videoRefsById.get(String(event?.mediaId || '')) || videoRefsByUrl.get(normalizedUrl);
+        if (!videoRef) {
+            omitted.unmatchedHistoryEvents += 1;
+            return entries;
+        }
+        entries.push({
+            videoRef,
+            playedDate: formatAnalysisDate(playedAt),
+            hourBlock: String(playedAt.getHours()).padStart(2, '0'),
+            weekday: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][playedAt.getDay()]
+        });
+        return entries;
+    }, []);
+
+    return {
+        schemaVersion: 1,
+        kind: 'cms-analysis-export',
+        privacyLevel: 'safe',
+        exportedAt: new Date().toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'local',
+        source: {
+            history: historyData?.source || 'library',
+            historyDays: historyData?.days || 90
+        },
+        omittedFields: ['id', 'mediaId', 'eventId', 'uid', 'thumbnail', 'settings', 'webSettings'],
+        videos,
+        history,
+        omitted
+    };
 }
 
 function createLibraryExportPayload() {
