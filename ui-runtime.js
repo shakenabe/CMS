@@ -22,7 +22,7 @@ function applyDesktopPanelHeights() {
     for (const [id, variable] of [['widget-player', '--cms-player-height'], ['widget-controls', '--cms-controls-height'], ['widget-folder-list-wrapper', '--cms-folders-height']]) {
         const panel = document.getElementById(id);
         const value = Number(appSettings.desktopPanelHeights?.[id]);
-        if (value > 0) {
+        if (appSettings.windowMode && value > 0) {
             const height = Math.max(130, Math.min(innerHeight * .65, value)) + 'px';
             panel?.style.setProperty('--panel-height', height); container?.style.setProperty(variable, height);
         } else {
@@ -61,34 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { window.CmsUI?.notify?.(error.message, { type: 'danger' }); }
         finally { restore.value = ''; }
     });
-    for (const id of ['widget-player', 'widget-controls', 'widget-folder-list-wrapper']) {
-        const panel = document.getElementById(id);
-        const handle = document.createElement('button');
-        handle.className = 'cms-panel-resizer'; handle.type = 'button';
-        handle.setAttribute('aria-label', `${WINDOW_PANEL_TITLES[id]}の高さを調整`);
-        const setHeight = height => {
-            const min = id === 'widget-player' ? 130 : 100;
-            const value = Math.round(Math.max(min, Math.min(window.innerHeight * .65, height)));
-            appSettings.desktopPanelHeights ||= {}; appSettings.desktopPanelHeights[id] = value;
-            if (innerWidth > 1050 && ['nerv', 'toyota'].includes(appSettings.theme) && id !== 'widget-folder-list-wrapper') {
-                appSettings.desktopPanelHeights['widget-player'] = value;
-                appSettings.desktopPanelHeights['widget-controls'] = value;
-            }
-            applyDesktopPanelHeights();
-        };
-        if (appSettings.desktopPanelHeights?.[id]) setHeight(appSettings.desktopPanelHeights[id]);
-        handle.addEventListener('pointerdown', event => {
-            if (appSettings.windowMode) return;
-            event.preventDefault(); const height = panel.getBoundingClientRect().height; const y = event.clientY;
-            trackWindowPointer(event, move => setHeight(height + move.clientY - y), saveSettings);
-        });
-        handle.addEventListener('keydown', event => {
-            if (!['ArrowUp', 'ArrowDown', 'Home'].includes(event.key)) return;
-            event.preventDefault();
-            if (event.key === 'Home') { delete appSettings.desktopPanelHeights?.[id]; applyDesktopPanelHeights(); }
-            else setHeight(panel.getBoundingClientRect().height + (event.key === 'ArrowUp' ? -10 : 10));
-            saveSettings();
-        });
-        panel.appendChild(handle);
-    }
+    // Fixed desktop panels do not create drag handles. Window-mode handles stay in script.js.
+    applyDesktopPanelHeights();
 });

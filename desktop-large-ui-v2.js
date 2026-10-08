@@ -62,6 +62,7 @@
 
     function getQueueItem(offset) {
         if (!Array.isArray(currentPlaylist) || !currentPlaylist.length || !Number.isInteger(currentIndex)) return null;
+        if (currentPlaybackContext?.finite && currentIndex + offset >= currentPlaylist.length) return null;
         const index = (currentIndex + offset) % currentPlaylist.length;
         return { item: currentPlaylist[index], index };
     }

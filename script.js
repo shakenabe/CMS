@@ -33,6 +33,10 @@ let playbackIntent = 'stopped';
 let playbackMediaState = 'idle';
 let currentPlayingItem = null;
 let currentPlaybackContext = null;
+let recommendationAttempt = null;
+let recommendationLoadSerial = 0;
+let completionInFlight = false;
+let activeRecommendationQueue = null;
 
 let ytPlayer = null;
 let isTransitioning = false;
@@ -241,14 +245,20 @@ function armPlaybackWatchdog(force = false) {
     schedulePlaybackWatchdogWake(deadline, token);
 }
 
-function completeWebPlayback(reason, token = playbackWatchdogToken) {
-    if (!currentPlayingItem || token !== playbackWatchdogToken || isTransitioning) return;
+async function completeWebPlayback(reason, token = playbackWatchdogToken) {
+    if (!currentPlayingItem || token !== playbackWatchdogToken || isTransitioning || completionInFlight) return;
     const completed = currentPlayingItem;
+    const attempt = recommendationAttempt;
+    completionInFlight = true;
+    try {
+    await markPlaybackCompleted(completed, attempt);
+    if (token !== playbackWatchdogToken) return;
     cancelPlaybackWatchdog();
-    markPlaybackCompleted(completed);
     stopProgressTimer();
     if (currentPlayingItem.site === 'niconico') nicoEndedFlag = true;
     playNextVideo(reason);
+    } catch (error) { console.error('[recommendation] count failed', error); }
+    finally { completionInFlight = false; }
 }
 
 function schedulePlaybackErrorSkip(delay = 5000) {
@@ -545,6 +555,9 @@ function saveCurrentSession(extra = {}) {
         folderId,
         targetFolderId: currentFolderId || folderId,
         playbackContext: currentPlaybackContext,
+        recommendationAttempt,
+        activeRecommendationQueue,
+        finiteItems: currentPlaybackContext?.finite ? currentPlaylist.map(item => ({ id: item.id, contentKey: window.CMSRecommendationEngine.normalizeContentKey(item), _cmsPlayContext: item._cmsPlayContext || null })) : null,
         itemId: item?.id || null,
         url: item?.url || null,
         site: item?.site || null,
@@ -645,20 +658,22 @@ function seekSavedPlaybackTime(saved) {
         else if (currentPlayingItem?.site === 'niconico') requestNicoSeek(time);
     }, 1800);
 }
-function markPlaybackCompleted(item) {
+async function markPlaybackCompleted(item, attempt = recommendationAttempt) {
     if (!item?.id) return;
-    item.playCount = (Number(item.playCount) || 0) + 1;
-    item.safePlayCount = item.playCount;
-    item.lastPlayedAt = new Date().toISOString();
-    const queue = JSON.parse(localStorage.getItem('cms_player_playback_queue_v1') || '{}');
-    const prev = queue[item.id] || { playCountDelta: 0 };
-    queue[item.id] = { playCountDelta: (Number(prev.playCountDelta) || 0) + 1, lastPlayedAt: item.lastPlayedAt };
-    localStorage.setItem('cms_player_playback_queue_v1', JSON.stringify(queue));
-    window.CmsWebFirebase?.queuePlaybackUpdate?.(item);
+    const result=await window.CmsRecommendationStore.recordCountedPlay(item, attempt, attempt?.playContext || { source: 'unknown' });
+    if (result.item) for (const record of allItems) if (record.id===item.id) {
+        record.playCount=result.item.playCount; record.safePlayCount=result.item.playCount;
+        record.lastPlayedAt=result.item.lastPlayedAt; record._cmsRecommendationCountManaged=true;
+    }
+    if (attempt && ['applied','alreadyApplied'].includes(result.status)) attempt.counted=true;
+    return result;
 }
 
 function updateLayoutMode() {
-    document.body.classList.remove('is-mobile', 'is-pc', 'is-tablet');
+    const mobile = !appSettings.windowMode && window.innerWidth <= MOBILE_LAYOUT_MAX && !appSettings.forcePcLayout;
+    document.body.classList.toggle('is-mobile', mobile);
+    document.body.classList.toggle('is-pc', !mobile);
+    document.body.classList.toggle('is-tablet', !mobile && window.innerWidth <= TABLET_LAYOUT_MAX);
     if (appSettings.windowMode) {
         document.body.classList.add('is-pc');
         document.body.classList.remove('mobile-list-focus', 'show-mobile-nav');
@@ -772,16 +787,19 @@ function setupMobileTrackListFocus() {
 
 function returnToCurrentTrack() {
     if (!currentPlayingItem || !currentPlaybackContext) return;
+    window.__cmsFollowPlaybackView=true;
+    appSettings.autoScrollActiveTrack=true;
+    userTrackScrollHoldUntil=0;
     clearTimeout(pendingTouchTrackTimer); pendingTouchTrackTimer = null;
     currentSearchQuery = ''; excludeNico = false;
     document.getElementById('widget-search-box').value = '';
     document.getElementById('pc-search-box').value = '';
     document.getElementById('exclude-nico').checked = false;
     buildLibrary(); renderFolders();
-    const source = musicLibrary.find(folder => folder.id === currentPlaybackContext.folderId);
+    const source = musicLibrary.find(folder => folder.id === currentPlaybackContext.folderId) || musicLibrary.find(folder=>folder.id==='__all');
     if (!source) { window.CmsUI?.notify?.('再生元フォルダが見つかりません。', { type: 'info' }); return; }
     if (source.id === '__vocaloid') appSettings.vocaloidGroupMode = 'videos';
-    selectFolder(source.id, { preserveScroll: true });
+    selectFolder(source.id, { preserveScroll: true, followPlayback:true });
     const index = currentRenderSongs.findIndex(song => isSameMediaItem(song, currentPlayingItem));
     if (index < 0) return;
     scrollTrackIndexIntoView(index, { force: true });
@@ -1487,7 +1505,7 @@ function resetMarqueeContent(content) {
     content.style.removeProperty('--marquee-shift');
     content.style.removeProperty('--marquee-duration');
     content.dataset.marqueeText = sourceText;
-    content.replaceChildren(document.createTextNode(sourceText));
+    if (content.childElementCount || content.textContent!==sourceText) content.replaceChildren(document.createTextNode(sourceText));
 }
 
 function buildMarqueeCopies(content, durationSeconds) {
@@ -1610,12 +1628,54 @@ window.CmsWebPlayer = {
         }
         return { count: allItems.length, source };
     },
-    getUseFirebase: () => Boolean(appSettings.useFirebase)
+    getUseFirebase: () => Boolean(appSettings.useFirebase),
+    getRecords: () => allItems.slice(),
+    getVisibleRecords: () => currentRenderSongs.slice(),
+    getCurrentItem: () => currentPlayingItem,
+    getRecommendationAttempt: () => recommendationAttempt,
+    getActiveRecommendationQueue: () => activeRecommendationQueue,
+    startRecommendation(items, context, queue) {
+        activeRecommendationQueue=queue || null;
+        startPlaylist(items,0,context);
+    },
+    appendRecommendation(items, queue, expected) {
+        const head=activeRecommendationQueue;
+        if (!head || head.queueId!==expected.queueId || head.queueRevision!==expected.queueRevision || head.mode!==queue.mode || currentPlaybackContext?.source!==head.mode)
+            throw new Error('追加先のキューが変わりました。再生成してください。');
+        const keyOf=item=>window.CMSRecommendationEngine.normalizeContentKey(item);
+        const keys=new Set(currentPlaylist.map(keyOf));
+        for (const item of items) {
+            const key=keyOf(item);
+            if (!key || keys.has(key)) throw new Error('追加曲に重複または非対応URLがあります。再生成してください。');
+            keys.add(key);
+        }
+        if (!items.length || currentPlaylist.length+items.length>window.CMSRecommendationEngine.DEFAULT_CONFIG.maxQueueLength) throw new Error('追加曲数が範囲外です。');
+        if (queue.items?.length!==currentPlaylist.length+items.length ||
+            currentPlaylist.some((item,index)=>keyOf(item)!==queue.items[index].contentKey) ||
+            items.some((item,index)=>keyOf(item)!==queue.items[currentPlaylist.length+index].contentKey)) throw new Error('キューの順序が変わりました。再生成してください。');
+        currentPlaylist.push(...items);
+        activeRecommendationQueue={...queue,queueId:head.queueId,queueRevision:head.queueRevision+1};
+        currentPlaybackContext.queueRevision=activeRecommendationQueue.queueRevision;
+        updatePlayerUI(currentPlayingItem);
+        window.dispatchEvent(new Event('cms-state-change'));
+        saveCurrentSession({force:true});
+        return activeRecommendationQueue;
+    }
 };
 
 function startPlaybackFromCurrentLibrary() {
     if (!musicLibrary.length || currentPlayingItem) return false;
     const saved = appSettings.resumeLastPlayback ? getSavedPlaybackState() : null;
+    if (saved?.playbackContext?.finite && saved.finiteItems?.length) {
+        activeRecommendationQueue=saved.activeRecommendationQueue || null;
+        const items = saved.finiteItems.map(ref => {
+            const record = allItems.find(item => item.id === ref.id && window.CMSRecommendationEngine.normalizeContentKey(item) === ref.contentKey)
+                || allItems.find(item => window.CMSRecommendationEngine.normalizeContentKey(item) === ref.contentKey);
+            return record ? { ...record, _cmsPlayContext: ref._cmsPlayContext } : null;
+        }).filter(Boolean);
+        const index = items.findIndex(item => item.id === saved.itemId);
+        if (items.length) { startPlaylist(items, Math.max(0, index), { ...saved.playbackContext, restoredAttempt: saved.recommendationAttempt }); seekSavedPlaybackTime(saved); return true; }
+    }
     restoreViewStateFromSession(saved);
     if (saved) { buildLibrary(); renderFolders(); }
     const restored = resolveSavedPlaybackWithFallback(saved);
@@ -1626,7 +1686,7 @@ function startPlaybackFromCurrentLibrary() {
     if (!f?.songs?.length) return false;
     const index = restored ? restored.index : 0;
     if (f.id && f.id !== currentFolderId) selectFolder(f.id, { preserveScroll: true, skipSave: true });
-    startPlaylist(f.songs, Math.min(Math.max(index, 0), f.songs.length - 1), { folderId: f.id });
+    startPlaylist(f.songs, Math.min(Math.max(index, 0), f.songs.length - 1), { folderId: f.id, source: 'unknown', restoredAttempt: saved?.recommendationAttempt });
     if (saved?.currentTime) saveCurrentSession({ force: true, currentTime: Number(saved.currentTime) || 0 });
     seekSavedPlaybackTime(saved);
     return true;
@@ -1800,6 +1860,7 @@ function renderVocaloidGroups(songs, mode) {
 }
 
 function selectFolder(id, options = {}) {
+    if (!options.preserveScroll && !options.followPlayback) window.__cmsFollowPlaybackView=false;
     if (id !== currentFolderId || id !== '__vocaloid') currentVocaloidGroup = null;
     currentFolderId = id;
     document.querySelectorAll('.w-f-item').forEach(e => {
@@ -2181,7 +2242,8 @@ function setupStatsModal() {
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && !modal.classList.contains('hidden')) close(); });
 }
 
-function renderTracks(songs) {
+function renderTracks(songs, { preserveScroll = false } = {}) {
+    const previousScroll = trackListEl.scrollTop;
     trackListEl.innerHTML = '';
     window.__cmsAutoTrackScrollUntil = Date.now() + 300;
     trackListEl.scrollTop = 0;
@@ -2200,6 +2262,11 @@ function renderTracks(songs) {
         return;
     }
     renderTrackWindow({ force: true });
+    if (preserveScroll) {
+        trackListEl.scrollTop = previousScroll;
+        renderTrackWindow({ force: true });
+        updateActiveTrackUI();
+    }
 }
 
 function loadMoreTracks() {
@@ -2295,7 +2362,8 @@ function scrollTrackIndexIntoView(index, { force = false } = {}) {
 
 function updateActiveTrackUI({ ensureVisible = true } = {}) {
     if (!currentRenderSongs) return;
-    const tIdx = CmsStatePolicy.activeIndex(currentRenderSongs, currentPlayingItem, currentPlaybackContext, currentFolderId);
+    const followsAll=window.__cmsFollowPlaybackView && currentFolderId==='__all';
+    const tIdx = followsAll ? currentRenderSongs.findIndex(item=>isSameMediaItem(item,currentPlayingItem)) : CmsStatePolicy.activeIndex(currentRenderSongs, currentPlayingItem, currentPlaybackContext, currentFolderId);
     document.querySelectorAll('.w-t-item').forEach(el => {
         el.classList.remove('active');
         el.removeAttribute('aria-current');
@@ -2312,7 +2380,7 @@ function updateActiveTrackUI({ ensureVisible = true } = {}) {
         activeEl.classList.add('active'); activeEl.setAttribute('aria-current', 'true'); activeEl.querySelector('.w-t-idx').classList.add('hidden'); activeEl.querySelector('.w-t-playing-icon').classList.remove('hidden');
         
         if (ensureVisible && canAutoScrollActiveTrack()) setTimeout(() => {
-            if (activeEl.isConnected && currentPlaybackContext?.folderId === currentFolderId && canAutoScrollActiveTrack()) scrollActiveTrackInList(activeEl);
+            if (activeEl.isConnected && (currentPlaybackContext?.folderId === currentFolderId || followsAll) && canAutoScrollActiveTrack()) scrollActiveTrackInList(activeEl);
         }, 100);
     }
 }
@@ -2324,7 +2392,7 @@ function scrollActiveTrackInList(activeEl, { force = false } = {}) {
     const desired = trackListEl.scrollTop + (itemRect.top - listRect.top) - (trackListEl.clientHeight - itemRect.height) / 2;
     const max = Math.max(0, trackListEl.scrollHeight - trackListEl.clientHeight);
     window.__cmsAutoTrackScrollUntil = Date.now() + 900;
-    trackListEl.scrollTo({ top: Math.min(max, Math.max(0, desired)), behavior: 'smooth' });
+    trackListEl.scrollTo({ top: Math.min(max, Math.max(0, desired)), behavior: appSettings.performanceMode ? 'auto' : 'smooth' });
 }
 
 function identifySupportedVideoUrl(rawUrl) {
@@ -2729,7 +2797,7 @@ function updateProgress() {
         nicoCurrentTime += 1; cur = nicoCurrentTime;
         const savedDuration = Number(currentPlayingItem.duration) || 0;
         dur = savedDuration > 10 ? savedDuration : nicoDuration;
-        if (dur > 0 && cur >= dur + 1.2 && !nicoEndedFlag) { nicoEndedFlag = true; markPlaybackCompleted(currentPlayingItem); stopProgressTimer(); playNextVideo(); return; }
+        if (dur > 0 && cur >= dur + 1.2 && !nicoEndedFlag) { void completeWebPlayback('nico-progress-ended'); return; }
     } else return;
     if (dur > 0) { const pct = (cur / dur) * 100; document.getElementById('progress-bar').style.width = `${pct}%`; document.getElementById('pocket-progress-bar').style.width = `${pct}%`; document.getElementById('time-current').textContent = formatTime(cur); document.getElementById('time-duration').textContent = formatTime(dur); document.getElementById('pocket-time-current').textContent = formatTime(cur); document.getElementById('pocket-time-duration').textContent = formatTime(dur); savePlaybackState({ currentTime: cur }); armPlaybackWatchdog(false); }
 }
@@ -2812,11 +2880,28 @@ function handleProgressClick(e) {
 
 function startPlaylist(items, idx = 0, context = {}) {
     if (!items.length) return;
-    currentPlaybackContext = { folderId: context.folderId ?? currentFolderId ?? '__all', source: context.source || 'library' };
+    if (!['smartRandom','uniformRandom'].includes(context.source)) activeRecommendationQueue=null;
+    currentPlaybackContext = { ...context, folderId: context.folderId ?? currentFolderId ?? '__all', source: context.finite ? context.source : (context.source === 'unknown' ? 'unknown' : 'manual') };
     playbackIntent = 'playing'; playbackMediaState = 'loading'; currentPlaylist = items.slice(); currentIndex = idx; loadVideo(currentIndex);
 }
-function playNextVideo() { if (currentPlaylist.length === 0 || isTransitioning) return; cancelPlaybackWatchdog(); playbackIntent = 'playing'; playbackMediaState = 'loading'; isTransitioning = true; setTimeout(() => { isTransitioning = false; }, 1000); currentIndex = (currentIndex + 1) % currentPlaylist.length; loadVideo(currentIndex); }
-function playPrevVideo() { if (currentPlaylist.length === 0 || isTransitioning) return; cancelPlaybackWatchdog(); playbackIntent = 'playing'; playbackMediaState = 'loading'; isTransitioning = true; setTimeout(() => { isTransitioning = false; }, 1000); currentIndex = (currentIndex - 1 + currentPlaylist.length) % currentPlaylist.length; loadVideo(currentIndex); }
+function movePlaylist(offset) {
+    if (!currentPlaylist.length || isTransitioning) return;
+    const next = currentIndex + offset;
+    if (currentPlaybackContext?.finite && next < 0) return;
+    if (currentPlaybackContext?.finite && (next < 0 || next >= currentPlaylist.length)) {
+        cancelPlaybackWatchdog(); playbackIntent = 'stopped'; playbackMediaState = 'idle'; isPlaying = false;
+        try { ytPlayer?.pauseVideo?.(); } catch (_) {}
+        const nico=document.getElementById('nico-player');
+        nico?.contentWindow?.postMessage({sourceConnectorType:1,playerId:'1',eventName:'pause'},'https://embed.nicovideo.jp');
+        stopProgressTimer(); stopSilentAudio(); updatePlayPauseIcon(); return;
+    }
+    if (!currentPlaybackContext?.finite) currentPlaybackContext = { ...currentPlaybackContext, source: 'sequential' };
+    cancelPlaybackWatchdog(); playbackIntent = 'playing'; playbackMediaState = 'loading'; isTransitioning = true;
+    setTimeout(() => { isTransitioning = false; }, 1000);
+    currentIndex = (next + currentPlaylist.length) % currentPlaylist.length; void loadVideo(currentIndex);
+}
+function playNextVideo() { movePlaylist(1); }
+function playPrevVideo() { movePlaylist(-1); }
 
 function getYouTubeId(url) { try { return new URL(url).searchParams.get('v') || url.split('/').pop(); } catch(e) { const m = url.match(/[?&]v=([^&]+)/); return m ? m[1] : url.split('/').pop(); } }
 function getNicoId(url) { return url.split('?')[0].split('/').pop(); }
@@ -2861,8 +2946,37 @@ function onPlayerStateChange(e) {
     }
 }
 
-function loadVideo(idx) {
+async function loadVideo(idx) {
     if (idx < 0 || idx >= currentPlaylist.length) return;
+    const serial = ++recommendationLoadSerial;
+    let selected = currentPlaylist[idx];
+    const selectedContext = { ...(selected._cmsPlayContext || currentPlaybackContext || {source:'unknown'}) };
+    delete selectedContext.restoredAttempt;
+    const restoredAttempt = currentPlaybackContext?.restoredAttempt;
+    if (currentPlaybackContext?.finite) {
+        const key=window.CMSRecommendationEngine.normalizeContentKey(selected);
+        const fresh=allItems.find(item=>!item.deleted && item.id===selected.id && window.CMSRecommendationEngine.normalizeContentKey(item)===key)
+            || allItems.find(item=>!item.deleted && window.CMSRecommendationEngine.normalizeContentKey(item)===key);
+        if (!fresh) {
+            currentIndex=idx;
+            if (idx+1<currentPlaylist.length) return loadVideo(idx+1);
+            movePlaylist(1); return;
+        }
+        selected={...fresh,_cmsPlayContext:selected._cmsPlayContext || null};
+        currentPlaylist[idx]=selected;
+    }
+    try {
+        await window.CmsRecommendationStore.ensure(allItems);
+        if (serial !== recommendationLoadSerial) return;
+        const attempt = await window.CmsRecommendationStore.beginAttempt(selected, selectedContext, restoredAttempt);
+        if (serial !== recommendationLoadSerial) return;
+        if (currentPlaybackContext) delete currentPlaybackContext.restoredAttempt;
+        recommendationAttempt = attempt;
+    } catch (error) {
+        if (serial !== recommendationLoadSerial) return;
+        // Playback remains available, but an unpersisted attempt must not be counted.
+        recommendationAttempt = null; console.error('[recommendation] attempt unavailable', error);
+    }
     cancelPlaybackWatchdog();
     currentIndex = idx; isTransitioning = false; currentPlayingItem = currentPlaylist[idx]; playbackIntent = 'playing'; playbackMediaState = 'loading'; isPlaying = true; nicoDuration = 0; nicoCurrentTime = 0; nicoEndedFlag = false; nicoPlayerReady = false; nicoPendingSeekSeconds = null; nicoSeekAttemptCount = 0; nicoSeekLastSentAt = 0;
     playbackWatchdogToken = `${Date.now()}:${idx}:${currentPlayingItem.id || currentPlayingItem.url || currentPlayingItem.title || ''}`;

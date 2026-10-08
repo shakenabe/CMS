@@ -8,6 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="legacy-base.css?v=2026092401">
     <link rel="stylesheet" href="redesign.css?v=2026092401">
+    <link rel="stylesheet" href="desktop-workspace.css?v=2026100801">
 </head>
 <body class="theme-modern is-pc">
 
@@ -79,7 +80,6 @@
     </div>
 
     <div id="main-app" class="hidden">
-        <div id="cms-design-toolbar"></div>
         <header id="pc-appbar" class="panel-glass" aria-label="CMSメインツールバー">
             <div class="pc-appbar-brand">
                 <strong>TUBENICO</strong>
@@ -158,7 +158,6 @@
                 </div>
             </div>
 
-            <div id="desktop-pane-resizer" role="separator" tabindex="0" aria-label="動画・フォルダ領域の幅を調整" aria-orientation="vertical" aria-valuemin="28" aria-valuemax="52" aria-valuenow="36"></div>
 
             <!-- 右ペイン: ライブラリ -->
             <div id="right-pane" class="pc-column">
@@ -462,11 +461,16 @@
 
     <script src="cms-icons.js?v=2026072502"></script>
     <script src="ui-feedback.js?v=2026090601"></script>
-    <script type="module" src="firebase-web.js?v=2026092401"></script>
+    <script type="module" src="firebase-web.js?v=2026100801"></script>
     <script src="state-policy.js?v=2026092401"></script>
-    <script src="ui-runtime.js?v=2026092401"></script>
-    <script src="script.js?v=2026092401"></script>
+    <script src="ui-runtime.js?v=2026100801"></script>
+    <script src="shared/recommendation-engine.js?v=2026100801"></script>
+    <script src="shared/recommendation-cloud.js?v=2026100801"></script>
+    <script src="recommendation-store-web.js?v=2026100801"></script>
+    <script src="script.js?v=2026100801"></script>
+    <script src="recommendation-web.js?v=2026100801"></script>
+    <script src="shared/recommendation-ui.js?v=2026100801"></script>
     <script src="desktop-large-ui-v2.js?v=2026092401"></script>
-    <script type="module" src="redesign.js?v=2026092401"></script>
+    <script src="redesign.js?v=2026100801"></script>
 </body>
 </html>

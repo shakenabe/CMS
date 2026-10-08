@@ -5,7 +5,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js';
 import {
   arrayUnion, collection, doc, documentId, getDoc, getDocs, getFirestore, increment, limit,
-  orderBy, query, serverTimestamp, startAfter, Timestamp, where, writeBatch
+  orderBy, query, runTransaction, serverTimestamp, setDoc, startAfter, Timestamp, where, writeBatch
 } from 'https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-lite.js';
 import {
   createIosHostedLoginUrl, isFirebaseHostedWeb, isIosWebKit
@@ -28,7 +28,6 @@ function loadCmsSafePatch() {
   document.head.appendChild(script);
 }
 
-loadCmsSafePatch();
 
 const firebaseConfig = Object.freeze({
   apiKey: 'AIzaSyBEHDu0Y8Gnu-Cf9bkgIcrJ9HhL1OYJGUY',
@@ -70,12 +69,13 @@ function markAuthStateReady(user) {
 
 function openCache() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(CACHE_DB, 2);
+    const request = indexedDB.open(CACHE_DB, 3);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains('media')) db.createObjectStore('media', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('cloudMedia')) db.createObjectStore('cloudMedia', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('state')) db.createObjectStore('state', { keyPath: 'key' });
+      if (!db.objectStoreNames.contains('recommendationData')) db.createObjectStore('recommendationData', { keyPath: 'key' });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -437,7 +437,8 @@ async function flushPlaybackQueue({ silent = true } = {}) {
 async function getPlaybackHistory({ days = 90, forceFlush = true } = {}) {
   const safeDays = Math.max(1, Math.min(365, Math.floor(Number(days) || 90)));
   const sinceAt = Date.now() - safeDays * 24 * 60 * 60 * 1000;
-  const pendingEvents = readPlaybackHistoryQueue();
+  const recommendationHistory = window.CmsRecommendationStore ? (await window.CmsRecommendationStore.read()).history : [];
+  const pendingEvents = [...readPlaybackHistoryQueue(), ...recommendationHistory];
   const normalizeEvents = events => (Array.isArray(events) ? events : [])
     .filter(event => event?.eventId && Number.isFinite(new Date(event.playedAt).getTime()))
     .filter(event => new Date(event.playedAt).getTime() >= sinceAt);
@@ -470,7 +471,7 @@ async function getPlaybackHistory({ days = 90, forceFlush = true } = {}) {
   snapshot.forEach(bucket => {
     for (const event of normalizeEvents(bucket.data()?.events)) merged.set(event.eventId, event);
   });
-  for (const event of normalizeEvents(readPlaybackHistoryQueue())) merged.set(event.eventId, event);
+  for (const event of normalizeEvents(pendingEvents)) merged.set(event.eventId, event);
   return {
     events: [...merged.values()].sort((a, b) => new Date(b.playedAt) - new Date(a.playedAt)),
     source: 'firebase',
@@ -630,8 +631,10 @@ async function saveLibrarySnapshot(data = {}) {
   };
 
   for (const item of changedItems) {
+    const payload = cleanFirestoreValue(item);
+    if (payload._cmsRecommendationCountManaged) { delete payload.playCount; delete payload.lastPlayedAt; }
     queueSet(userDoc(uid, 'mediaItems', item.id), {
-      ...cleanFirestoreValue(item),
+      ...payload,
       deleted: false,
       updatedAt: serverTimestamp()
     });
@@ -804,6 +807,7 @@ async function syncCloud({ force = false, silent = false } = {}) {
     }
     const updated = await readCache();
     showLibrary(updated, 'firebase', { silent });
+    scheduleRecommendationSync();
     updateStatus(`Firebase: 読込完了（${updated.mediaItems.length}件・再生回数同期可）`);
     return updated;
   })();
@@ -844,7 +848,63 @@ async function login() {
   }
 }
 
+let recommendationSyncFlight = null;
+let recommendationSyncTimer = null;
+async function syncRecommendations({ refreshHistory = false } = {}) {
+  if (recommendationSyncFlight) return recommendationSyncFlight;
+  recommendationSyncFlight = (async () => {
+    const store = window.CmsRecommendationStore;
+    if (!window.CmsWebPlayer?.getUseFirebase()) return { status: 'local' };
+    const requireRecommendationUser = () => {
+      const user = auth.currentUser;
+      if (!user || user.uid !== store.ownerUid) throw new Error('CMSの所有者アカウントでログインしてください。');
+      return user;
+    };
+    const owner = 'user:' + requireRecommendationUser().uid;
+    const cloud = window.CMSRecommendationCloud({ arrayUnion, collection, doc, getDoc, getDocs, query, where, runTransaction, serverTimestamp, setDoc }, firestore, requireRecommendationUser);
+    await flushPlaybackQueue();
+    const data = await store.ensure(window.CmsWebPlayer.getRecords());
+    if (data.owner !== owner) throw new Error('同期開始後に保存先が変更されました。再試行してください。');
+    if (!data.migration.ready) await cloud.initializeRecommendationState(data.migration);
+    await cloud.ensureRecommendationEvidence(Object.values(data.preferences).filter(pref=>!pref.cloudKnown).map(pref=>pref.contentKey));
+    for (const event of Object.values(data.events)) {
+      await cloud.acceptRecommendationOperation({ kind: 'playback', payload: event });
+    }
+    for (const mutation of Object.values(data.mutations)) {
+      await cloud.acceptRecommendationOperation({ kind: 'preference', payload: mutation });
+    }
+    for (const folder of Object.values(data.folderOutbox)) {
+      const versions=[];
+      for(const descriptor of folder.revisionHistory || []) {
+        const version=await store.folderVersion(folder.folderId,descriptor.folderRevision);
+        if(version) versions.push(version);
+      }
+      await cloud.acceptRecommendationOperation({ kind: 'folder', payload: {...folder,versions} });
+    }
+    const snapshot = await cloud.fetchRecommendationState({afterRevision:data.migration.dataRevision});
+    await store.applySynchronization(snapshot, {events:Object.keys(data.events),mutations:Object.keys(data.mutations),
+      folders:Object.values(data.folderOutbox).map(folder=>({folderId:folder.folderId,folderMutationId:folder.folderMutationId}))},owner);
+    if (refreshHistory) await store.mergeHistory((await getPlaybackHistory({ days:90, forceFlush:false })).events,owner);
+    return { status: 'success' };
+  })().finally(() => { recommendationSyncFlight = null; });
+  return recommendationSyncFlight;
+}
+function scheduleRecommendationSync() {
+  if (recommendationSyncTimer) return;
+  recommendationSyncTimer = setTimeout(() => {
+    recommendationSyncTimer = null;
+    if (auth.currentUser && window.CmsWebPlayer?.getUseFirebase()) syncRecommendations().catch(error => updateStatus('推薦同期: ' + error.message));
+  }, 60000);
+}
 window.CmsWebFirebase = {
+  syncRecommendations, scheduleRecommendationSync,
+  async fetchRecommendationFolderVersion(folderId,revision) {
+    const requireOwner=()=>{
+      if(!auth.currentUser || auth.currentUser.uid!==window.CmsRecommendationStore.ownerUid) throw new Error('所有者アカウントでログインしてください。');
+      return auth.currentUser;
+    };
+    return window.CMSRecommendationCloud({arrayUnion,collection,doc,getDoc,getDocs,runTransaction,serverTimestamp,setDoc},firestore,requireOwner).fetchRecommendationFolderVersion(folderId,revision);
+  },
   login,
   sync: (options = {}) => syncCloud({ force: true, silent: false, ...options }),
   saveLibrary: saveLibrarySnapshot,
