@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="legacy-base.css?v=2026092401">
     <link rel="stylesheet" href="redesign.css?v=2026092401">
-    <link rel="stylesheet" href="desktop-workspace.css?v=2026100801">
+    <link rel="stylesheet" href="desktop-workspace.css?v=2026100802">
 </head>
 <body class="theme-modern is-pc">
 
@@ -52,8 +52,8 @@
                 <button id="pocket-next-item-2" type="button" class="pocket-next-item" data-queue-offset="2">
                     <img alt="" loading="lazy"><span><strong>次の曲はありません</strong><small>---</small></span>
                 </button>
-                <label class="pocket-quick-slider" for="pocket-volume-slider"><span>音量</span><input id="pocket-volume-slider" type="range" min="0" max="100" step="1" value="100" aria-label="音量"><output id="pocket-volume-value">100%</output></label>
-                <label class="pocket-quick-slider" for="pocket-panel-opacity-slider"><span>背景透過</span><input id="pocket-panel-opacity-slider" type="range" min="0" max="100" step="1" value="28" aria-label="操作パネルの背景透過"><output id="pocket-panel-opacity-value">28%</output></label>
+                <label class="pocket-quick-slider" for="pocket-volume-slider"><span aria-hidden="true"><i class="fas fa-volume-high"></i></span><input id="pocket-volume-slider" type="range" min="0" max="100" step="1" value="100" aria-label="音量"><output id="pocket-volume-value">100%</output></label>
+                <label class="pocket-quick-slider" for="pocket-panel-opacity-slider"><span aria-hidden="true"><i class="fas fa-eye"></i></span><input id="pocket-panel-opacity-slider" type="range" min="0" max="100" step="1" value="28" aria-label="操作パネルの背景透過"><output id="pocket-panel-opacity-value">28%</output></label>
             </aside>
             <button id="pocket-unlock-btn" type="button" class="pocket-unlock-btn"><i class="fas fa-unlock"></i> ロック解除</button>
         </div>
@@ -196,7 +196,7 @@
                     </div>
 
                     <div class="library-lists-container">
-                        <div id="widget-track-list-wrapper" class="panel-glass">
+                <div id="widget-track-list-wrapper" class="panel-glass">
                             <div class="pc-track-heading">
                                 <span>SELECTED CHANNEL</span>
                                 <strong id="current-folder-title">すべてのアイテム</strong>
@@ -207,6 +207,7 @@
                     </div>
                 </div>
             </div>
+            <div id="desktop-pane-resizer" role="separator" aria-orientation="vertical" aria-label="プレーヤーと動画一覧の幅を調整" tabindex="0"></div>
         </main>
     </div>
 
@@ -246,11 +247,13 @@
                     <p id="stats-source-status">現在のライブラリから集計しています</p>
                 </div>
                 <div class="stats-header-actions">
-                    <button id="btn-export-analysis-json" class="theme-btn" type="button" title="分析用JSONを書き出し"><i class="fas fa-file-export"></i> 分析用JSON</button>
+                    <button id="btn-set-analysis-export-folder" class="theme-btn" type="button" title="分析JSONの保存先フォルダを選択"><i class="fas fa-folder-open"></i> 保存先</button>
+                    <button id="btn-export-analysis-json" class="theme-btn" type="button" title="分析用JSONを更新して保存"><i class="fas fa-rotate"></i> 更新して保存</button>
                     <button id="btn-refresh-stats" class="theme-btn" type="button"><i class="fas fa-rotate"></i> 更新</button>
                     <button id="btn-close-stats" type="button" aria-label="統計画面を閉じる"><i class="fas fa-xmark"></i></button>
                 </div>
             </header>
+            <p id="analysis-export-status" class="analysis-export-status" role="status" aria-live="polite">保存先未設定 — 「保存先」から Documents\QUIN\data\projects\cms を選択してください（変更可）。</p>
             <div class="stats-scroll-area">
                 <div id="stats-summary-grid" class="stats-summary-grid"></div>
                 <div id="stats-highlight-grid" class="stats-highlight-grid"></div>
@@ -333,6 +336,19 @@
                     <div class="setting-row">
                         <label><input type="checkbox" id="set-window-mode"> <cms-icon name="window"></cms-icon>ウィンドウモード (パネル自由配置・サイズ変更)</label>
                         <button id="btn-reset-window" class="theme-btn" style="padding: 5px; font-size:0.8rem; margin-top:5px; width:150px;">配置をリセット</button>
+                    </div>
+                    <div class="setting-section-label"><strong>PCレイアウトのサイズ</strong><span>P1〜P4のパネル幅・高さを調整</span></div>
+                    <div class="setting-row desktop-size-settings">
+                        <label for="set-desktop-folder-width">フォルダ一覧の幅: <output id="desktop-folder-width-value">260px</output></label>
+                        <input type="range" id="set-desktop-folder-width" min="200" max="420" step="10" value="260">
+                        <label for="set-desktop-player-width">プレーヤー列の幅: <output id="desktop-player-width-value">480px</output></label>
+                        <input type="range" id="set-desktop-player-width" min="240" max="600" step="10" value="480">
+                        <label for="set-desktop-player-height">プレーヤーの高さ: <output id="desktop-player-height-value">360px</output></label>
+                        <input type="range" id="set-desktop-player-height" min="180" max="600" step="10" value="360">
+                        <label for="set-desktop-controls-height">再生コントロールの高さ: <output id="desktop-controls-height-value">200px</output></label>
+                        <input type="range" id="set-desktop-controls-height" min="120" max="320" step="10" value="200">
+                        <label for="set-desktop-track-height">動画行の高さ: <output id="desktop-track-height-value">76px</output></label>
+                        <input type="range" id="set-desktop-track-height" min="56" max="120" step="2" value="76">
                     </div>
 
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
@@ -467,10 +483,10 @@
     <script src="shared/recommendation-engine.js?v=2026100801"></script>
     <script src="shared/recommendation-cloud.js?v=2026100801"></script>
     <script src="recommendation-store-web.js?v=2026100801"></script>
-    <script src="script.js?v=2026100801"></script>
+    <script src="script.js?v=2026100802"></script>
     <script src="recommendation-web.js?v=2026100801"></script>
     <script src="shared/recommendation-ui.js?v=2026100801"></script>
-    <script src="desktop-large-ui-v2.js?v=2026092401"></script>
+    <script src="desktop-large-ui-v2.js?v=2026100802"></script>
     <script src="redesign.js?v=2026100801"></script>
 </body>
 </html>

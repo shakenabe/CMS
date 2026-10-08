@@ -11,6 +11,37 @@
         if (typeof saveSettings === 'function') saveSettings();
     }
 
+    const desktopSizeControls = [
+        { id: 'set-desktop-folder-width', key: 'desktopFolderWidth', css: '--cms-folder-width', output: 'desktop-folder-width-value', unit: 'px', fallback: 260 },
+        { id: 'set-desktop-player-width', key: 'desktopPlayerWidth', css: '--cms-player-width', output: 'desktop-player-width-value', unit: 'px', fallback: 480 },
+        { id: 'set-desktop-player-height', key: 'desktopPlayerHeight', css: '--cms-player-height', output: 'desktop-player-height-value', unit: 'px', fallback: 360 },
+        { id: 'set-desktop-controls-height', key: 'desktopControlsHeight', css: '--cms-controls-height', output: 'desktop-controls-height-value', unit: 'px', fallback: 200 },
+        { id: 'set-desktop-track-height', key: 'desktopTrackHeight', css: '--cms-track-height', output: 'desktop-track-height-value', unit: 'px', fallback: 76 }
+    ];
+
+    function applyDesktopSize(control, value) {
+        const input = document.getElementById(control.id);
+        const numeric = clamp(Number(value) || control.fallback, Number(input?.min || 0), Number(input?.max || 10000));
+        document.documentElement.style.setProperty(control.css, `${numeric}${control.unit}`);
+        if (input) input.value = String(numeric);
+        const output = document.getElementById(control.output);
+        if (output) output.textContent = `${numeric}${control.unit}`;
+        return numeric;
+    }
+
+    function setupDesktopSizeControls() {
+        desktopSizeControls.forEach(control => {
+            const value = applyDesktopSize(control, appSettings?.[control.key] ?? control.fallback);
+            const input = document.getElementById(control.id);
+            if (!input || input.dataset.ready === '1') return;
+            input.dataset.ready = '1';
+            input.addEventListener('input', () => {
+                appSettings[control.key] = applyDesktopSize(control, input.value);
+            });
+            appSettings[control.key] = value;
+        });
+    }
+
     function setupDesktopResizer() {
         const workspace = document.getElementById('widget-container');
         const resizer = document.getElementById('desktop-pane-resizer');
@@ -20,6 +51,12 @@
         const setFromClientX = clientX => {
             const rect = workspace.getBoundingClientRect();
             if (!(rect.width > 0)) return;
+            if (document.body.classList.contains('theme-modern')) {
+                const width = clamp(clientX - rect.left, 320, Math.min(600, rect.width - 420));
+                appSettings.desktopPlayerWidth = Math.round(width);
+                applyDesktopSize(desktopSizeControls[1], appSettings.desktopPlayerWidth);
+                return;
+            }
             const scale = window.innerWidth > 1050 && ['nerv', 'niconico'].includes(appSettings.theme) ? .55 : 1;
             const ratio = clamp((clientX - rect.left) / rect.width * 100 / scale, 28, 52);
             document.documentElement.style.setProperty('--desktop-left-ratio', `${ratio}%`);
@@ -27,7 +64,11 @@
             resizer.setAttribute('aria-valuenow', String(Math.round(ratio)));
         };
         const commit = () => {
-            saveDesktopRatio(parseFloat(document.body.style.getPropertyValue('--desktop-left-ratio')) || 36);
+            if (document.body.classList.contains('theme-modern')) {
+                if (typeof saveSettings === 'function') saveSettings();
+            } else {
+                saveDesktopRatio(parseFloat(document.body.style.getPropertyValue('--desktop-left-ratio')) || 36);
+            }
         };
         resizer.addEventListener('pointerdown', event => {
             if (!document.body.classList.contains('is-pc') || document.body.classList.contains('window-mode')) return;
@@ -50,6 +91,12 @@
         resizer.addEventListener('keydown', event => {
             if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
             event.preventDefault();
+            if (document.body.classList.contains('theme-modern')) {
+                appSettings.desktopPlayerWidth = clamp((Number(appSettings.desktopPlayerWidth) || 480) + (event.key === 'ArrowLeft' ? -10 : 10), 320, 600);
+                applyDesktopSize(desktopSizeControls[1], appSettings.desktopPlayerWidth);
+                if (typeof saveSettings === 'function') saveSettings();
+                return;
+            }
             const current = Number(appSettings?.desktopLeftRatio) || 36;
             saveDesktopRatio(current + (event.key === 'ArrowLeft' ? -1 : 1));
             resizer.setAttribute('aria-valuenow', String(Math.round(Number(appSettings.desktopLeftRatio))));
@@ -134,8 +181,9 @@
         updatePocketQueue();
     }
 
-    window.CmsDesktopLargeUI = { updatePocketQueue };
+    window.CmsDesktopLargeUI = { updatePocketQueue, refreshSizing: setupDesktopSizeControls };
     document.addEventListener('DOMContentLoaded', () => {
+        setupDesktopSizeControls();
         setupDesktopResizer();
         setupPocketEnhancements();
     });

@@ -1,6 +1,6 @@
 const defaultSettings = {
     theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, nicoBoost: 1.0,
-    baseFontSize: 100, pcLeftWidth: 350, desktopLeftRatio: 36, showClock: true, clockFeatureV1: true, clockType: 'digital1', pocketClockType: 'digital1', showThumbnails: true,
+    baseFontSize: 100, pcLeftWidth: 350, desktopLeftRatio: 36, desktopFolderWidth: 260, desktopPlayerWidth: 480, desktopPlayerHeight: 360, desktopControlsHeight: 200, desktopTrackHeight: 76, showClock: true, clockFeatureV1: true, clockType: 'digital1', pocketClockType: 'digital1', showThumbnails: true,
     performanceMode: false, dataSaverMode: false, colorMode: 'system',
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff', blurBaseColor: '#000000',
     pocketAlwaysOn: false, pocketSwipeUnlock: true, pocketUseBackground: false, pocketBgDim: 35, pocketFullscreenMode: 'browser', pocketVolume: 100, pocketPanelOpacity: 28, settingsSchemaVersion: 2,
@@ -72,6 +72,15 @@ let marqueeResizeObserver = null;
 let marqueeUpdateGeneration = 0;
 let statsHistoryPlaylist = [];
 let latestStatsHistoryData = { events: [], source: 'library', days: 90 };
+let analysisExportDirectoryHandle = null;
+let analysisExportWriteInProgress = false;
+let analysisExportAutoTimer = 0;
+let analysisExportNextAttemptAt = 0;
+const ANALYSIS_EXPORT_FILE_NAME = 'cms_analysis_export.json';
+const ANALYSIS_EXPORT_INTERVAL_MS = 60 * 60 * 1000;
+const ANALYSIS_EXPORT_DB_NAME = 'cms-analysis-export';
+const ANALYSIS_EXPORT_DB_STORE = 'destinations';
+const ANALYSIS_EXPORT_LAST_SAVED_KEY = 'cms_analysis_export_last_saved_at';
 let lastPlaybackStateSavedAt = 0;
 let suppressSessionSave = false;
 let hasCustomBackgroundImage = false;
@@ -1174,6 +1183,7 @@ function applyThemeSettings() {
     const pOverlay = document.getElementById('pocket-overlay'); if (appSettings.pocketAlwaysOn) pOverlay.classList.add('always-on'); else pOverlay.classList.remove('always-on');
     applyPocketAppearance();
     applyDesktopPanelHeights();
+    window.CmsDesktopLargeUI?.refreshSizing();
     window.dispatchEvent(new Event('cms-state-change'));
 }
 
@@ -1366,7 +1376,10 @@ function setupSettingsModal() {
     };
     const markSettingsDirty = () => { settingsManualDirty = true; updateSettingsDirtyState(); };
     const closeSettings = ({ restore = false } = {}) => {
-        if (restore && settingsOpenSnapshot) appSettings = { ...settingsOpenSnapshot };
+        if (restore && settingsOpenSnapshot) {
+            appSettings = { ...settingsOpenSnapshot };
+            window.CmsDesktopLargeUI?.refreshSizing();
+        }
         window.CmsUI?.closeDialog(modal);
         settingsBaseline = '';
         settingsManualDirty = false;
@@ -1379,6 +1392,7 @@ function setupSettingsModal() {
 
     document.getElementById('btn-open-settings').onclick = () => {
         settingsOpenSnapshot = JSON.parse(JSON.stringify(appSettings));
+        window.CmsDesktopLargeUI?.refreshSizing();
         document.getElementById('set-theme').value = appSettings.theme; document.getElementById('set-color-mode').value = appSettings.colorMode; document.getElementById('set-font-size').value = appSettings.baseFontSize; document.getElementById('font-val').textContent = appSettings.baseFontSize;
         document.getElementById('set-bg-position').value = appSettings.bgPosition; document.getElementById('set-bg-size').value = appSettings.bgSize;
         document.getElementById('set-opacity').value = appSettings.bgOpacity; document.getElementById('op-val').textContent = appSettings.bgOpacity;
@@ -2188,11 +2202,89 @@ async function refreshStatsHistory() {
     }
 }
 
-async function downloadAnalysisJSON() {
-    const button = document.getElementById('btn-export-analysis-json');
+function openAnalysisExportDatabase() {
+    return new Promise((resolve, reject) => {
+        if (!window.indexedDB) { reject(new Error('このブラウザでは保存先を記憶できません。')); return; }
+        const request = indexedDB.open(ANALYSIS_EXPORT_DB_NAME, 1);
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(ANALYSIS_EXPORT_DB_STORE)) db.createObjectStore(ANALYSIS_EXPORT_DB_STORE);
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('保存先設定を開けません。'));
+        request.onblocked = () => reject(new Error('保存先設定を更新できません。CMSを開いた他のタブを閉じてください。'));
+    });
+}
+
+async function storeAnalysisExportDirectory(handle) {
+    const db = await openAnalysisExportDatabase();
+    try {
+        await new Promise((resolve, reject) => {
+            const transaction = db.transaction(ANALYSIS_EXPORT_DB_STORE, 'readwrite');
+            transaction.objectStore(ANALYSIS_EXPORT_DB_STORE).put(handle, 'directory');
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error || new Error('保存先を記憶できません。'));
+            transaction.onabort = () => reject(transaction.error || new Error('保存先の記憶が中断されました。'));
+        });
+    } finally { db.close(); }
+}
+
+async function restoreAnalysisExportDirectory() {
+    try {
+        const db = await openAnalysisExportDatabase();
+        try {
+            return await new Promise((resolve, reject) => {
+                const request = db.transaction(ANALYSIS_EXPORT_DB_STORE, 'readonly').objectStore(ANALYSIS_EXPORT_DB_STORE).get('directory');
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = () => reject(request.error || new Error('保存先を読み込めません。'));
+            });
+        } finally { db.close(); }
+    } catch (error) {
+        console.warn('[analysis-export] destination restore failed', error);
+        return null;
+    }
+}
+
+function setAnalysisExportStatus(message, state = '') {
+    const status = document.getElementById('analysis-export-status');
+    if (!status) return;
+    status.textContent = message;
+    if (state) status.dataset.state = state;
+    else delete status.dataset.state;
+}
+
+function getAnalysisExportTimeText(value = Date.now()) {
+    return new Date(value).toLocaleString('ja-JP', { dateStyle: 'short', timeStyle: 'short' });
+}
+
+async function chooseAnalysisExportFolder() {
+    if (!window.showDirectoryPicker) {
+        setAnalysisExportStatus('このブラウザはフォルダへの直接保存に未対応です。更新時は通常のダウンロードとして保存します。', 'warning');
+        window.CmsUI?.notify('直接保存に未対応のため、JSONはブラウザのダウンロード先へ保存します。', { type: 'warning', title: '分析用JSON' });
+        return false;
+    }
+    try {
+        const handle = await window.showDirectoryPicker({ id: 'cms-analysis-export', mode: 'readwrite', startIn: 'documents' });
+        const permission = await handle.requestPermission({ mode: 'readwrite' });
+        if (permission !== 'granted') throw new Error('フォルダへの書き込みが許可されませんでした。');
+        await storeAnalysisExportDirectory(handle);
+        analysisExportDirectoryHandle = handle;
+        setAnalysisExportStatus(`保存先: ${handle.name} — 選択後、最初のJSONを保存しています。以降は1時間ごとに更新します。`);
+        await saveAnalysisJSON({ automatic: false, notify: true });
+        return true;
+    } catch (error) {
+        if (error?.name !== 'AbortError') {
+            console.warn('[analysis-export] folder selection failed', error);
+            setAnalysisExportStatus(error?.message || '保存先フォルダを選択できませんでした。', 'warning');
+            window.CmsUI?.notify(error?.message || '保存先フォルダを選択できませんでした。', { type: 'warning', title: '分析用JSON' });
+        }
+        return false;
+    }
+}
+
+async function buildLatestAnalysisPayload({ automatic = false } = {}) {
     const previousHistory = latestStatsHistoryData;
     let historyData = previousHistory;
-    if (button) button.disabled = true;
     try {
         if (window.CmsWebFirebase?.getPlaybackHistory) {
             historyData = await window.CmsWebFirebase.getPlaybackHistory({ days: 365, forceFlush: appSettings.useFirebase });
@@ -2201,20 +2293,89 @@ async function downloadAnalysisJSON() {
     } catch (error) {
         console.warn('[analysis-export] history load failed', error);
         historyData = previousHistory;
-        window.CmsUI?.notify('履歴の最新取得に失敗したため、現在表示中の履歴・ライブラリで分析用JSONを書き出します。', {
-            type: 'warning',
-            title: '分析用JSON'
+        if (!automatic) window.CmsUI?.notify('履歴の最新取得に失敗したため、現在保持している履歴とライブラリからJSONを作成します。', {
+            type: 'warning', title: '分析用JSON'
         });
+    }
+    return createAnalysisExportPayload(historyData);
+}
+
+async function saveAnalysisJSON({ automatic = false, notify = true } = {}) {
+    if (analysisExportWriteInProgress) return false;
+    const button = document.getElementById('btn-export-analysis-json');
+    let handle = analysisExportDirectoryHandle;
+    if (!handle && automatic) return false;
+    if (!handle && window.showDirectoryPicker) {
+        setAnalysisExportStatus('先に「保存先」を押して、出力フォルダを選択してください。', 'warning');
+        if (notify) window.CmsUI?.notify('先に分析JSONの保存先フォルダを選択してください。', { type: 'warning', title: '分析用JSON' });
+        return false;
+    }
+    analysisExportWriteInProgress = true;
+    if (button) button.disabled = true;
+    setAnalysisExportStatus(automatic ? '分析用JSONを自動更新しています…' : '最新の履歴を取得して保存しています…');
+    try {
+        if (handle) {
+            let permission = await handle.queryPermission({ mode: 'readwrite' });
+            if (permission !== 'granted' && !automatic) permission = await handle.requestPermission({ mode: 'readwrite' });
+            if (permission !== 'granted') {
+                setAnalysisExportStatus('保存先の再許可が必要です。「更新して保存」を押して許可してください。', 'warning');
+                analysisExportNextAttemptAt = Date.now() + 15 * 60 * 1000;
+                return false;
+            }
+        }
+        const payload = await buildLatestAnalysisPayload({ automatic });
+        if (handle) {
+            const file = await handle.getFileHandle(ANALYSIS_EXPORT_FILE_NAME, { create: true });
+            const writable = await file.createWritable();
+            await writable.write(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' }));
+            await writable.close();
+        } else {
+            const stamp = formatAnalysisDate(new Date()) || new Date().toISOString().slice(0, 10);
+            downloadJSONFile(payload, `cms_analysis_export_${stamp}.json`);
+        }
+        const savedAt = Date.now();
+        try { localStorage.setItem(ANALYSIS_EXPORT_LAST_SAVED_KEY, String(savedAt)); } catch (_) {}
+        analysisExportNextAttemptAt = savedAt + ANALYSIS_EXPORT_INTERVAL_MS;
+        setAnalysisExportStatus(`最終保存: ${getAnalysisExportTimeText(savedAt)} — 動画${payload.videos.length.toLocaleString()}件 / 履歴${payload.history.length.toLocaleString()}件${handle ? ` / ${handle.name}\\${ANALYSIS_EXPORT_FILE_NAME}` : ' / ダウンロード'}`,
+            'success');
+        if (notify) window.CmsUI?.notify(`分析用JSONを保存しました（動画${payload.videos.length.toLocaleString()}件 / 履歴${payload.history.length.toLocaleString()}件）。`, {
+            type: 'success', title: '分析用JSON'
+        });
+        return true;
+    } catch (error) {
+        console.error('[analysis-export] save failed', error);
+        setAnalysisExportStatus(`保存に失敗しました: ${error?.message || String(error)}`, 'warning');
+        if (!automatic) window.CmsUI?.notify(`分析用JSONを保存できませんでした: ${error?.message || String(error)}`, { type: 'warning', title: '分析用JSON' });
+        analysisExportNextAttemptAt = Date.now() + 15 * 60 * 1000;
+        return false;
     } finally {
+        analysisExportWriteInProgress = false;
         if (button) button.disabled = false;
     }
-    const payload = createAnalysisExportPayload(historyData);
-    const stamp = formatAnalysisDate(new Date()) || new Date().toISOString().slice(0, 10);
-    downloadJSONFile(payload, `cms_analysis_export_${stamp}.json`);
-    window.CmsUI?.notify(`分析用JSONを書き出しました（動画${payload.videos.length.toLocaleString()}件 / 履歴${payload.history.length.toLocaleString()}件）。`, {
-        type: 'success',
-        title: '分析用JSON'
-    });
+}
+
+async function initializeAnalysisExport() {
+    analysisExportDirectoryHandle = await restoreAnalysisExportDirectory();
+    if (analysisExportDirectoryHandle) {
+        let lastSaved = 0;
+        try { lastSaved = Number(localStorage.getItem(ANALYSIS_EXPORT_LAST_SAVED_KEY)) || 0; } catch (_) {}
+        const permission = await analysisExportDirectoryHandle.queryPermission({ mode: 'readwrite' }).catch(() => 'prompt');
+        setAnalysisExportStatus(permission === 'granted'
+            ? `保存先: ${analysisExportDirectoryHandle.name} — 1時間ごとに自動更新します（CMSを開いている間）。`
+            : `保存先: ${analysisExportDirectoryHandle.name} — ブラウザの再許可が必要です。更新ボタンから保存してください。`,
+        permission === 'granted' ? '' : 'warning');
+        analysisExportNextAttemptAt = lastSaved ? lastSaved + ANALYSIS_EXPORT_INTERVAL_MS : Date.now() + ANALYSIS_EXPORT_INTERVAL_MS;
+    }
+    if (!analysisExportAutoTimer) {
+        analysisExportAutoTimer = window.setInterval(async () => {
+            if (!analysisExportDirectoryHandle || analysisExportWriteInProgress || !allItems.length || Date.now() < analysisExportNextAttemptAt) return;
+            await saveAnalysisJSON({ automatic: true, notify: false });
+        }, 60 * 1000);
+    }
+}
+
+async function downloadAnalysisJSON() {
+    await saveAnalysisJSON({ automatic: false, notify: true });
 }
 
 function setupStatsModal() {
@@ -2229,6 +2390,8 @@ function setupStatsModal() {
     document.getElementById('btn-close-stats')?.addEventListener('click', close);
     document.getElementById('btn-refresh-stats')?.addEventListener('click', refreshStatsHistory);
     document.getElementById('btn-export-analysis-json')?.addEventListener('click', downloadAnalysisJSON);
+    document.getElementById('btn-set-analysis-export-folder')?.addEventListener('click', chooseAnalysisExportFolder);
+    initializeAnalysisExport();
     document.getElementById('stats-recent-list')?.addEventListener('click', event => {
         const row = event.target.closest('[data-history-play-index]');
         if (!row || row.disabled) return;
@@ -3114,7 +3277,7 @@ function setupPocketMode() {
     document.getElementById('btn-pocket-mode').addEventListener('click', open);
     document.getElementById('pocket-unlock-btn').addEventListener('click', (e) => { e.stopPropagation(); if (!pOverlay.classList.contains('layout-editing')) unlock(); });
     pOverlay.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('button')) return;
+        if (e.target.closest('button,input,select,textarea,label,a,[data-no-unlock]')) return;
         activePointer = e.pointerId; startY = e.clientY; pOverlay.classList.add('touch-holding');
         if (holdStatus) holdStatus.innerHTML = '<i class="fas fa-unlock"></i> 長押し中…指を離さずお待ちください';
         window.CmsUI?.announce('ロック解除の長押しを開始しました');
