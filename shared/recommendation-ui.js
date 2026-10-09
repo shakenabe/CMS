@@ -6,7 +6,10 @@
   let snapshot = null, preview = null, busy = false, starTimer, previewNeedsRegeneration = false, appendRequest = null, folderUpdateTarget = null, runSerial=0, refreshSerial=0;
   const element = (tag, text, parent) => { const node = document.createElement(tag); if (text != null) node.textContent = text; if (parent) parent.append(node); return node; };
   const style = element('style', `
-.cms-rec-open { position:fixed; right:18px; bottom:82px; z-index:9000; padding:10px 16px; border-radius:22px; background:#173d66; color:#fff; border:1px solid #8db7e2; cursor:pointer; }
+.cms-rec-launcher { position:fixed; right:18px; bottom:82px; z-index:9000; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:6px; max-width:calc(100vw - 32px); }
+.cms-rec-launcher[hidden],.cms-rec-details[hidden],.cms-rec-history-entry[hidden] { display:none!important; }
+.cms-rec-open,.cms-rec-details { padding:10px 16px; border-radius:22px; background:#173d66; color:#fff; border:1px solid #8db7e2; cursor:pointer; }
+.cms-rec-details { padding:10px 12px; background:#243748; } .cms-rec-open:disabled,.cms-rec-details:disabled { opacity:.65; cursor:wait; }
 .cms-rec-dialog { --cms-rec-bg:var(--bg-card,var(--theme-surface,#fff)); --cms-rec-fg:var(--text-primary,var(--theme-text,#18212b)); width:min(860px,94vw); max-height:86vh; padding:20px; border:1px solid #8198ab; border-radius:14px; background:var(--cms-rec-bg); color:var(--cms-rec-fg); box-shadow:0 12px 60px #0006; }
 .cms-rec-dialog::backdrop { background:#0008; } .cms-rec-dialog button,.cms-rec-dialog select,.cms-rec-dialog input { padding:7px; margin:4px; color:var(--cms-rec-fg); background:var(--cms-rec-bg); border:1px solid #8092a8; border-radius:6px; cursor:pointer; }
 .cms-rec-dialog[open] { display:flex; flex-direction:column; height:min(760px,86vh); overflow:hidden; }
@@ -15,10 +18,12 @@
 .cms-rec-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #8198ab44; } .cms-rec-title { flex:1; min-width:120px; overflow-wrap:anywhere; } .cms-rec-reason { display:block; font-size:12px; opacity:.8; margin-top:4px; }
 .cms-rec-star { font-size:19px; padding:3px 7px; border:1px solid #8292a3; border-radius:6px; background:transparent; color:inherit; cursor:pointer; flex:none; }
 .cms-rec-star[aria-pressed="true"] { color:#b77700; background:#ffd46522; } .cms-rec-debug { white-space:pre-wrap; font-size:12px; }
-@media(max-width:600px) { .cms-rec-dialog { padding:12px; } .cms-rec-open { right:8px; bottom:100px; } }
+@media(max-width:600px) { .cms-rec-dialog { padding:12px; } .cms-rec-launcher { right:8px; bottom:100px; } }
 `, document.head);
   style.id = 'cms-recommendation-style';
-  const open = element('button', '★ おすすめ / 選曲', document.body); open.className = 'cms-rec-open'; open.id = 'cms-open-recommendations';
+  const launcher = element('div', null, document.body); launcher.className = 'cms-rec-launcher';
+  const open = element('button', '★ おすすめ / 選曲', launcher); open.className = 'cms-rec-open'; open.id = 'cms-open-recommendations'; open.type='button';
+  const details = element('button', '選曲詳細', launcher); details.className='cms-rec-details'; details.id='cms-recommendation-details'; details.type='button'; details.hidden=true;
   const dialog = element('dialog', null, document.body); dialog.className = 'cms-rec-dialog'; dialog.id = 'cms-recommendations';
   const heading = element('h2', 'おすすめ・Smart Random', dialog);
   const tools = element('div', null, dialog); tools.className = 'cms-rec-tools';
@@ -36,7 +41,7 @@
   const profile = select('配分 ', [['standard','標準 14 / 4 / 2'],['stable','安定 16 / 3 / 1'],['explore','発掘 11 / 4 / 5'],['rediscover','再発見 10 / 8 / 2']]);
   const lengthWrap = element('label', '曲数 ', tools), length = element('input', null, lengthWrap);
   length.type = 'number'; length.min = '1'; length.max = '200'; length.value = '20'; length.style.width = '65px';
-  const scope = select('対象 ', [['library','全ライブラリ'],['favorites','★ お気に入りだけ'],['site:youtube','YouTube'],['site:niconico','ニコニコ']]);
+  const scope = select('対象 ', [['library','全ライブラリ'],['currentFolder','現在表示中のフォルダ'],['favorites','★ お気に入りだけ'],['vocaloid','ボカロの登録曲'],['site:youtube','YouTube'],['site:niconico','ニコニコ']]);
   const operation = select('プレビュー ', [['replace','新規生成'],['append','前のプレビューに追加'],['appendActive','再生キューに追加']]);
   const debugWrap = element('label', '内訳 ', tools), debug = element('input', null, debugWrap); debug.type = 'checkbox';
   const status = element('div', '', dialog); status.className = 'cms-rec-status'; status.setAttribute('role','status'); status.setAttribute('aria-live','polite');
@@ -49,7 +54,7 @@
   button('キューを生成', generate);
   // Closing is never serialized behind cloud/storage work.
   const close=element('button','閉じる',actions);close.type='button';close.addEventListener('click',()=>dialog.close());
-  dialog.addEventListener('close',()=>{busy=false;runSerial++;refreshSerial++;});
+  dialog.addEventListener('close',()=>{busy=false;runSerial++;refreshSerial++;setBusyState(false);});
   const play = button('プレビューを再生', async () => {
     if (previewNeedsRegeneration) throw new Error('条件を変更したため、先にキューを再生成してください。');
     if (!preview?.items.length) throw new Error('先にキューを生成してください。');
@@ -76,24 +81,95 @@
     previewNeedsRegeneration=true;play.disabled=save.disabled=true;
     status.textContent='生成条件を変更しました。プレビューは古い条件のままです。キューを再生成してください。';
   });
-  async function run(action) {
+  function getLaunchSettings() {
+    const value=adapter.getLaunchSettings?.() || {};
+    return { enabled:value.enabled!==false, behavior:value.behavior==='play'?'play':'panel',
+      profile:['standard','stable','explore','rediscover'].includes(value.profile)?value.profile:'standard',
+      length:Math.max(1,Math.min(200,Math.floor(Number(value.length) || 20))),
+      scope:['library','currentFolder','favorites','vocaloid'].includes(value.scope)?value.scope:'library' };
+  }
+  function setBusyState(value) {
+    open.disabled=value; details.disabled=value;
+    open.setAttribute('aria-busy',String(value));
+  }
+  function applyLaunchSettings({ updateControls=false, cancelPending=false }={}) {
+    const settings=getLaunchSettings();
+    if (cancelPending || !settings.enabled) { runSerial++; refreshSerial++; busy=false;setBusyState(false); }
+    launcher.hidden=!settings.enabled;
+    details.hidden=!settings.enabled || settings.behavior!=='play';
+    open.textContent=settings.behavior==='play'?'▶ スマート選曲':'★ おすすめ / 選曲';
+    open.setAttribute('aria-label',open.textContent);
+    open.title=settings.behavior==='play'?'設定した対象・配分でキューを生成し、そのまま再生':'おすすめの確認・キュー生成・フォルダ保存';
+    for (const entry of document.querySelectorAll('.cms-rec-history-entry')) entry.hidden=!settings.enabled;
+    if (!settings.enabled && dialog.open) dialog.close();
+    if (updateControls) {
+      const changed=profile.value!==settings.profile || length.value!==String(settings.length) || scope.value!==settings.scope;
+      profile.value=settings.profile;length.value=String(settings.length);scope.value=settings.scope;
+      if (changed && preview) { previewNeedsRegeneration=true;play.disabled=save.disabled=true; }
+    }
+    return settings;
+  }
+  async function openPanel() {
+    if (!getLaunchSettings().enabled) return;
+    if (!dialog.open) dialog.showModal();
+    return run(refresh);
+  }
+  async function launch() {
+    const settings=getLaunchSettings();
+    if (!settings.enabled) return;
+    if (settings.behavior==='panel') return openPanel();
+    return run(async isCurrent => {
+      const next=await adapter.state();
+      if (!isCurrent()) return;
+      const queue=engine.buildQueue(prepare(next,getScope(settings.scope,next)), { mode:'smartRandom',profile:settings.profile,length:settings.length,
+        seed:crypto.getRandomValues(new Uint32Array(1))[0],queueId:crypto.randomUUID(),operation:'replace' });
+      queue.generatedAt=new Date().toISOString();
+      if (!queue.items.length) throw new Error(queue.emptyReason || 'この対象に再生できる候補がありません。対象設定を変更してください。');
+      queue.segments=[{generationQueueId:queue.queueId,mode:queue.mode,profile:queue.profile,engineVersion:queue.engineVersion,
+        configVersion:queue.configVersion,seed:queue.seed,inputSnapshotHash:queue.inputSnapshotHash,
+        requestedQuota:queue.requestedQuota,actualCounts:queue.actualCounts,start:0,length:queue.items.length}];
+      if (!isCurrent()) return;
+      await adapter.saveQueue(queue);
+      if (!isCurrent()) return;
+      const started=await playReferences(queue.items,{source:'smartRandom',queueId:queue.queueId,profile:queue.profile},queue,isCurrent);
+      if (!started || !isCurrent()) return;
+      snapshot=next;preview=queue;appendRequest=null;folderUpdateTarget=null;previewNeedsRegeneration=false;
+      mode.value='smartRandom';profile.value=settings.profile;length.value=String(settings.length);scope.value=settings.scope;operation.value='replace';
+      play.textContent='プレビューを再生';save.textContent='生成フォルダとして保存';play.disabled=save.disabled=false;
+      renderStars();
+    }, { showError:true });
+  }
+  async function run(action, { showError=false }={}) {
     if (busy) return;
     const serial=++runSerial;
-    busy = true;
-    try { await action(); } catch (error) { status.textContent = error.message || String(error); }
-    finally { if(serial===runSerial) busy = false; }
+    busy = true;setBusyState(true);
+    const isCurrent=()=>serial===runSerial && getLaunchSettings().enabled;
+    try { await action(isCurrent); } catch (error) {
+      if (serial!==runSerial) return;
+      const message=error.message || String(error);status.textContent=message;
+      if (showError && getLaunchSettings().enabled) {
+        if (!dialog.open) dialog.showModal();
+        window.CmsUI?.notify?.(message,{type:'warning',title:'スマート選曲'});
+      }
+    }
+    finally { if(serial===runSerial) { busy = false;setBusyState(false); } }
   }
-  function getScope() {
-    if (scope.value==='favorites') return {type:'contentKeys',contentKeys:(snapshot?.preferences || []).filter(pref=>pref.favorite).map(pref=>pref.contentKey)};
-    if (scope.value.startsWith('folder:')) return {type:'folder',folderName:decodeURIComponent(scope.value.slice(7))};
-    return scope.value.startsWith('site:') ? { type:'site', site:scope.value.slice(5) } : { type:'library' };
+  function getScope(value=scope.value, state=snapshot) {
+    if (value==='favorites') return {type:'contentKeys',contentKeys:(state?.preferences || []).filter(pref=>pref.favorite).map(pref=>pref.contentKey)};
+    if (value==='currentFolder' || value==='vocaloid') {
+      const selected=value==='currentFolder'?adapter.getCurrentScope?.():adapter.getVocaloidScope?.();
+      if (!selected || !['records','library'].includes(selected.type) || (value==='vocaloid' && selected.type!=='records')) throw new Error('この対象を取得できません。対象設定を変更してください。');
+      return selected.type==='records'?{type:'records',recordIds:[...(selected.recordIds || [])]}:{type:'library'};
+    }
+    if (value.startsWith('folder:')) return {type:'folder',folderName:decodeURIComponent(value.slice(7))};
+    return value.startsWith('site:') ? { type:'site', site:value.slice(5) } : { type:'library' };
   }
-  function prepare() {
-    const migration = snapshot.migration;
+  function prepare(state=snapshot, selectedScope=getScope()) {
+    const migration = state.migration;
     if (!migration || (migration.ready !== true && migration.status !== 'ready')) throw new Error('共有baselineの確認待ちです。「推薦データを同期」を実行してください。通常再生はそのまま利用できます。');
-    return engine.prepareCandidates({ records:snapshot.records, history:snapshot.history, preferences:snapshot.preferences, relations:[],
+    return engine.prepareCandidates({ records:state.records, history:state.history, preferences:state.preferences, relations:[],
       referenceTime:new Date().toISOString(), timezone:Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tokyo',
-      scope:getScope(), currentContentKey:snapshot.currentContentKey, sessionRecentContentKeys:snapshot.sessionRecentContentKeys || [], historyLimit:snapshot.historyLimit || 1000 });
+      scope:selectedScope, currentContentKey:state.currentContentKey, sessionRecentContentKeys:state.sessionRecentContentKeys || [], historyLimit:state.historyLimit || 1000 });
   }
   async function refresh() {
     const serial=++refreshSerial;
@@ -183,8 +259,10 @@
     button('対象外', async () => { await adapter.preference(candidate.contentKey,'excludedFromRecommendations',true); await refresh(); }, row);
     if (debug.checked) { const detail = element('details',null,title); element('summary','スコア内訳',detail); const pre=element('pre',JSON.stringify({ bucket:candidate.bucket, weight:candidate.weight, breakdown:candidate.breakdown, reasons:candidate.reasonCodes },null,2),detail); pre.className='cms-rec-debug'; }
   }
-  async function generate() {
-    snapshot = await adapter.state();
+  async function generate(isCurrent=()=>true) {
+    const next=await adapter.state();
+    if (!isCurrent()) return;
+    snapshot = next;
     const prepared = prepare();
     const base=operation.value==='appendActive' ? snapshot.activeQueue : preview;
     const appending=operation.value!=='replace';
@@ -197,6 +275,7 @@
       configVersion:queue.configVersion,seed:queue.seed,inputSnapshotHash:queue.inputSnapshotHash,
       requestedQuota:queue.requestedQuota,actualCounts:queue.actualCounts,start:appending?base.items.length:0,length:queue.items.length};
     await adapter.saveQueue(queue);
+    if (!isCurrent()) return;
     appendRequest=operation.value==='appendActive' ? {expected:{queueId:base.queueId,queueRevision:base.queueRevision,length:base.items.length},suffix:queue} : null;
     if (appending) {
       const combined=base.items.concat(queue.items);
@@ -215,8 +294,9 @@
     if (debug.checked) { const details=element('details',null,section); element('summary','生成診断（入力ハッシュ・緩和情報）',details); element('pre',JSON.stringify({engineVersion:preview.engineVersion,configVersion:preview.configVersion,inputSnapshotHash:preview.inputSnapshotHash,diagnostics:preview.diagnostics},null,2),details).className='cms-rec-debug'; }
     play.disabled = save.disabled = previewNeedsRegeneration;
   }
-  async function playReferences(references, context, queue = null) {
+  async function playReferences(references, context, queue = null, isCurrent=()=>true) {
     const fresh = await adapter.state(), records = fresh.records;
+    if (!isCurrent()) return false;
     const items = references.map(ref => {
       const ids = ref.playbackRecordIds || ref.recordIds || [ref.recordId];
       const record = records.find(item => !item.deleted && ids.includes(item.id) && engine.normalizeContentKey(item) === ref.contentKey)
@@ -235,18 +315,25 @@
     }
     if (queue===preview && appendRequest) {
       await adapter.append(items,active,appendRequest.expected);
+      if (!isCurrent()) return false;
       status.textContent=items.length+'曲を末尾に追加しました。現在の曲・再生位置・既存の順序は変えていません。';
-      return;
+      return true;
     }
-    await adapter.play(items,context,active);
+    if (!isCurrent()) return false;
+    const started=await adapter.play(items,context,active,isCurrent);
+    if (started===false) return false;
+    if (!isCurrent()) return false;
     status.textContent = items.length + '曲の固定順で再生を開始しました。' + (items.length<references.length?'削除済みの参照はスキップしました。':'');
+    return true;
   }
   function renderStars() {
     const history = adapter.historyContainer?.();
     if (history && !history.querySelector('.cms-rec-history-entry')) {
-      const entry = button('★ おすすめ：お気に入りや再生記録から選曲', () => { dialog.showModal(); return refresh(); }, history);
-      entry.className='cms-rec-history-entry'; history.prepend(entry);
+      const entry = element('button','★ おすすめ：お気に入りや再生記録から選曲',history);
+      entry.type='button';entry.className='cms-rec-history-entry';entry.addEventListener('click',()=>void launch());history.prepend(entry);
     }
+    const settings=getLaunchSettings();
+    for (const entry of document.querySelectorAll('.cms-rec-history-entry')) entry.hidden=!settings.enabled;
     for (const row of document.querySelectorAll(adapter.rowSelector)) {
       const record = adapter.rowRecord(row), key = engine.normalizeContentKey(record);
       if (!key) continue;
@@ -260,15 +347,20 @@
       if (b.getAttribute('aria-pressed')!==String(value)) b.setAttribute('aria-pressed',String(value));
     }
   }
-  open.addEventListener('click', () => { dialog.showModal(); void run(refresh); });
+  open.addEventListener('click', () => void launch());
+  details.addEventListener('click',()=>void openPanel());
   debug.addEventListener('change', () => void run(refresh));
   const observer = new MutationObserver(changes => {
     if (!changes.some(change=>!dialog.contains(change.target) && !change.target.closest?.('.cms-rec-star'))) return;
     clearTimeout(starTimer); starTimer=setTimeout(renderStars,150);
   });
   observer.observe(document.body,{childList:true,subtree:true});
+  window.addEventListener('cms-recommendation-settings-change',()=>{
+    applyLaunchSettings({updateControls:true,cancelPending:true});renderStars();
+  });
+  applyLaunchSettings({updateControls:true});
   // Load only after a real library exists; never freeze an empty Web baseline.
   setTimeout(() => adapter.state().then(value => { snapshot=value; renderStars(); }).catch(() => {}),1500);
-  window.CMSRecommendationUI = { refresh:() => run(refresh) };
+  window.CMSRecommendationUI = { refresh:() => run(refresh),openPanel,launch };
 })();
 
