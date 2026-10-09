@@ -11,7 +11,7 @@ const recommendationKey = value => encodeURIComponent(String(value));
 function compactFolder(folder) {
   const result=cleanValue(folder);
   delete result.key;delete result.account;delete result.versions;
-  delete result.folderMutationId;delete result.expectedRemoteRevision;
+  delete result.folderMutationId;delete result.expectedRemoteRevision;delete result.folderOperation;
   for (const field of ['queue','generationSnapshot']) if (result[field]) {
     delete result[field].inputSnapshot;
     delete result[field].items;
@@ -62,6 +62,15 @@ async function acceptRecommendationOperation(entry) {
       const current=existing.exists()?existing.data():null;
       const expected=value.expectedRemoteRevision ?? value.folderRevision-1;
       if ((current?.folderRevision || 0)!==expected) throw new Error('生成フォルダが別端末で更新されています。古い内容では上書きできません。');
+      if (!Number.isSafeInteger(expected) || expected<0 || value.folderRevision<=expected) throw new Error('Invalid folder revision');
+      // A tombstone can only be revived by an explicit, current-revision restore.
+      // Older clients' queued updates must never silently recreate a deleted head.
+      if (current?.deleted===true && value.deleted!==true && value.folderOperation!=='restore') throw new Error('削除された生成フォルダは、最新版を確認してから明示的に復元してください。');
+      if (current?.folderRevision) {
+        const oldVersionRef=userDocument(user.uid,'recommendationFolderVersions',recommendationKey(value.folderId)+':v'+current.folderRevision);
+        const oldVersion=await tx.get(oldVersionRef);
+        if (!oldVersion.exists()) tx.set(oldVersionRef,compactFolder(current));
+      }
       const syncRevision=(state.exists()?Number(state.data().dataRevision)||0:0)+1;
       tx.set(ref,{...compactFolder(value),syncRevision,lastMutationId:mutationId,serverCommittedAt:serverTimestamp()});
       tx.set(stateRef,{dataRevision:syncRevision,syncProtocolVersion:2},{merge:true});

@@ -5,11 +5,11 @@
   if (root) root.CMSRecommendationEngine = api;
 })(typeof globalThis !== 'undefined' ? globalThis : self, function () {
   'use strict';
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const BUCKETS = ['core', 'rediscovery', 'discovery'];
   const ALL_BUCKETS = BUCKETS.concat('overflow');
   const DEFAULT_CONFIG = deepFreeze({
-    engineVersion: VERSION, configVersion: 'v1-unified-1', rngVersion: 'mulberry32-v1',
+    engineVersion: VERSION, configVersion: 'v1-unified-2', rngVersion: 'mulberry32-v1',
     defaultMode: 'smartRandom', defaultProfile: 'standard', defaultQueueLength: 20,
     maxQueueLength: 200, recommendationSectionLimit: 10,
     profiles: {
@@ -98,6 +98,14 @@
   }
   function validKey(key) {
     return typeof key === 'string' && /^(?:youtube:[A-Za-z0-9_-]{11}|niconico:(?:(?:sm|nm|so)?\d+))$/.test(key);
+  }
+  // Exact tag matching, independent of casing and full-width variants; never title matching.
+  function normalizeExcludedTags(value) {
+    const entries = Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
+    return [...new Set(entries.filter(entry => typeof entry === 'string')
+      .flatMap(entry => entry.split(/[,、，\r\n]+/u))
+      .map(entry => entry.normalize('NFKC').trim().toLowerCase().slice(0, 120)).filter(Boolean))]
+      .sort(compare).slice(0, 100);
   }
   function dayIndex(value) {
     if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -193,6 +201,8 @@
     const referenceTime = ref.toISOString(), asOfDate = civilDay(ref, timezone), refDay = dayIndex(asOfDate);
     const diagnostics = [], groups = new Map(), ids = new Map(), prefs = preferenceMap(input.preferences);
     const excluded = new Set(input.excludedContentKeys || []);
+    const excludedTags = normalizeExcludedTags(input.excludedTags);
+    const excludedTagSet = new Set(excludedTags);
     const diag = (code, contentKey, detail) => diagnostics.push({ code, contentKey: contentKey || null, detail: detail || null });
     (input.records || []).forEach(record => {
       const key = normalizeContentKey(record);
@@ -238,6 +248,12 @@
         .sort((a, b) => compare(getId(a), getId(b)));
       if (!eligible.length || pref.excludedFromRecommendations === true || excluded.has(key) ||
           input.currentContentKey === key) return;
+      // A duplicate URL must not bypass an excluded tag by choosing its untagged registration.
+      const matchingTag = records.flatMap(record => normalizeExcludedTags([
+        ...(Array.isArray(record.tags) ? record.tags : typeof record.tags === 'string' ? [record.tags] : []),
+        ...(Array.isArray(record.confirmedTags) ? record.confirmedTags : [])
+      ])).find(tag => excludedTagSet.has(tag));
+      if (matchingTag) { diag('excludedTag', key, matchingTag); return; }
       const counts = records.map(r => {
         if (validCount(r.playCount)) return r.playCount;
         if (r.playCount !== undefined) diag('invalidPlayCount', key);
@@ -297,6 +313,7 @@
       request: { scope: clone(input.scope || { type: 'library' }),
         currentContentKey: input.currentContentKey || null,
         excludedContentKeys: Array.from(excluded).sort(compare),
+        excludedTags,
         sessionRecentContentKeys: config.recency.sessionAvoidLast ? (input.sessionRecentContentKeys || []).slice(-config.recency.sessionAvoidLast) : [] },
       observation: { retainedCount: (input.history || []).length, validCount: validHistoryCount,
         retentionLimit: input.historyLimit || null, oldestDate: observedDates[0] || null,
@@ -441,7 +458,7 @@
     return { schemaVersion: 1, queueId: request.queueId || null, queueRevision: 1,
       engineVersion: VERSION, configVersion: config.configVersion, rngVersion: config.rngVersion,
       mode, profile, referenceTime: prepared.referenceTime, timezone: prepared.timezone, seed: request.seed,
-      operation, scope: clone(prepared.request.scope), requestedLength: length, actualLength: items.length,
+      operation, scope: clone(prepared.request.scope), excludedTags: clone(prepared.request.excludedTags || []), requestedLength: length, actualLength: items.length,
       requestedQuota, actualCounts, items, configSnapshot: config, observation: clone(prepared.observation),
       inputSnapshotHash: sha256(stableStringify(inputSnapshot)), inputSnapshot,
       emptyReason: !items.length ? '条件に合う動画がありません' : null, diagnostics };
@@ -490,7 +507,7 @@
     }
     return h.map(v => v.toString(16).padStart(8,'0')).join('');
   }
-  return Object.freeze({ VERSION, DEFAULT_CONFIG, normalizeContentKey, validateConfig, prepareCandidates,
+  return Object.freeze({ VERSION, DEFAULT_CONFIG, normalizeContentKey, normalizeExcludedTags, validateConfig, prepareCandidates,
     classifyCandidate: (v, c) => classifyCandidate(v, validateConfig(c)),
     scoreCandidate: (v, bucket, c) => scoreCandidate(v, bucket, validateConfig(c)),
     buildRecommendationSections, buildQueue, allocateQuota, stableStringify, sha256 });
