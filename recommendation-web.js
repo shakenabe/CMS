@@ -5,12 +5,13 @@
     getLaunchSettings: () => window.CmsWebPlayer.getRecommendationLaunchSettings(),
     getCurrentScope: () => window.CmsWebPlayer.getRecommendationCurrentScope(),
     getVocaloidScope: () => window.CmsWebPlayer.getRecommendationVocaloidScope(),
+    setExcludedTags: tags => window.CmsWebPlayer.setRecommendationExcludedTags(tags),
     async state() {
       const records = window.CmsWebPlayer.getRecords();
       if (!records.length) throw new Error('先にライブラリを読み込んでください。');
       const data = await store().ensure(records);
       return { records, history: data.history, preferences: store().preferences(data), migration: data.migration,
-        folders: data.folders, currentContentKey: CMSRecommendationEngine.normalizeContentKey(window.CmsWebPlayer.getCurrentItem()),
+        folders: data.folders.filter(folder => !folder.deleted), deletedFolders: data.folders.filter(folder => folder.deleted), currentContentKey: CMSRecommendationEngine.normalizeContentKey(window.CmsWebPlayer.getCurrentItem()),
         activeQueue:window.CmsWebPlayer.getActiveRecommendationQueue(),
         sessionRecentContentKeys: data.sessionRecentContentKeys, historyLimit: 2000 };
     },
@@ -18,6 +19,9 @@
     saveQueue: queue => store().saveQueue(queue),
     saveFolder: (queue, name) => store().saveFolder(queue, name),
     updateFolder:(folderId,revision,queue)=>store().updateFolder(folderId,revision,queue),
+    renameFolder:(folderId,revision,name)=>store().renameFolder(folderId,revision,name),
+    deleteFolder:(folderId,revision)=>store().deleteFolder(folderId,revision),
+    restoreFolder:(folderId,revision)=>store().restoreFolder(folderId,revision),
     async folderVersion(folderId,revision) {
       let version=await store().folderVersion(folderId,revision);
       const owner=store().namespace();

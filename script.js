@@ -8,7 +8,7 @@ const defaultSettings = {
     pocketShowClock: true, pocketShowArt: true, pocketShowTitle: true, pocketShowProgress: true, pocketShowControls: true, pocketShowUnlock: true,
     pocketLayout: {}, pocketLayoutScale: {}, forcePcLayout: false,
     musicMode: false, autoScrollActiveTrack: true, vocaloidCollectionEnabled: false, vocaloidGroupMode: 'videos',
-    recommendationEnabled: true, recommendationLaunchBehavior: 'panel', recommendationLaunchScope: 'library', recommendationProfile: 'standard', recommendationLength: 20,
+    recommendationEnabled: true, recommendationLaunchBehavior: 'panel', recommendationLaunchScope: 'library', recommendationProfile: 'standard', recommendationLength: 20, recommendationExcludedTags: [],
     windowMode: false, windowPositions: {}, windowStates: {}, windowColorsLinked: true,
     windowPanelColor: '#000000', windowPanelAlpha: 55, windowTitleColor: '#1f4f8f', windowTitleAlpha: 100,
     defaultSortOrder: 'custom', useFirebase: false, resumeLastPlayback: true, desktopPanelHeights: {}
@@ -515,6 +515,7 @@ function loadSettings() {
         // motionMode was a separate setting until 2026-09. Keep old saved data readable,
         // but make the lightweight flag the single source of truth from now on.
         delete appSettings.motionMode;
+        appSettings.recommendationExcludedTags = window.CMSRecommendationEngine.normalizeExcludedTags(appSettings.recommendationExcludedTags);
     } catch (e) {}
     // The shared recommendation UI can mount before DOMContentLoaded restores settings.
     window.dispatchEvent(new Event('cms-recommendation-settings-change'));
@@ -1409,6 +1410,7 @@ function setupSettingsModal() {
         document.getElementById('set-recommendation-scope').value = appSettings.recommendationLaunchScope || 'library';
         document.getElementById('set-recommendation-profile').value = appSettings.recommendationProfile || 'standard';
         document.getElementById('set-recommendation-length').value = Math.max(1, Math.min(200, Number(appSettings.recommendationLength) || 20));
+        document.getElementById('set-recommendation-excluded-tags').value = window.CMSRecommendationEngine.normalizeExcludedTags(appSettings.recommendationExcludedTags).join(', ');
         document.getElementById('set-vocaloid-collection').checked = Boolean(appSettings.vocaloidCollectionEnabled);
         document.getElementById('set-resume-last-playback').checked = appSettings.resumeLastPlayback !== false;
         document.getElementById('set-show-thumbnails').checked = appSettings.showThumbnails;
@@ -1493,6 +1495,7 @@ function setupSettingsModal() {
         appSettings.recommendationLaunchScope = document.getElementById('set-recommendation-scope').value;
         appSettings.recommendationProfile = document.getElementById('set-recommendation-profile').value;
         appSettings.recommendationLength = Math.max(1, Math.min(200, Math.round(Number(document.getElementById('set-recommendation-length').value) || 20)));
+        appSettings.recommendationExcludedTags = window.CMSRecommendationEngine.normalizeExcludedTags(document.getElementById('set-recommendation-excluded-tags').value);
         appSettings.theme = document.getElementById('set-theme').value; appSettings.colorMode = document.getElementById('set-color-mode').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
         appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.vocaloidCollectionEnabled = document.getElementById('set-vocaloid-collection').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.pocketFullscreenMode = document.getElementById('set-pocket-fullscreen-mode').value; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         appSettings.windowColorsLinked = true; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = appSettings.windowPanelColor; appSettings.windowTitleAlpha = appSettings.windowPanelAlpha;
@@ -1667,8 +1670,15 @@ window.CmsWebPlayer = {
         behavior: appSettings.recommendationLaunchBehavior || 'panel',
         scope: appSettings.recommendationLaunchScope || 'library',
         profile: appSettings.recommendationProfile || 'standard',
-        length: appSettings.recommendationLength || 20
+        length: appSettings.recommendationLength || 20,
+        excludedTags: window.CMSRecommendationEngine.normalizeExcludedTags(appSettings.recommendationExcludedTags)
     }),
+    setRecommendationExcludedTags(tags) {
+        appSettings.recommendationExcludedTags = window.CMSRecommendationEngine.normalizeExcludedTags(tags);
+        saveSettings();
+        window.dispatchEvent(new CustomEvent('cms-recommendation-settings-change', { detail: { excludedTagsOnly: true } }));
+        return appSettings.recommendationExcludedTags.slice();
+    },
     getRecommendationCurrentScope: () => ({ type: 'records', recordIds: (musicLibrary.find(folder => folder.id === currentFolderId)?.songs || []).map(item => item.id) }),
     getRecommendationVocaloidScope: () => ({ type: 'records', recordIds: allItems.filter(item => item?.vocaloidInfo?.matched === true).map(item => item.id) }),
     startRecommendation(items, context, queue) {

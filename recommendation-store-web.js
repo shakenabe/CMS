@@ -177,7 +177,7 @@
         const folder = await mutate((data,store) => {
             const base = String(requestedName || `スマート選曲 ${new Date().toISOString().slice(0, 10)}`).trim().slice(0, 120) || 'スマート選曲';
             const ordinaryNames = new Set((global.CmsWebPlayer?.getRecords?.() || []).flatMap(item => item.folders || [item.folder]));
-            let name = base, suffix = 2; while (ordinaryNames.has(name) || data.folders.some(folder => folder.name === name)) name = `${base} (${suffix++})`;
+            let name = base, suffix = 2; while (ordinaryNames.has(name) || data.folders.some(folder => !folder.deleted && folder.name === name)) name = `${base} (${suffix++})`;
             const folderId=uuid(),snapshot=clone(queue),{inputSnapshot,...metadata}=snapshot;
             store.put({key:ns+':folderSnapshot:'+folderId,value:snapshot});
             const folder = { folderId, folderRevision: 1, name, queueId: queue.queueId, mode: queue.mode, createdAt: new Date().toISOString(), items: clone(queue.items), segments: clone(queue.segments || []), generationSnapshot: metadata, snapshotRef:folderId, revisionHistory: [] };
@@ -201,7 +201,7 @@
         const result=await mutate(async(data,store)=>{
             const index=data.folders.findIndex(folder=>folder.folderId===folderId);
             const old=data.folders[index];
-            if (!old || old.folderRevision!==expectedRevision) throw new Error('フォルダが変更されています。再確認してください。');
+            if (!old || old.deleted || old.folderRevision!==expectedRevision) throw new Error('フォルダが変更または削除されています。再確認してください。');
             const saved=await value(store.get(ns+':folderSnapshot:'+folderId));
             const oldSnapshot=saved?.value?.queueId===old.queueId ? saved.value : {...old.generationSnapshot,items:old.items};
             store.put({key:ns+':folderVersion:'+folderId+':v'+old.folderRevision,value:{...old,generationSnapshot:oldSnapshot}});
@@ -211,12 +211,51 @@
               queueId:queue.queueId,mode:queue.mode,updatedAt:new Date().toISOString(),
               revisionHistory:[...(old.revisionHistory || []),{folderRevision:old.folderRevision,queueId:old.queueId,updatedAt:old.updatedAt || old.createdAt}]};
             data.folders[index]=next;
-            if (ns!=='local') data.folderOutbox[folderId]={...next,folderMutationId:uuid(),expectedRemoteRevision:data.folderOutbox[folderId]?.expectedRemoteRevision ?? old.folderRevision};
+            if (ns!=='local') data.folderOutbox[folderId]={...next,folderOperation:data.folderOutbox[folderId]?.folderOperation==='restore'?'restore':'update',
+                folderMutationId:uuid(),expectedRemoteRevision:data.folderOutbox[folderId]?.expectedRemoteRevision ?? old.folderRevision};
             return clone(next);
         },ns);
         if (ns!=='local') global.CmsWebFirebase?.scheduleRecommendationSync?.();
         return result;
     }
+    async function changeFolder(folderId, expectedRevision, operation, requestedName) {
+        const ns=namespace();
+        if (!Number.isSafeInteger(expectedRevision) || expectedRevision<1) throw new Error('フォルダの版を再確認してください。');
+        const result=await mutate(async(data,store)=>{
+            const index=data.folders.findIndex(folder=>folder.folderId===folderId),old=data.folders[index];
+            if (!old || old.folderRevision!==expectedRevision) throw new Error('フォルダが変更されています。再確認してください。');
+            if (operation==='restore' ? !old.deleted : old.deleted) throw new Error(operation==='restore'?'このフォルダは削除されていません。':'削除したフォルダは先に復元してください。');
+            let name=operation==='rename'?String(requestedName || '').trim():old.name;
+            if (!name || name.length>120) throw new Error('フォルダ名は1〜120文字で入力してください。');
+            if (operation!=='delete') {
+                const ordinaryNames=new Set((global.CmsWebPlayer?.getRecords?.() || []).filter(item=>!item.deleted).flatMap(item=>item.folders || [item.folder]));
+                const names=new Set([...ordinaryNames,...data.folders.filter(folder=>!folder.deleted && folder.folderId!==folderId).map(folder=>folder.name)]);
+                if (operation==='rename' && names.has(name)) throw new Error('同じ名前のフォルダがあります。別の名前を指定してください。');
+                if (operation==='restore') {
+                    const base=name;let suffix=2;
+                    while(names.has(name)) { const ending=` (${suffix++})`;name=base.slice(0,120-ending.length)+ending; }
+                }
+                if (operation==='rename' && name===old.name) return clone(old);
+            }
+            const saved=await value(store.get(ns+':folderSnapshot:'+folderId));
+            const oldSnapshot=saved?.value?.queueId===old.queueId?saved.value:{...old.generationSnapshot,items:old.items};
+            store.put({key:ns+':folderVersion:'+folderId+':v'+old.folderRevision,value:{...old,generationSnapshot:oldSnapshot}});
+            const at=new Date().toISOString();
+            const next={...old,name,folderRevision:old.folderRevision+1,updatedAt:at,
+                revisionHistory:[...(old.revisionHistory || []),{folderRevision:old.folderRevision,queueId:old.queueId,updatedAt:old.updatedAt || old.createdAt}]};
+            if (operation==='delete') { next.deleted=true;next.deletedAt=at; }
+            if (operation==='restore') { next.deleted=false;next.deletedAt=null;next.restoredAt=at; }
+            data.folders[index]=next;
+            if(ns!=='local') data.folderOutbox[folderId]={...next,folderOperation:operation!=='delete' && data.folderOutbox[folderId]?.folderOperation==='restore'?'restore':operation,folderMutationId:uuid(),
+                expectedRemoteRevision:data.folderOutbox[folderId]?.expectedRemoteRevision ?? old.folderRevision};
+            return clone(next);
+        },ns);
+        if(ns!=='local') global.CmsWebFirebase?.scheduleRecommendationSync?.();
+        return result;
+    }
+    const renameFolder=(folderId,expectedRevision,name)=>changeFolder(folderId,expectedRevision,'rename',name);
+    const deleteFolder=(folderId,expectedRevision)=>changeFolder(folderId,expectedRevision,'delete');
+    const restoreFolder=(folderId,expectedRevision)=>changeFolder(folderId,expectedRevision,'restore');
     async function addDiagnostic(reason, item) { return mutate(data => { data.diagnostics.unshift({ reason, contentKey: keyOf(item), at: new Date().toISOString() }); data.diagnostics = data.diagnostics.slice(0, 100); }); }
     async function mergeHistory(events, owner = namespace()) {
         return mutate(data => {
@@ -237,7 +276,12 @@
             }
             for (const id of accepted.mutations) delete data.mutations[id];
             for (const acceptedFolder of accepted.folders) {
-                if(data.folderOutbox[acceptedFolder.folderId]?.folderMutationId===acceptedFolder.folderMutationId) delete data.folderOutbox[acceptedFolder.folderId];
+                const pending=data.folderOutbox[acceptedFolder.folderId];
+                if(pending?.folderMutationId===acceptedFolder.folderMutationId) delete data.folderOutbox[acceptedFolder.folderId];
+                else if(pending) {
+                    const remote=(payload.folders || []).find(folder=>folder.folderId===acceptedFolder.folderId && folder.lastMutationId===acceptedFolder.folderMutationId);
+                    if(remote && pending.folderRevision>remote.folderRevision && (pending.revisionHistory || []).some(version=>version.folderRevision===remote.folderRevision)) pending.expectedRemoteRevision=remote.folderRevision;
+                }
             }
             for (const folder of payload.folders || []) {
                 const index=data.folders.findIndex(value=>value.folderId===folder.folderId);
@@ -246,5 +290,5 @@
             }
         }, owner);
     }
-    global.CmsRecommendationStore = { ensure, read, peek, preferences, recordCountedPlay, beginAttempt, setPreference, adoptShared, acknowledgeEvent, acknowledgeMutation, saveQueue, setActiveQueue, saveFolder, acknowledgeFolder, folderVersion, cacheFolderVersion, updateFolder, addDiagnostic, mergeHistory, applySynchronization, namespace, ownerUid: OWNER_UID };
+    global.CmsRecommendationStore = { ensure, read, peek, preferences, recordCountedPlay, beginAttempt, setPreference, adoptShared, acknowledgeEvent, acknowledgeMutation, saveQueue, setActiveQueue, saveFolder, acknowledgeFolder, folderVersion, cacheFolderVersion, updateFolder, renameFolder, deleteFolder, restoreFolder, addDiagnostic, mergeHistory, applySynchronization, namespace, ownerUid: OWNER_UID };
 })(window);

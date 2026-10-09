@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="legacy-base.css?v=2026092401">
     <link rel="stylesheet" href="redesign.css?v=2026092401">
-    <link rel="stylesheet" href="desktop-workspace.css?v=2026100901">
+    <link rel="stylesheet" href="desktop-workspace.css?v=2026101001">
 </head>
 <body class="theme-modern is-pc">
 
@@ -315,14 +315,17 @@
                     <div class="setting-row"><label><input type="checkbox" id="set-recommendation-enabled"> おすすめ選曲を有効にする</label></div>
                     <div class="setting-row">
                         <label for="set-recommendation-behavior">おすすめボタンの動作</label>
-                        <select id="set-recommendation-behavior" class="widget-search"><option value="panel">画面を開いて選ぶ（従来通り）</option><option value="play">ワンクリックでスマート再生</option></select>
-                        <label for="set-recommendation-scope">ワンクリック再生の対象</label>
+                        <select id="set-recommendation-behavior" class="widget-search"><option value="panel">選曲画面を開いて選ぶ</option><option value="play">設定した条件を確認してスマート再生</option></select>
+                        <label for="set-recommendation-scope">スマート再生の対象</label>
                         <select id="set-recommendation-scope" class="widget-search"><option value="library">全ライブラリ</option><option value="currentFolder">現在表示しているフォルダ</option><option value="favorites">★ お気に入りだけ</option><option value="vocaloid">ボカロ / Kiite 判定済み</option></select>
                         <label for="set-recommendation-profile">選曲の傾向</label>
                         <select id="set-recommendation-profile" class="widget-search"><option value="standard">バランスよく</option><option value="stable">いつもの曲中心</option><option value="explore">まだ聴いていない曲多め</option><option value="rediscover">久しぶりの曲多め</option></select>
                         <label for="set-recommendation-length">生成する曲数</label>
                         <input id="set-recommendation-length" type="number" min="1" max="200" value="20" class="widget-search">
-                        <span style="font-size:0.75rem; opacity:0.8;">再生中の固定キューは「LIBRARY CHANNELS」の一時フォルダで確認できます。ワンクリック設定でも「選曲詳細」から従来の画面を開けます。</span>
+                        <label for="set-recommendation-excluded-tags">選曲から除外するタグ</label>
+                        <textarea id="set-recommendation-excluded-tags" class="widget-search" rows="2" maxlength="12100" placeholder="例: 音MAD, 作業用BGM"></textarea>
+                        <small>カンマ・読点・改行で区切って指定（最大100タグ）。タグ名が一致する動画を、おすすめ・新しい自動選曲から外します。元の動画や再生中の曲は削除しません。</small>
+                        <span style="font-size:0.75rem; opacity:0.8;">再生中の曲順は「LIBRARY CHANNELS」の一時フォルダで確認できます。スマート再生は確認画面で開始を押すまで生成・再生しません。「選曲詳細」から条件の編集もできます。</span>
                     </div>
                     <div class="setting-row">
                         <label><input type="checkbox" id="set-vocaloid-collection"> <cms-icon name="music"></cms-icon>ボカロ / Kiite 専用一覧を表示</label>
@@ -493,12 +496,12 @@
     <script type="module" src="firebase-web.js?v=2026100801"></script>
     <script src="state-policy.js?v=2026092401"></script>
     <script src="ui-runtime.js?v=2026100801"></script>
-    <script src="shared/recommendation-engine.js?v=2026100801"></script>
-    <script src="shared/recommendation-cloud.js?v=2026100801"></script>
-    <script src="recommendation-store-web.js?v=2026100801"></script>
-    <script src="script.js?v=2026100901"></script>
-    <script src="recommendation-web.js?v=2026100901"></script>
-    <script src="shared/recommendation-ui.js?v=2026100901"></script>
+    <script src="shared/recommendation-engine.js?v=2026101001"></script>
+    <script src="shared/recommendation-cloud.js?v=2026101001"></script>
+    <script src="recommendation-store-web.js?v=2026101001"></script>
+    <script src="script.js?v=2026101001"></script>
+    <script src="recommendation-web.js?v=2026101001"></script>
+    <script src="shared/recommendation-ui.js?v=2026101001"></script>
     <script src="desktop-large-ui-v2.js?v=2026100802"></script>
     <script src="redesign.js?v=2026100901"></script>
 </body>

@@ -131,6 +131,7 @@ body.cms-redesign.performance-mode * { scroll-behavior:auto !important; }
 /* Use all remaining height for tracks, including narrow desktop/side-panel
    viewports. Width settings still apply, but cannot squeeze controls offscreen. */
 @media(min-width:721px) {
+  body.cms-redesign.is-pc:not(.window-mode).theme-nerv #widget-folder-list-wrapper { align-self:stretch !important; }
   body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) {
     --cms-p34-folder-width:max(180px,min(var(--cms-folder-width,260px),26vw));
   }
@@ -195,3 +196,74 @@ body.theme-toyota #pocket-overlay .pocket-play-btn { background:#9cff57; color:#
 body.theme-niconico #pocket-overlay .pocket-content { border:3px double #ff9800; border-radius:0; box-shadow:5px 5px 0 #171717aa; }
 body.theme-niconico #pocket-overlay .pocket-controls button { border-radius:0; }
 body.theme-niconico #pocket-overlay .pocket-play-btn { background:#ff9800; color:#151515; }
+
+/* Desktop settings use the available window, not the phone-width dialog.
+   The heading/tabs/actions stay reachable while only the settings body scrolls. */
+@media(min-width:721px) {
+  body #settings-modal { padding:16px; align-items:stretch; justify-content:stretch; }
+  body #settings-modal .settings-window {
+    width:100%; max-width:none; height:100%; max-height:100%; min-height:0;
+    padding:20px 24px; gap:12px; border-radius:var(--border-radius,0);
+  }
+  body #settings-modal #settings-title { flex:none; margin:0 !important; font-size:1.3rem; }
+  body #settings-modal .settings-tabs { flex:none; width:min(560px,100%); margin:0; }
+  body #settings-modal .tab-btn { min-height:42px; padding:10px 22px; }
+  body #settings-modal .setting-scroll-area {
+    flex:1 1 auto; min-height:0; max-height:none; overflow:auto;
+    padding:0 8px 12px 0; overscroll-behavior:contain; scrollbar-gutter:stable;
+  }
+  body #settings-modal .tab-content.active {
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+    align-content:start; align-items:start; column-gap:18px; row-gap:12px;
+  }
+  body #settings-modal .tab-content > .setting-section-label {
+    grid-column:1 / -1; margin:6px 0 0; padding:10px 12px;
+    flex-direction:row; align-items:baseline;
+  }
+  body #settings-modal .tab-content > .setting-row,
+  body #settings-modal .tab-content > .setting-group {
+    min-width:0; margin:0 !important; padding:14px !important;
+    border:1px solid var(--settings-border,var(--border-color)) !important;
+    border-radius:var(--border-radius,0); background:var(--settings-surface);
+  }
+  body #settings-modal .setting-row label { line-height:1.5; }
+  body #settings-modal .setting-row > label:has(input[type="checkbox"]) { min-height:32px; }
+  body #settings-modal :is(select,input[type="text"],input[type="url"],input[type="number"],input[type="file"],textarea) { min-width:0; max-width:100%; box-sizing:border-box; }
+  body #settings-modal :is(select,input[type="text"],input[type="url"],input[type="number"],button) { min-height:38px; }
+  body #settings-modal .setting-row:has(#set-recommendation-enabled),
+  body #settings-modal .setting-row:has(#set-recommendation-behavior),
+  body #settings-modal .desktop-size-settings,
+  body #settings-modal .pocket-layout-settings { grid-column:1 / -1; }
+  body #settings-modal .setting-row:has(#set-recommendation-behavior),
+  body #settings-modal .desktop-size-settings {
+    display:grid; grid-template-columns:minmax(200px,.65fr) minmax(0,1fr);
+    gap:10px 20px; align-items:center;
+  }
+  body #settings-modal .setting-row:has(#set-recommendation-behavior) > :is(span,small) { grid-column:1 / -1; white-space:normal; overflow-wrap:anywhere; }
+  body #settings-modal .desktop-size-settings input[type="range"] { min-width:0; }
+  body #settings-modal .pocket-layout-settings {
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 18px;
+  }
+  body #settings-modal .pocket-layout-settings > :is(h3,.pocket-visible-grid,.pocket-layout-buttons,.setting-help) { grid-column:1 / -1; }
+  body #settings-modal .pocket-layout-settings h3 { margin:0; }
+  body #settings-modal .pocket-visible-grid { margin:0; grid-template-columns:repeat(3,minmax(0,1fr)); }
+  body #settings-modal .window-color-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  body #settings-modal .device-settings-note { flex:none; margin:0; font-size:.76rem; line-height:1.5; }
+  body #settings-modal .settings-save-status { flex:none; margin:0; }
+  body #settings-modal .settings-actions {
+    flex:none; justify-content:flex-end; margin:0; padding-top:12px; position:static;
+  }
+  body #settings-modal .settings-actions #btn-save-settings { flex:0 1 300px !important; }
+  body #settings-modal .settings-actions button { min-height:44px; padding:10px 24px; }
+  body #settings-modal :is(input,select,textarea,button):focus-visible {
+    outline:2px solid var(--rd-accent,var(--settings-text)); outline-offset:2px;
+  }
+}
+
+@media(min-width:721px) and (max-width:980px) {
+  body #settings-modal { padding:8px; }
+  body #settings-modal .settings-window { padding:16px; }
+  body #settings-modal .tab-content.active { column-gap:12px; }
+  body #settings-modal .tab-content > .setting-row,
+  body #settings-modal .tab-content > .setting-group { padding:12px !important; }
+}
