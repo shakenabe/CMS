@@ -11,7 +11,7 @@
         for (const name of Object.values(themeNames)) document.body.classList.toggle('theme-'+name, name===theme);
         const origin = document.getElementById('cms-playing-origin');
         if (!origin) return;
-        const folder = state.folder==='__all'?'すべて':state.folder==='__history'?'再生履歴':state.folder==='__vocaloid'?'ボカロ / Kiite':state.folder;
+        const folder = state.folder==='__all'?'すべて':state.folder==='__history'?'再生履歴':state.folder==='__vocaloid'?'ボカロ / Kiite':state.folder==='__smart_queue'?'再生キュー':state.folder;
         const label = '再生元：'+(folder || 'おすすめ / キュー');
         if (origin.textContent!==label) origin.textContent=label;
         origin.disabled=!state.title;

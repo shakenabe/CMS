@@ -8,6 +8,7 @@ const defaultSettings = {
     pocketShowClock: true, pocketShowArt: true, pocketShowTitle: true, pocketShowProgress: true, pocketShowControls: true, pocketShowUnlock: true,
     pocketLayout: {}, pocketLayoutScale: {}, forcePcLayout: false,
     musicMode: false, autoScrollActiveTrack: true, vocaloidCollectionEnabled: false, vocaloidGroupMode: 'videos',
+    recommendationEnabled: true, recommendationLaunchBehavior: 'panel', recommendationLaunchScope: 'library', recommendationProfile: 'standard', recommendationLength: 20,
     windowMode: false, windowPositions: {}, windowStates: {}, windowColorsLinked: true,
     windowPanelColor: '#000000', windowPanelAlpha: 55, windowTitleColor: '#1f4f8f', windowTitleAlpha: 100,
     defaultSortOrder: 'custom', useFirebase: false, resumeLastPlayback: true, desktopPanelHeights: {}
@@ -515,6 +516,8 @@ function loadSettings() {
         // but make the lightweight flag the single source of truth from now on.
         delete appSettings.motionMode;
     } catch (e) {}
+    // The shared recommendation UI can mount before DOMContentLoaded restores settings.
+    window.dispatchEvent(new Event('cms-recommendation-settings-change'));
 }
 function saveSettings() { localStorage.setItem('cms_player_settings_v23', JSON.stringify(appSettings)); window.dispatchEvent(new Event('cms-state-change')); }
 
@@ -1401,6 +1404,11 @@ function setupSettingsModal() {
         
         document.getElementById('set-performance-mode').checked = appSettings.performanceMode; document.getElementById('set-data-saver').checked = appSettings.dataSaverMode;
         document.getElementById('set-music-mode').checked = Boolean(appSettings.musicMode);
+        document.getElementById('set-recommendation-enabled').checked = appSettings.recommendationEnabled !== false;
+        document.getElementById('set-recommendation-behavior').value = appSettings.recommendationLaunchBehavior || 'panel';
+        document.getElementById('set-recommendation-scope').value = appSettings.recommendationLaunchScope || 'library';
+        document.getElementById('set-recommendation-profile').value = appSettings.recommendationProfile || 'standard';
+        document.getElementById('set-recommendation-length').value = Math.max(1, Math.min(200, Number(appSettings.recommendationLength) || 20));
         document.getElementById('set-vocaloid-collection').checked = Boolean(appSettings.vocaloidCollectionEnabled);
         document.getElementById('set-resume-last-playback').checked = appSettings.resumeLastPlayback !== false;
         document.getElementById('set-show-thumbnails').checked = appSettings.showThumbnails;
@@ -1480,6 +1488,11 @@ function setupSettingsModal() {
 
     document.getElementById('btn-save-settings').onclick = async () => {
         const previousVocaloidCollectionEnabled = Boolean(appSettings.vocaloidCollectionEnabled);
+        appSettings.recommendationEnabled = document.getElementById('set-recommendation-enabled').checked;
+        appSettings.recommendationLaunchBehavior = document.getElementById('set-recommendation-behavior').value;
+        appSettings.recommendationLaunchScope = document.getElementById('set-recommendation-scope').value;
+        appSettings.recommendationProfile = document.getElementById('set-recommendation-profile').value;
+        appSettings.recommendationLength = Math.max(1, Math.min(200, Math.round(Number(document.getElementById('set-recommendation-length').value) || 20)));
         appSettings.theme = document.getElementById('set-theme').value; appSettings.colorMode = document.getElementById('set-color-mode').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
         appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.vocaloidCollectionEnabled = document.getElementById('set-vocaloid-collection').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.pocketFullscreenMode = document.getElementById('set-pocket-fullscreen-mode').value; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         appSettings.windowColorsLinked = true; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = appSettings.windowPanelColor; appSettings.windowTitleAlpha = appSettings.windowPanelAlpha;
@@ -1491,6 +1504,7 @@ function setupSettingsModal() {
         if (fInput.files.length > 0) { await saveBgImageToDB(fInput.files[0]); }
         
         saveSettings(); applyVolume(); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); scheduleMarqueeUpdate();
+        window.dispatchEvent(new Event('cms-recommendation-settings-change'));
         if (previousVocaloidCollectionEnabled !== Boolean(appSettings.vocaloidCollectionEnabled)) {
             buildLibrary();
             renderFolders();
@@ -1648,6 +1662,15 @@ window.CmsWebPlayer = {
     getCurrentItem: () => currentPlayingItem,
     getRecommendationAttempt: () => recommendationAttempt,
     getActiveRecommendationQueue: () => activeRecommendationQueue,
+    getRecommendationLaunchSettings: () => ({
+        enabled: appSettings.recommendationEnabled !== false,
+        behavior: appSettings.recommendationLaunchBehavior || 'panel',
+        scope: appSettings.recommendationLaunchScope || 'library',
+        profile: appSettings.recommendationProfile || 'standard',
+        length: appSettings.recommendationLength || 20
+    }),
+    getRecommendationCurrentScope: () => ({ type: 'records', recordIds: (musicLibrary.find(folder => folder.id === currentFolderId)?.songs || []).map(item => item.id) }),
+    getRecommendationVocaloidScope: () => ({ type: 'records', recordIds: allItems.filter(item => item?.vocaloidInfo?.matched === true).map(item => item.id) }),
     startRecommendation(items, context, queue) {
         activeRecommendationQueue=queue || null;
         startPlaylist(items,0,context);
@@ -1670,6 +1693,7 @@ window.CmsWebPlayer = {
         currentPlaylist.push(...items);
         activeRecommendationQueue={...queue,queueId:head.queueId,queueRevision:head.queueRevision+1};
         currentPlaybackContext.queueRevision=activeRecommendationQueue.queueRevision;
+        refreshPlaybackQueueFolder();
         updatePlayerUI(currentPlayingItem);
         window.dispatchEvent(new Event('cms-state-change'));
         saveCurrentSession({force:true});
@@ -1711,8 +1735,38 @@ function startGame() {
     startPlaybackFromCurrentLibrary();
 }
 
-const VIRTUAL_LIBRARY_FOLDER_IDS = new Set(['__all', '__vocaloid']);
+const PLAYBACK_QUEUE_FOLDER_ID = '__smart_queue';
+const VIRTUAL_LIBRARY_FOLDER_IDS = new Set(['__all', '__vocaloid', PLAYBACK_QUEUE_FOLDER_ID]);
 function isVirtualLibraryFolderId(id) { return VIRTUAL_LIBRARY_FOLDER_IDS.has(id); }
+
+function getPlaybackQueueFolder() {
+    if (!currentPlaybackContext?.finite || !currentPlaylist.length) return null;
+    const name = currentPlaybackContext.source === 'uniformRandom' ? '再生中：ランダム選曲'
+        : currentPlaybackContext.source === 'generatedFolder' ? '再生中：生成フォルダ'
+        : currentPlaybackContext.source === 'history' ? '再生中：履歴キュー' : '再生中：スマート選曲';
+    return { id: PLAYBACK_QUEUE_FOLDER_ID, name, songs: currentPlaylist.slice() };
+}
+
+function refreshPlaybackQueueFolder({ select = false } = {}) {
+    buildLibrary();
+    renderFolders();
+    if (select && getPlaybackQueueFolder()) {
+        selectFolder(PLAYBACK_QUEUE_FOLDER_ID, { preserveScroll: true, skipSave: true, followPlayback: true });
+    } else if (currentFolderId === PLAYBACK_QUEUE_FOLDER_ID) {
+        selectFolder(getPlaybackQueueFolder() ? PLAYBACK_QUEUE_FOLDER_ID : '__all', { preserveScroll: true, skipSave: true });
+    }
+}
+
+function playTrackFromView(songs, index, folderId = currentFolderId) {
+    if (folderId === PLAYBACK_QUEUE_FOLDER_ID) {
+        if (!currentPlaybackContext?.finite || !isSameMediaItem(songs[index], currentPlaylist[index])) return;
+        playbackIntent = 'playing';
+        playbackMediaState = 'loading';
+        void loadVideo(index);
+        return;
+    }
+    startPlaylist(songs, index, { folderId });
+}
 
 function buildLibrary() {
     const fMap = new Map(); const fOrderIndex = new Map();
@@ -1743,6 +1797,8 @@ function buildLibrary() {
         return orderA - orderB;
     });
     const virtualFolders = [{ id: '__all', name: 'All', songs: sortSongs(items) }];
+    const playbackQueueFolder = getPlaybackQueueFolder();
+    if (playbackQueueFolder) virtualFolders.push(playbackQueueFolder);
     if (appSettings.vocaloidCollectionEnabled) {
         virtualFolders.push({
             id: '__vocaloid',
@@ -1765,7 +1821,7 @@ function renderFolders() {
         return;
     }
     musicLibrary.forEach(f => {
-        const folderIcon = f.id === '__all' ? 'library' : f.id === '__vocaloid' ? 'music' : 'folder';
+        const folderIcon = f.id === '__all' ? 'library' : ['__vocaloid', PLAYBACK_QUEUE_FOLDER_ID].includes(f.id) ? 'music' : 'folder';
         const div = document.createElement('div');
         div.className = 'w-f-item';
         const name = document.createElement('span');
@@ -2484,13 +2540,13 @@ function renderTrackWindow({ force = false } = {}) {
                 suppressNextTouchTrackClick = false;
             } else if (e.sourceCapabilities?.firesTouchEvents || lastTrackPointerType === 'touch' || lastTrackPointerType === 'pen') {
                 const queue = currentRenderSongs.slice(); const folderId = currentFolderId;
-                clearTimeout(pendingTouchTrackTimer); pendingTouchTrackTimer = setTimeout(() => { pendingTouchTrackTimer = null; startPlaylist(queue, i, { folderId }); }, 350);
+                clearTimeout(pendingTouchTrackTimer); pendingTouchTrackTimer = setTimeout(() => { pendingTouchTrackTimer = null; playTrackFromView(queue, i, folderId); }, 350);
             } else if (e.detail === 0) {
-                startPlaylist(currentRenderSongs, i);
+                playTrackFromView(currentRenderSongs, i);
             } else {
                 const queue = currentRenderSongs.slice(); const folderId = currentFolderId;
                 clearTimeout(pendingTouchTrackTimer);
-                if (e.detail === 1) pendingTouchTrackTimer = setTimeout(() => { pendingTouchTrackTimer = null; startPlaylist(queue, i, { folderId }); }, 350);
+                if (e.detail === 1) pendingTouchTrackTimer = setTimeout(() => { pendingTouchTrackTimer = null; playTrackFromView(queue, i, folderId); }, 350);
             }
         }; 
         window.CmsUI?.makeInteractive(div, {
@@ -3043,9 +3099,12 @@ function handleProgressClick(e) {
 
 function startPlaylist(items, idx = 0, context = {}) {
     if (!items.length) return;
+    const hadPlaybackQueue = Boolean(getPlaybackQueueFolder());
     if (!['smartRandom','uniformRandom'].includes(context.source)) activeRecommendationQueue=null;
-    currentPlaybackContext = { ...context, folderId: context.folderId ?? currentFolderId ?? '__all', source: context.finite ? context.source : (context.source === 'unknown' ? 'unknown' : 'manual') };
-    playbackIntent = 'playing'; playbackMediaState = 'loading'; currentPlaylist = items.slice(); currentIndex = idx; loadVideo(currentIndex);
+    currentPlaybackContext = { ...context, folderId: context.finite ? PLAYBACK_QUEUE_FOLDER_ID : (context.folderId ?? currentFolderId ?? '__all'), source: context.finite ? context.source : (context.source === 'unknown' ? 'unknown' : 'manual') };
+    playbackIntent = 'playing'; playbackMediaState = 'loading'; currentPlaylist = items.slice(); currentIndex = idx;
+    if (context.finite || hadPlaybackQueue) refreshPlaybackQueueFolder({ select: Boolean(context.finite) });
+    void loadVideo(currentIndex);
 }
 function movePlaylist(offset) {
     if (!currentPlaylist.length || isTransitioning) return;

@@ -2,6 +2,9 @@
   'use strict';
   const store = () => window.CmsRecommendationStore;
   window.CMSRecommendationAdapter = {
+    getLaunchSettings: () => window.CmsWebPlayer.getRecommendationLaunchSettings(),
+    getCurrentScope: () => window.CmsWebPlayer.getRecommendationCurrentScope(),
+    getVocaloidScope: () => window.CmsWebPlayer.getRecommendationVocaloidScope(),
     async state() {
       const records = window.CmsWebPlayer.getRecords();
       if (!records.length) throw new Error('先にライブラリを読み込んでください。');
@@ -27,9 +30,11 @@
       return version;
     },
     sync: () => window.CmsWebFirebase.syncRecommendations({refreshHistory:true}),
-    async play(items, context, queue) {
+    async play(items, context, queue, isCurrent = () => true) {
       await store().setActiveQueue(queue || { items, ...context });
+      if (!isCurrent()) return false;
       window.CmsWebPlayer.startRecommendation(items, { ...context, finite: true }, queue);
+      return true;
     },
     async append(items, queue, expected) {
       const result=window.CmsWebPlayer.appendRecommendation(items,queue,expected);

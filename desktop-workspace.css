@@ -58,7 +58,7 @@ body.cms-redesign.performance-mode * { scroll-behavior:auto !important; }
 }
 
 /* Theme-specific desktop compositions. P1/P2 follow the supplied references;
-   P3/P4 retain the current three-column workspace. */
+   P3/P4 keep folders beside a top playback row and a full-width library below. */
 @media(min-width:1101px) {
   body.cms-redesign.is-pc:not(.window-mode).theme-modern #widget-container {
     grid-template-columns:minmax(240px,var(--cms-player-width,38vw)) 12px minmax(0,1fr) !important;
@@ -103,19 +103,6 @@ body.cms-redesign.performance-mode * { scroll-behavior:auto !important; }
   body.cms-redesign.is-pc:not(.window-mode).theme-nerv #widget-library { grid-area:library; }
   body.cms-redesign.is-pc:not(.window-mode).theme-nerv #widget-track-list-wrapper { min-height:0; }
 
-  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-container {
-    grid-template-columns:minmax(200px,var(--cms-folder-width,clamp(200px,19vw,280px))) minmax(240px,var(--cms-player-width,30vw)) minmax(0,1fr) !important;
-    grid-template-rows:var(--cms-clock-row,0px) minmax(180px,min(var(--cms-player-height,360px),44vh)) minmax(120px,min(var(--cms-controls-height,200px),28vh)) !important;
-    grid-template-areas:"clock clock clock" "folders player library" "folders controls library" !important;
-    gap:10px !important;
-  }
-  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico).show-clock #widget-container { --cms-clock-row:48px; }
-  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-clock { grid-area:clock; display:none !important; }
-  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico).show-clock #widget-clock { display:flex !important; }
-  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-player { grid-area:player; }
-  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-controls { grid-area:controls; max-height:none; }
-  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-folder-list-wrapper { grid-area:folders; }
-  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-library { grid-area:library; }
 }
 
 @media(min-width:721px) and (max-width:1100px) {
@@ -139,6 +126,46 @@ body.cms-redesign.performance-mode * { scroll-behavior:auto !important; }
   }
   body.cms-redesign.is-pc:not(.window-mode).theme-nerv #widget-clock { display:none !important; }
   body.cms-redesign.is-pc:not(.window-mode).theme-nerv.show-clock #widget-clock { display:flex !important; }
+}
+
+/* Use all remaining height for tracks, including narrow desktop/side-panel
+   viewports. Width settings still apply, but cannot squeeze controls offscreen. */
+@media(min-width:721px) {
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) {
+    --cms-p34-folder-width:max(180px,min(var(--cms-folder-width,260px),26vw));
+  }
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-container {
+    grid-template-columns:var(--cms-p34-folder-width) minmax(0,min(var(--cms-player-width,480px),calc((100vw - var(--cms-p34-folder-width) - 44px) * .58))) minmax(0,1fr) !important;
+    grid-template-rows:minmax(180px,min(max(var(--cms-player-height,360px),var(--cms-controls-height,200px)),42vh)) minmax(120px,1fr) !important;
+    grid-template-areas:"folders player controls" "folders library library" !important;
+    align-content:stretch; gap:10px !important;
+  }
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico).show-clock #widget-container {
+    grid-template-rows:48px minmax(180px,min(max(var(--cms-player-height,360px),var(--cms-controls-height,200px)),42vh)) minmax(120px,1fr) !important;
+    grid-template-areas:"clock clock clock" "folders player controls" "folders library library" !important;
+  }
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-container .panel-glass {
+    min-width:0; width:100% !important; margin:0 !important; align-self:stretch !important;
+  }
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-clock { grid-area:clock; display:none !important; }
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico).show-clock #widget-clock { display:flex !important; }
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-player { grid-area:player; }
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-controls { grid-area:controls; max-height:none; }
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-folder-list-wrapper { grid-area:folders; align-self:stretch !important; }
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-library { grid-area:library; align-self:stretch !important; }
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico).music-mode #widget-container {
+    grid-template-columns:var(--cms-p34-folder-width) minmax(0,1fr) !important;
+    grid-template-rows:minmax(160px,min(var(--cms-controls-height,200px),38vh)) minmax(120px,1fr) !important;
+    grid-template-areas:"folders controls" "folders library" !important;
+  }
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico).music-mode.show-clock #widget-container {
+    grid-template-rows:48px minmax(160px,min(var(--cms-controls-height,200px),38vh)) minmax(120px,1fr) !important;
+    grid-template-areas:"clock clock" "folders controls" "folders library" !important;
+  }
+}
+
+@media(min-width:721px) and (max-width:1100px) {
+  body.cms-redesign.is-pc:not(.window-mode):is(.theme-toyota,.theme-niconico) #widget-controls { padding:12px !important; }
 }
 
 @media(min-width:721px) and (max-height:600px) {

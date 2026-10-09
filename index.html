@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="legacy-base.css?v=2026092401">
     <link rel="stylesheet" href="redesign.css?v=2026092401">
-    <link rel="stylesheet" href="desktop-workspace.css?v=2026100802">
+    <link rel="stylesheet" href="desktop-workspace.css?v=2026100901">
 </head>
 <body class="theme-modern is-pc">
 
@@ -311,6 +311,19 @@
                     <div class="setting-section-label"><strong>再生と一覧</strong><span>通信量・表示要素・前回位置を調整します</span></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-performance-mode"> <cms-icon name="performance"></cms-icon>軽量化 (動作を軽くする)</label></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-music-mode"> <cms-icon name="music"></cms-icon>音楽モード (モバイルSpotify風UI)</label></div>
+                    <div class="setting-section-label"><strong>おすすめ選曲</strong><span>ボタンから選曲を始める方法を選べます</span></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-recommendation-enabled"> おすすめ選曲を有効にする</label></div>
+                    <div class="setting-row">
+                        <label for="set-recommendation-behavior">おすすめボタンの動作</label>
+                        <select id="set-recommendation-behavior" class="widget-search"><option value="panel">画面を開いて選ぶ（従来通り）</option><option value="play">ワンクリックでスマート再生</option></select>
+                        <label for="set-recommendation-scope">ワンクリック再生の対象</label>
+                        <select id="set-recommendation-scope" class="widget-search"><option value="library">全ライブラリ</option><option value="currentFolder">現在表示しているフォルダ</option><option value="favorites">★ お気に入りだけ</option><option value="vocaloid">ボカロ / Kiite 判定済み</option></select>
+                        <label for="set-recommendation-profile">選曲の傾向</label>
+                        <select id="set-recommendation-profile" class="widget-search"><option value="standard">バランスよく</option><option value="stable">いつもの曲中心</option><option value="explore">まだ聴いていない曲多め</option><option value="rediscover">久しぶりの曲多め</option></select>
+                        <label for="set-recommendation-length">生成する曲数</label>
+                        <input id="set-recommendation-length" type="number" min="1" max="200" value="20" class="widget-search">
+                        <span style="font-size:0.75rem; opacity:0.8;">再生中の固定キューは「LIBRARY CHANNELS」の一時フォルダで確認できます。ワンクリック設定でも「選曲詳細」から従来の画面を開けます。</span>
+                    </div>
                     <div class="setting-row">
                         <label><input type="checkbox" id="set-vocaloid-collection"> <cms-icon name="music"></cms-icon>ボカロ / Kiite 専用一覧を表示</label>
                         <span style="font-size:0.75rem; opacity:0.8;">拡張機能版でKiite照合した判定をFirebase経由で表示し、動画一覧・投稿者別・チャンネル別に切り替えられます。<a href="https://kiite.jp/" target="_blank" rel="noopener noreferrer">Kiiteを開く</a></span>
@@ -483,10 +496,10 @@
     <script src="shared/recommendation-engine.js?v=2026100801"></script>
     <script src="shared/recommendation-cloud.js?v=2026100801"></script>
     <script src="recommendation-store-web.js?v=2026100801"></script>
-    <script src="script.js?v=2026100802"></script>
-    <script src="recommendation-web.js?v=2026100801"></script>
-    <script src="shared/recommendation-ui.js?v=2026100801"></script>
+    <script src="script.js?v=2026100901"></script>
+    <script src="recommendation-web.js?v=2026100901"></script>
+    <script src="shared/recommendation-ui.js?v=2026100901"></script>
     <script src="desktop-large-ui-v2.js?v=2026100802"></script>
-    <script src="redesign.js?v=2026100801"></script>
+    <script src="redesign.js?v=2026100901"></script>
 </body>
 </html>
