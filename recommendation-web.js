@@ -2,10 +2,13 @@
   'use strict';
   const store = () => window.CmsRecommendationStore;
   window.CMSRecommendationAdapter = {
+    launcherContainer: () => document.getElementById('recommendation-toolbar-slot'),
     getLaunchSettings: () => window.CmsWebPlayer.getRecommendationLaunchSettings(),
+    setLaunchSettings: settings => window.CmsWebPlayer.setRecommendationLaunchSettings(settings),
     getCurrentScope: () => window.CmsWebPlayer.getRecommendationCurrentScope(),
     getVocaloidScope: () => window.CmsWebPlayer.getRecommendationVocaloidScope(),
     setExcludedTags: tags => window.CmsWebPlayer.setRecommendationExcludedTags(tags),
+    setExcludedFolders: folders => window.CmsWebPlayer.setRecommendationExcludedFolders(folders),
     async state() {
       const records = window.CmsWebPlayer.getRecords();
       if (!records.length) throw new Error('先にライブラリを読み込んでください。');

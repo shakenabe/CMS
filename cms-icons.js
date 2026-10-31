@@ -19,6 +19,8 @@
         oldest: '<path d="M12 20V5M7 10l5-5 5 5M5 19h4"/>',
         alpha: '<path d="m4 19 4-14 4 14M5.5 14h5M14 6h6l-6 12h6"/>',
         play: '<path d="m8 5 11 7-11 7z"/>',
+        search: '<circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/>',
+        plus: '<path d="M12 4v16M4 12h16"/>',
         home: '<path d="m3 11 9-8 9 8M5.5 10v10h13V10M10 20v-6h4v6"/>',
         cloud: '<path d="M7 18h11a4 4 0 0 0 .7-7.9A6.5 6.5 0 0 0 6.2 8.7 4.7 4.7 0 0 0 7 18z"/>',
         movie: '<rect x="3" y="6" width="18" height="14" rx="2"/><path d="M3 10h18M7 6l2-3M13 6l2-3M19 6l2-3"/>',

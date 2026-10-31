@@ -10,6 +10,11 @@ import {
 import {
   createIosHostedLoginUrl, isFirebaseHostedWeb, isIosWebKit
 } from './firebase-auth-route.mjs';
+import {
+  firebaseAuthErrorMessage, localFirebaseReadinessError, resolveFirebaseConfig, safeFirebaseErrorLabel
+} from './firebase-local-config.mjs';
+import { acknowledgeAddition, cleanLibraryAddition, enqueueAdditions, libraryFieldPatch, mergeAdditionFolders,
+  overlayAdditions, readAdditionOutbox } from './shared/library-sync-policy.mjs';
 
 const CMS_SAFE_PATCH_VERSION = '2026062704';
 
@@ -29,7 +34,7 @@ function loadCmsSafePatch() {
 }
 
 
-const firebaseConfig = Object.freeze({
+const defaultFirebaseConfig = Object.freeze({
   apiKey: 'AIzaSyBEHDu0Y8Gnu-Cf9bkgIcrJ9HhL1OYJGUY',
   authDomain: 'cms-sync-test.firebaseapp.com',
   projectId: 'cms-sync-test',
@@ -38,7 +43,8 @@ const firebaseConfig = Object.freeze({
   appId: '1:187347469414:web:0d17b0657fd8be4c34d9a7'
 });
 
-const app = initializeApp(firebaseConfig);
+const firebaseConfigState = await resolveFirebaseConfig(defaultFirebaseConfig);
+const app = initializeApp(firebaseConfigState.config);
 const auth = getAuth(app);
 const firestore = getFirestore(app);
 const provider = new GoogleAuthProvider();
@@ -57,6 +63,9 @@ let currentUser = null;
 let syncInFlight = null;
 let playbackFlushTimer = null;
 let playbackFlushInFlight = null;
+let libraryAdditionFlight = null;
+let libraryAdditionRetryTimer = null;
+let libraryAdditionStatus = { state: 'pending', pending: 0, message: '' };
 let resolveAuthStateReady;
 let authStateReadyResolved = false;
 const authStateReady = new Promise(resolve => { resolveAuthStateReady = resolve; });
@@ -574,8 +583,87 @@ function firestoreFingerprint(value) {
 }
 
 function stripRuntimeFields(item) {
-  const { originalIndex, safeDate, safePlayCount, updatedAt, deleted, deletedAt, ...rest } = item || {};
+  const { originalIndex, safeDate, safePlayCount, updatedAt, deleted, deletedAt,
+    _cmsQueueId, _cmsQueueItemId, _cmsPlayContext, ...rest } = item || {};
   return rest;
+}
+
+function updateLibraryAdditionStatus(state, message) {
+  libraryAdditionStatus = { state, message, pending: readAdditionOutbox(localStorage).entries.length };
+  let element = document.getElementById('firebase-library-write-status');
+  if (!element) {
+    const parent = document.getElementById('firebase-sync-status-settings')?.parentElement
+      || document.getElementById('cloud-status-settings')?.parentElement;
+    if (parent) { element = document.createElement('p'); element.id = 'firebase-library-write-status'; element.setAttribute('role', 'status'); parent.appendChild(element); }
+  }
+  if (element) { element.textContent = message; element.dataset.syncState = state; }
+  window.dispatchEvent(new CustomEvent('cms-library-write-state', { detail: { ...libraryAdditionStatus } }));
+}
+
+function scheduleLibraryAdditionFlush(delay = 0) {
+  clearTimeout(libraryAdditionRetryTimer);
+  libraryAdditionRetryTimer = setTimeout(() => {
+    libraryAdditionRetryTimer = null;
+    flushLibraryAdditions().catch(() => {});
+  }, delay);
+}
+
+async function queueLibraryAdditions(items, folders = []) {
+  const journal = enqueueAdditions(localStorage, items.map(cleanLibraryAddition), folders);
+  updateLibraryAdditionStatus('pending', `動画の同期: 送信待ち ${journal.entries.length}件（このPCに保存済み）`);
+  scheduleLibraryAdditionFlush();
+  return { state: 'pending', pending: journal.entries.length };
+}
+
+async function flushLibraryAdditions() {
+  if (libraryAdditionFlight) return libraryAdditionFlight;
+  const pending = readAdditionOutbox(localStorage).entries;
+  if (!pending.length) return { state: 'success', pending: 0 };
+  if (!currentUser || currentUser.uid !== FIREBASE_OWNER_UID || !window.CmsWebPlayer?.getUseFirebase() || navigator.onLine === false) {
+    updateLibraryAdditionStatus('pending', `動画の同期: 送信待ち ${pending.length}件（接続後に自動送信）`);
+    return { state: 'pending', pending: pending.length };
+  }
+  const uid = currentUser.uid;
+  libraryAdditionFlight = (async () => {
+    updateLibraryAdditionStatus('syncing', `動画の同期: 送信中 ${pending.length}件`);
+    for (const entry of pending) {
+      if (currentUser?.uid !== uid || !window.CmsWebPlayer?.getUseFirebase()) break;
+      await runTransaction(firestore, async transaction => {
+        const mediaRef = userDoc(uid, 'mediaItems', entry.item.id);
+        const foldersRef = userDoc(uid, 'folderSettings', 'main');
+        const [media, folders] = await Promise.all([transaction.get(mediaRef), transaction.get(foldersRef)]);
+        if (media.exists() && (media.data().url !== entry.item.url || media.data().deleted)) {
+          throw new Error('追加先の動画が他の端末で変更されています。未送信記録は保持しました。');
+        }
+        // A retry must not overwrite remotely accumulated counts or metadata.
+        if (!media.exists()) transaction.set(mediaRef, { ...entry.item, deleted: false, updatedAt: serverTimestamp() });
+        const previousFolders = folders.data()?.data || [];
+        const additions = (entry.item.folders || [entry.item.folder]).filter(Boolean).map(name =>
+          entry.folders?.find(folder => folder.folderName === name) || { folderName: name });
+        const mergedFolders = mergeAdditionFolders(previousFolders, additions);
+        if (mergedFolders.length !== previousFolders.length) transaction.set(foldersRef, { data: mergedFolders, updatedAt: serverTimestamp() }, { merge: true });
+        if (!media.exists() || mergedFolders.length !== previousFolders.length) transaction.set(userDoc(uid, 'sync', 'meta'), {
+          lastChangedAt: serverTimestamp(), libraryChangedAt: serverTimestamp(), webUpdatedAt: serverTimestamp()
+        }, { merge: true });
+      });
+      // Persist the acknowledged cloud copy before removing its durable journal.
+      const cache = await readCache();
+      await replaceCache(overlayAdditions(cache, [entry]), { source: 'web-addition', remoteMetaAt: cache.remoteMetaAt || 0,
+        lastPullAt: cache.lastPullAt || 0, lastSyncAt: cache.lastSyncAt || 0 });
+      acknowledgeAddition(localStorage, entry);
+    }
+    const remaining = readAdditionOutbox(localStorage).entries.length;
+    updateLibraryAdditionStatus(remaining ? 'pending' : 'success', remaining
+      ? `動画の同期: 送信待ち ${remaining}件` : '動画の同期: Firebaseへ保存済み');
+    if (remaining && currentUser?.uid === uid && window.CmsWebPlayer?.getUseFirebase()) scheduleLibraryAdditionFlush(100);
+    return { state: remaining ? 'pending' : 'success', pending: remaining };
+  })();
+  try { return await libraryAdditionFlight; }
+  catch (error) {
+    updateLibraryAdditionStatus('danger', `動画の同期: 送信失敗・${readAdditionOutbox(localStorage).entries.length}件をPCに保持（自動再試行）`);
+    scheduleLibraryAdditionFlush(PLAYBACK_RETRY_DELAY_MS);
+    throw error;
+  } finally { libraryAdditionFlight = null; }
 }
 
 async function commitBatch(batch, counter) {
@@ -613,9 +701,9 @@ async function saveLibrarySnapshot(data = {}) {
     const previous = baselineById.get(item.id);
     return !previous || firestoreFingerprint(previous) !== firestoreFingerprint(item);
   });
-  const deletedIds = (baseline.mediaItems || [])
-    .filter(item => item?.id && !localIds.has(item.id))
-    .map(item => item.id);
+  // Absence from an imported/stale snapshot is never a deletion instruction.
+  const deletedIds = [...new Set(Array.isArray(data.deletedIds) ? data.deletedIds : [])]
+    .filter(id => typeof id === 'string' && baselineById.has(id) && !localIds.has(id));
   const folderSettingsChanged = firestoreFingerprint(baseline.folderSettings || []) !== firestoreFingerprint(data.folderSettings || []);
   const webSettingsChanged = firestoreFingerprint(baseline.webSettings || {}) !== firestoreFingerprint(data.webSettings || {});
 
@@ -631,11 +719,12 @@ async function saveLibrarySnapshot(data = {}) {
   };
 
   for (const item of changedItems) {
-    const payload = cleanFirestoreValue(item);
-    if (payload._cmsRecommendationCountManaged) { delete payload.playCount; delete payload.lastPlayedAt; }
+    const previous = baselineById.get(item.id);
+    const payload = cleanFirestoreValue(libraryFieldPatch(item, previous));
+    if (!Object.keys(payload).length) continue;
     queueSet(userDoc(uid, 'mediaItems', item.id), {
       ...payload,
-      deleted: false,
+      ...(!previous ? { deleted: false } : {}),
       updatedAt: serverTimestamp()
     });
     if (counter.count >= 420) await commitBatch(counter.batch, counter);
@@ -670,16 +759,21 @@ async function saveLibrarySnapshot(data = {}) {
   await commitBatch(counter.batch, counter);
   await applySavedLibraryDelta(changedItems, deletedIds, data, {
     source: 'web-edit',
-    remoteMetaAt: Date.now(),
-    lastPullAt: Date.now(),
+    // A local commit is not a cloud pull cursor. Advancing this to wall-clock
+    // time would skip another device's concurrent changes on the next refresh.
+    remoteMetaAt: baseline.remoteMetaAt || 0,
+    lastPullAt: baseline.lastPullAt || 0,
     lastSyncAt: Date.now()
   });
   updateStatus(`Firebase: 差分保存完了（更新 ${changedItems.length}件・削除 ${deletedIds.length}件）`);
   return { status: 'success', saved: changedItems.length, tombstoned: deletedIds.length };
 }
 
+let lastSuccessfulCloudSync = 0;
+let publicCloudStatus = '';
 function updateStatus(message) {
   const raw = String(message || '');
+  publicCloudStatus = raw.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '接続済みアカウント');
   const failed = /エラー|失敗|権限|利用権限/.test(raw);
   const working = /接続中|読込中|同期中|保存中/.test(raw);
   const disconnected = /未接続/.test(raw);
@@ -691,6 +785,7 @@ function updateStatus(message) {
     settings.textContent = `ライブラリ同期: ${raw.replace(/^Firebase\s*:\s*/i, '').replace(/^ローカルキャッシュ\s*:\s*/i, '端末キャッシュ ')}`;
     settings.dataset.syncState = state;
   }
+  window.dispatchEvent(new Event('cms-state-change'));
 }
 
 function clearIosAuthQuery() {
@@ -756,7 +851,8 @@ async function handleIosHostedRedirect() {
 }
 
 function showLibrary(data, source, options = {}) {
-  if (data.mediaItems?.length) window.CmsWebPlayer?.applyLibrary(data, source, options);
+  const local = overlayAdditions(data, readAdditionOutbox(localStorage).entries);
+  if (local.mediaItems?.length) window.CmsWebPlayer?.applyLibrary(local, source, options);
 }
 
 async function syncCloud({ force = false, silent = false } = {}) {
@@ -765,6 +861,9 @@ async function syncCloud({ force = false, silent = false } = {}) {
   if (syncInFlight) return syncInFlight;
   syncInFlight = (async () => {
     updateStatus('Firebase: 更新確認中...');
+    // The addition journal is independent from snapshot reconciliation and never
+    // deletes cloud records absent from an older local copy.
+    await flushLibraryAdditions().catch(() => {});
     try {
       await flushPlaybackQueue({ silent: true });
     } catch (error) {
@@ -777,6 +876,7 @@ async function syncCloud({ force = false, silent = false } = {}) {
     const remoteMetaAt = metaSnapshot.data()?.lastChangedAt?.toMillis?.() || 0;
     if (!force && cache.initialized && cloudBaseline.initialized && remoteMetaAt && remoteMetaAt <= (cache.remoteMetaAt || 0)) {
       showLibrary(cache, 'cache', { silent: true });
+      lastSuccessfulCloudSync = Date.now();
       updateStatus(`Firebase: 最新（${cache.mediaItems.length}件）`);
       return cache;
     }
@@ -808,6 +908,7 @@ async function syncCloud({ force = false, silent = false } = {}) {
     const updated = await readCache();
     showLibrary(updated, 'firebase', { silent });
     scheduleRecommendationSync();
+    lastSuccessfulCloudSync = Date.now();
     updateStatus(`Firebase: 読込完了（${updated.mediaItems.length}件・再生回数同期可）`);
     return updated;
   })();
@@ -818,6 +919,8 @@ async function syncCloud({ force = false, silent = false } = {}) {
 
 async function login() {
   try {
+    const localConfigError = localFirebaseReadinessError(firebaseConfigState);
+    if (localConfigError) throw localConfigError;
     if (isIosWebKit()) {
       if (!isFirebaseHostedWeb()) {
         updateStatus('Firebase: iOS対応ログイン画面へ移動します…');
@@ -834,16 +937,21 @@ async function login() {
     const result = await signInWithPopup(auth, provider);
     return await completeAuthorizedLogin(result.user, 'popup');
   } catch (error) {
-    if (error?.code === 'auth/popup-blocked') {
+    const configMessage = firebaseAuthErrorMessage(error);
+    if (configMessage) {
+      updateStatus(configMessage);
+    } else if (error?.code === 'auth/popup-blocked') {
       updateStatus('Firebase: ポップアップがブロックされました。Safariのポップアップを許可して、もう一度お試しください。');
     } else if (error?.code === 'auth/popup-closed-by-user' || error?.code === 'auth/cancelled-popup-request') {
       updateStatus('Firebase: Googleログインがキャンセルされました。');
     } else if (error?.code === 'auth/web-storage-unsupported') {
       updateStatus('Firebase: SafariのCookie/サイトデータが無効です。通常タブで開き、サイトデータを許可してください。');
+    } else if (error?.code === 'auth/unauthorized-domain') {
+      updateStatus('Firebase認証エラー: このPCのURLが許可ドメインに登録されていません。PCの設定で接続先ドメインを確認してください（' + location.hostname + '）。JSON読み込みは引き続き利用できます。');
     } else {
-      updateStatus(`Firebaseエラー: ${error.code || error.message}`);
+      updateStatus(`Firebaseエラー: ${safeFirebaseErrorLabel(error)}`);
     }
-    console.error('[auth] login failed', error);
+    console.error('[auth] login failed', { code: safeFirebaseErrorLabel(error) });
     throw error;
   }
 }
@@ -851,6 +959,8 @@ async function login() {
 let recommendationSyncFlight = null;
 let recommendationSyncTimer = null;
 async function syncRecommendations({ refreshHistory = false } = {}) {
+  const localConfigError = localFirebaseReadinessError(firebaseConfigState);
+  if (localConfigError) throw localConfigError;
   if (recommendationSyncFlight) return recommendationSyncFlight;
   recommendationSyncFlight = (async () => {
     const store = window.CmsRecommendationStore;
@@ -899,6 +1009,8 @@ function scheduleRecommendationSync() {
 window.CmsWebFirebase = {
   syncRecommendations, scheduleRecommendationSync,
   async fetchRecommendationFolderVersion(folderId,revision) {
+    const localConfigError = localFirebaseReadinessError(firebaseConfigState);
+    if (localConfigError) throw localConfigError;
     const requireOwner=()=>{
       if(!auth.currentUser || auth.currentUser.uid!==window.CmsRecommendationStore.ownerUid) throw new Error('所有者アカウントでログインしてください。');
       return auth.currentUser;
@@ -906,8 +1018,12 @@ window.CmsWebFirebase = {
     return window.CMSRecommendationCloud({arrayUnion,collection,doc,getDoc,getDocs,runTransaction,serverTimestamp,setDoc},firestore,requireOwner).fetchRecommendationFolderVersion(folderId,revision);
   },
   login,
+  getSyncStatus: () => ({ connected:Boolean(currentUser && currentUser.uid === FIREBASE_OWNER_UID), auto:Boolean(window.CmsWebPlayer?.getUseFirebase()), message:publicCloudStatus, lastSyncAt:lastSuccessfulCloudSync }),
   sync: (options = {}) => syncCloud({ force: true, silent: false, ...options }),
   saveLibrary: saveLibrarySnapshot,
+  queueLibraryAdditions,
+  flushLibraryAdditions,
+  getLibraryWriteStatus: () => ({ ...libraryAdditionStatus, pending: readAdditionOutbox(localStorage).entries.length }),
   queuePlaybackUpdate,
   flushPlaybackQueue,
   getPlaybackHistory,
@@ -919,12 +1035,24 @@ window.CmsWebFirebase = {
   }, { source: 'json', remoteMetaAt: 0, lastPullAt: 0, lastSyncAt: Date.now() })
 };
 
-document.addEventListener('DOMContentLoaded', async () => {
+const initializeFirebaseUi = async () => {
   const bind = (id, handler) => document.getElementById(id)?.addEventListener('click', () => {
-    handler().catch(error => console.error(`[firebase-ui] ${id}`, error));
+    handler().catch(error => console.error(`[firebase-ui] ${id}`, { code: safeFirebaseErrorLabel(error) }));
   });
   bind('btn-cloud-login', login);
   bind('btn-cloud-login-settings', login);
+  const connectAuto = async () => {
+    const connected=Boolean(currentUser && currentUser.uid === FIREBASE_OWNER_UID);
+    if(!connected)await login();
+    if (!currentUser || currentUser.uid !== FIREBASE_OWNER_UID) return;
+    window.CmsWebPlayer.setUseFirebase(true);
+    scheduleLibraryAdditionFlush(0);
+    const checkbox=document.getElementById('set-use-firebase');if(checkbox)checkbox.checked=true;
+    if(connected)await syncCloud({force:false,silent:true});
+    updateStatus('Firebase: 自動読み込みON（5分ごとに差分を確認します）');
+  };
+  bind('btn-cloud-connect-auto', connectAuto);
+  bind('btn-cloud-connect-auto-settings', connectAuto);
   bind('btn-load-firebase', () => syncCloud({ force: true, silent: false }));
   bind('btn-cloud-signout', () => signOut(auth));
   try {
@@ -940,9 +1068,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     showLibrary(cache, 'cache', { silent: true });
     if (cache.mediaItems?.length) updateStatus(`ローカルキャッシュ: ${cache.mediaItems.length}件`);
   } catch (_) {}
-});
+};
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeFirebaseUi, { once: true });
+else void initializeFirebaseUi();
 
 onAuthStateChanged(auth, async user => {
+  const localConfigError = localFirebaseReadinessError(firebaseConfigState);
+  if (localConfigError) {
+    currentUser = null;
+    markAuthStateReady(null);
+    updateStatus(firebaseAuthErrorMessage(localConfigError));
+    updateHistoryStatus('再生履歴同期: 未接続', 'warning');
+    return;
+  }
   currentUser = user;
   markAuthStateReady(user);
   if (!user) {
@@ -957,12 +1095,13 @@ onAuthStateChanged(auth, async user => {
   }
   updateStatus(`Firebase: ${user.email || 'ログイン済み'}（再生回数同期可）`);
   updateHistoryStatus(pendingPlaybackCount() ? `再生履歴同期: 送信待ち（${pendingPlaybackCount()}件）` : '再生履歴同期: 最新', pendingPlaybackCount() ? 'warning' : 'success');
+  scheduleLibraryAdditionFlush(500);
   schedulePlaybackQueueFlush(1000);
   if (window.CmsWebPlayer?.getUseFirebase()) await syncCloud({ force: false, silent: true }).catch(() => {});
 });
 
 setInterval(() => {
-  if (currentUser && window.CmsWebPlayer?.getUseFirebase()) void syncCloud({ force: false, silent: true });
+  if (currentUser && window.CmsWebPlayer?.getUseFirebase()) void syncCloud({ force: false, silent: true }).catch(() => {});
 }, 5 * 60 * 1000);
 
 document.addEventListener('visibilitychange', () => {
@@ -983,5 +1122,6 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('online', () => {
   if (!currentUser || !window.CmsWebPlayer?.getUseFirebase()) return;
   schedulePlaybackQueueFlush(0);
+  scheduleLibraryAdditionFlush(0);
   void syncCloud({ force: false, silent: true }).catch(() => {});
 });

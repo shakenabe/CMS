@@ -1,4 +1,15 @@
 /* Stable desktop grid; window/pocket/mobile retain their own layout contracts. */
+#recommendation-toolbar-slot { flex:none; min-width:0; border-bottom:1px solid var(--border-color,#8198ab55); }
+body.cms-redesign .pc-track-heading { display:flex !important; flex-direction:row !important; align-items:center; justify-content:space-between; gap:8px; padding:8px 12px !important; min-height:0 !important; flex:none; }
+body.cms-redesign .pc-track-heading strong { font-size:14px !important; line-height:1.4 !important; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+body.cms-redesign .pc-track-heading small { flex:none; margin:0 !important; font-size:12px !important; }
+@media(min-width:721px) {
+  body.cms-redesign.is-pc:not(.window-mode) #widget-controls { display:flex !important; align-items:center !important; justify-content:center !important; }
+  body.cms-redesign.is-pc:not(.window-mode) #widget-controls .player-controls-inner { width:100%; min-width:0; height:auto !important; flex:none !important; align-items:center !important; }
+  body.cms-redesign.is-pc:not(.window-mode) #widget-controls .widget-info-container { flex:1; min-width:0; }
+  body.cms-redesign.is-pc:not(.window-mode) #widget-controls .controls-main { display:flex !important; align-items:center !important; justify-content:center !important; gap:10px; }
+  body.cms-redesign.is-pc:not(.window-mode) #widget-controls .controls-main button { display:inline-flex !important; align-items:center !important; justify-content:center !important; margin:0 !important; line-height:1 !important; }
+}
 body.cms-redesign:not(.window-mode) #desktop-pane-resizer,
 body.cms-redesign:not(.window-mode) .cms-panel-resizer { display:none !important; }
 body.cms-redesign:not(.window-mode) #desktop-pane-resizer { display:none; }

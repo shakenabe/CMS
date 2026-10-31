@@ -8,7 +8,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="legacy-base.css?v=2026092401">
     <link rel="stylesheet" href="redesign.css?v=2026092401">
-    <link rel="stylesheet" href="desktop-workspace.css?v=2026101001">
+    <link rel="stylesheet" href="desktop-workspace.css?v=2026103101">
+    <link rel="stylesheet" href="remote-host.css?v=2026103101">
+    <link rel="stylesheet" href="player-studio.css?v=2026103101">
 </head>
 <body class="theme-modern is-pc">
 
@@ -63,10 +65,11 @@
     <div id="import-screen" class="overlay-screen">
         <div class="start-content panel-glass">
             <h1 class="theme-text" style="margin-top:0;">CMS Web Player</h1>
-            <p>JSONファイルを読み込んでください。<br><span style="font-size:0.8rem; opacity:0.8;">※Firebase連携が有効な場合は自動で読込を試行します</span></p>
+            <p>Google接続でライブラリを読み込めます。<br><span style="font-size:0.8rem; opacity:0.8;">JSON読み込みも手動取り込み・復旧用として利用できます。</span></p>
             <label for="import-json" class="custom-file-upload theme-btn"><i class="fas fa-file-import"></i> ファイルを選択</label>
             <input type="file" id="import-json" accept=".json">
             <button id="btn-cloud-login" class="theme-btn cloud-btn"><i class="fas fa-cloud"></i> Googleでクラウド読込</button>
+            <button id="btn-cloud-connect-auto" class="theme-btn cloud-btn" type="button">Google接続して自動読み込みをON</button>
             <div id="cloud-status-start" class="cloud-status">Firebase: 未接続（JSONのみでも利用できます）</div>
         </div>
     </div>
@@ -195,10 +198,10 @@
                         </div>
                     </div>
 
+                    <div id="recommendation-toolbar-slot" aria-label="おすすめ・スマート選曲"></div>
                     <div class="library-lists-container">
                 <div id="widget-track-list-wrapper" class="panel-glass">
                             <div class="pc-track-heading">
-                                <span>SELECTED CHANNEL</span>
                                 <strong id="current-folder-title">すべてのアイテム</strong>
                                 <small id="pc-track-folder-count">--件のアイテム</small>
                             </div>
@@ -247,13 +250,12 @@
                     <p id="stats-source-status">現在のライブラリから集計しています</p>
                 </div>
                 <div class="stats-header-actions">
-                    <button id="btn-set-analysis-export-folder" class="theme-btn" type="button" title="分析JSONの保存先フォルダを選択"><i class="fas fa-folder-open"></i> 保存先</button>
-                    <button id="btn-export-analysis-json" class="theme-btn" type="button" title="分析用JSONを更新して保存"><i class="fas fa-rotate"></i> 更新して保存</button>
+                    <button id="btn-export-analysis-json" class="theme-btn" type="button" title="最新の分析用JSONをダウンロード"><i class="fas fa-rotate"></i> 分析用JSONを更新・保存</button>
                     <button id="btn-refresh-stats" class="theme-btn" type="button"><i class="fas fa-rotate"></i> 更新</button>
                     <button id="btn-close-stats" type="button" aria-label="統計画面を閉じる"><i class="fas fa-xmark"></i></button>
                 </div>
             </header>
-            <p id="analysis-export-status" class="analysis-export-status" role="status" aria-live="polite">保存先未設定 — 「保存先」から Documents\QUIN\data\projects\cms を選択してください（変更可）。</p>
+            <p id="analysis-export-status" class="analysis-export-status" role="status" aria-live="polite">分析用JSONはブラウザのダウンロード先へ保存します。「更新」は統計表示だけを更新します。</p>
             <div class="stats-scroll-area">
                 <div id="stats-summary-grid" class="stats-summary-grid"></div>
                 <div id="stats-highlight-grid" class="stats-highlight-grid"></div>
@@ -281,6 +283,12 @@
             <div class="setting-scroll-area">
                 <!-- 基本設定タブ -->
                 <div id="tab-basic" class="tab-content active">
+                    <div class="setting-group" id="settings-data-management">
+                        <h3>データ管理・更新</h3>
+                        <p class="setting-help">AI分析用：動画タイトル・URL・再生回数・所属フォルダ（複数対応）と再生履歴を書き出します。内部管理IDや接続設定は含みません。復元用バックアップとは別のファイルです。</p>
+                        <button id="btn-settings-export-analysis-json" type="button" class="theme-btn">AI分析用JSONを書き出す</button>
+                        <p id="settings-analysis-export-status" class="setting-help" role="status" aria-live="polite">ブラウザのダウンロード先へ保存します。</p>
+                    </div>
                     <div class="setting-section-label"><strong>表示と並び順</strong><span>日常的に変更する項目です</span></div>
                     <div class="setting-row">
                         <label>テーマ</label>
@@ -322,10 +330,16 @@
                         <select id="set-recommendation-profile" class="widget-search"><option value="standard">バランスよく</option><option value="stable">いつもの曲中心</option><option value="explore">まだ聴いていない曲多め</option><option value="rediscover">久しぶりの曲多め</option></select>
                         <label for="set-recommendation-length">生成する曲数</label>
                         <input id="set-recommendation-length" type="number" min="1" max="200" value="20" class="widget-search">
+                        <label for="set-recommendation-mode">選曲モード</label>
+                        <select id="set-recommendation-mode" class="widget-search"><option value="smartRandom">好みと未再生曲を混ぜる</option><option value="uniformRandom">全曲を均等に選ぶ</option></select>
+                        <label><input id="set-recommendation-confirm" type="checkbox" checked> スマート再生の前に確認する</label>
                         <label for="set-recommendation-excluded-tags">選曲から除外するタグ</label>
                         <textarea id="set-recommendation-excluded-tags" class="widget-search" rows="2" maxlength="12100" placeholder="例: 音MAD, 作業用BGM"></textarea>
                         <small>カンマ・読点・改行で区切って指定（最大100タグ）。タグ名が一致する動画を、おすすめ・新しい自動選曲から外します。元の動画や再生中の曲は削除しません。</small>
-                        <span style="font-size:0.75rem; opacity:0.8;">再生中の曲順は「LIBRARY CHANNELS」の一時フォルダで確認できます。スマート再生は確認画面で開始を押すまで生成・再生しません。「選曲詳細」から条件の編集もできます。</span>
+                        <label for="set-recommendation-excluded-folders">選曲から除外するフォルダ</label>
+                        <select id="set-recommendation-excluded-folders" class="widget-search" multiple size="5" aria-label="選曲から除外するフォルダ"></select>
+                        <small>複数選択できます（PCはCtrl / Shift）。一つでも選択フォルダに属する曲を、同じURLの別登録も含めて除外します。元の曲や再生中のキューは変更しません。</small>
+                        <span style="font-size:0.75rem; opacity:0.8;">再生中の曲順は「LIBRARY CHANNELS」で確認できます。選曲画面の「選曲設定」も同じ設定です。確認をOFFにしたスマート再生は保存した条件で直ちに再生を切り替えます。</span>
                     </div>
                     <div class="setting-row">
                         <label><input type="checkbox" id="set-vocaloid-collection"> <cms-icon name="music"></cms-icon>ボカロ / Kiite 専用一覧を表示</label>
@@ -373,6 +387,7 @@
                         <div id="cloud-history-status-settings" class="cloud-status" data-sync-state="warning">再生履歴同期: 未接続</div>
                         <div style="display:flex; gap:10px; margin-top:5px; flex-wrap:wrap;">
                             <button id="btn-cloud-login-settings" class="theme-btn cloud-action">Googleログイン</button>
+                            <button id="btn-cloud-connect-auto-settings" class="theme-btn cloud-action" type="button">Google接続＋自動読み込みON</button>
                             <button id="btn-load-firebase" class="theme-btn cloud-action">クラウド再読込</button>
                             <button id="btn-cloud-signout" class="theme-btn cloud-action">ログアウト</button>
                         </div>
@@ -491,18 +506,22 @@
         </div>
     </div>
 
-    <script src="cms-icons.js?v=2026072502"></script>
+    <script src="cms-icons.js?v=2026103101"></script>
     <script src="ui-feedback.js?v=2026090601"></script>
-    <script type="module" src="firebase-web.js?v=2026100801"></script>
-    <script src="state-policy.js?v=2026092401"></script>
+    <script type="module" src="firebase-web.js?v=2026103101"></script>
+    <script src="state-policy.js?v=2026103101"></script>
     <script src="ui-runtime.js?v=2026100801"></script>
-    <script src="shared/recommendation-engine.js?v=2026101001"></script>
+    <script src="shared/recommendation-engine.js?v=2026101201"></script>
     <script src="shared/recommendation-cloud.js?v=2026101001"></script>
     <script src="recommendation-store-web.js?v=2026101001"></script>
-    <script src="script.js?v=2026101001"></script>
-    <script src="recommendation-web.js?v=2026101001"></script>
-    <script src="shared/recommendation-ui.js?v=2026101001"></script>
+    <script src="shared/nico-playback.js?v=2026101205"></script>
+    <script src="script.js?v=2026103102"></script>
+    <script src="recommendation-web.js?v=2026103101"></script>
+    <script src="shared/recommendation-ui.js?v=2026103101"></script>
     <script src="desktop-large-ui-v2.js?v=2026100802"></script>
     <script src="redesign.js?v=2026100901"></script>
+    <script src="remote-model.js?v=2026103101"></script>
+    <script src="remote-host.js?v=2026103101"></script>
+    <script src="player-studio.js?v=2026103101"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@ const defaultSettings = {
     pocketShowClock: true, pocketShowArt: true, pocketShowTitle: true, pocketShowProgress: true, pocketShowControls: true, pocketShowUnlock: true,
     pocketLayout: {}, pocketLayoutScale: {}, forcePcLayout: false,
     musicMode: false, autoScrollActiveTrack: true, vocaloidCollectionEnabled: false, vocaloidGroupMode: 'videos',
-    recommendationEnabled: true, recommendationLaunchBehavior: 'panel', recommendationLaunchScope: 'library', recommendationProfile: 'standard', recommendationLength: 20, recommendationExcludedTags: [],
+    recommendationEnabled: true, recommendationLaunchBehavior: 'panel', recommendationLaunchScope: 'library', recommendationProfile: 'standard', recommendationLength: 20, recommendationMode: 'smartRandom', recommendationConfirmBeforePlay: true, recommendationExcludedTags: [], recommendationExcludedFolders: [],
     windowMode: false, windowPositions: {}, windowStates: {}, windowColorsLinked: true,
     windowPanelColor: '#000000', windowPanelAlpha: 55, windowTitleColor: '#1f4f8f', windowTitleAlpha: 100,
     defaultSortOrder: 'custom', useFirebase: false, resumeLastPlayback: true, desktopPanelHeights: {}
@@ -46,6 +46,7 @@ let nicoDuration = 0;
 let nicoCurrentTime = 0;
 let nicoEndedFlag = false;
 let nicoPlayerReady = false;
+let nicoPlaybackStarted = false;
 let nicoPendingSeekSeconds = null;
 let nicoSeekAttemptCount = 0;
 let nicoSeekLastSentAt = 0;
@@ -91,6 +92,7 @@ const CMS_PLAYER_SESSION_LEGACY_KEY = 'cms_player_last_playback_v1';
 // 編集モード管理
 let isEditMode = false;
 let selectedItems = new Set();
+let pendingLibraryDeletedIds = new Set();
 
 const importScreen = document.getElementById('import-screen');
 const readyScreen = document.getElementById('ready-screen');
@@ -497,6 +499,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupPlayerControls(); setupSettingsModal(); setupStatsModal(); setupUrlAdd(); window.addEventListener('message', handleNicoMessage); setupPocketMode(); setupPocketLayoutDrag(); setupClockUI(); setupTrackListReturnGesture(); setupControlsReturnGesture();
     setupEditMode();
     applyWindowMode(); 
+    // A pending registration is recoverable even when the external Firebase SDK
+    // cannot load. No JSON import or network authentication is required to view it.
+    try {
+        const policy = await import('./shared/library-sync-policy.mjs');
+        const entries = policy.readAdditionOutbox(localStorage).entries;
+        if (entries.length && !allItems.length) {
+            processImportData(policy.overlayAdditions({ mediaItems: [], folderSettings: [] }, entries));
+            importScreen.classList.add('hidden'); readyScreen.classList.remove('hidden');
+        }
+    } catch (error) { console.error('[library-additions] local recovery unavailable', error); }
 });
 
 function loadYouTubeAPI() { if (!window.YT) { const tag = document.createElement('script'); tag.src = "https://www.youtube.com/iframe_api"; document.getElementsByTagName('script')[0].parentNode.insertBefore(tag, document.getElementsByTagName('script')[0]); } }
@@ -516,6 +528,7 @@ function loadSettings() {
         // but make the lightweight flag the single source of truth from now on.
         delete appSettings.motionMode;
         appSettings.recommendationExcludedTags = window.CMSRecommendationEngine.normalizeExcludedTags(appSettings.recommendationExcludedTags);
+        appSettings.recommendationExcludedFolders = window.CMSRecommendationEngine.normalizeExcludedFolders(appSettings.recommendationExcludedFolders);
     } catch (e) {}
     // The shared recommendation UI can mount before DOMContentLoaded restores settings.
     window.dispatchEvent(new Event('cms-recommendation-settings-change'));
@@ -563,14 +576,15 @@ function saveCurrentSession(extra = {}) {
     const item = extra.item || currentPlayingItem || null;
     const folderId = extra.folderId || currentPlaybackContext?.folderId || currentFolderId || '__all';
     const itemIndex = item ? currentRenderSongs.findIndex(song => isSameMediaItem(song, item)) : -1;
-    const playlistIndex = item ? currentPlaylist.findIndex(song => isSameMediaItem(song, item)) : -1;
+    const playlistIndex = item ? currentPlaylist.findIndex(song => CmsStatePolicy.sameQueueItem(song, item)) : -1;
     localStorage.setItem(CMS_PLAYER_SESSION_KEY, JSON.stringify({
         folderId,
         targetFolderId: currentFolderId || folderId,
         playbackContext: currentPlaybackContext,
         recommendationAttempt,
         activeRecommendationQueue,
-        finiteItems: currentPlaybackContext?.finite ? currentPlaylist.map(item => ({ id: item.id, contentKey: window.CMSRecommendationEngine.normalizeContentKey(item), _cmsPlayContext: item._cmsPlayContext || null })) : null,
+        finiteItems: currentPlaybackContext?.finite ? currentPlaylist.map(item => ({ id: item.id, contentKey: window.CMSRecommendationEngine.normalizeContentKey(item), _cmsPlayContext: item._cmsPlayContext || null, _cmsQueueId: item._cmsQueueId, _cmsQueueItemId: item._cmsQueueItemId })) : null,
+        queueItemId: item?._cmsQueueItemId || null,
         itemId: item?.id || null,
         url: item?.url || null,
         site: item?.site || null,
@@ -813,7 +827,7 @@ function returnToCurrentTrack() {
     if (!source) { window.CmsUI?.notify?.('再生元フォルダが見つかりません。', { type: 'info' }); return; }
     if (source.id === '__vocaloid') appSettings.vocaloidGroupMode = 'videos';
     selectFolder(source.id, { preserveScroll: true, followPlayback:true });
-    const index = currentRenderSongs.findIndex(song => isSameMediaItem(song, currentPlayingItem));
+    const index = CmsStatePolicy.activeIndex(currentRenderSongs, currentPlayingItem, currentPlaybackContext, currentFolderId);
     if (index < 0) return;
     scrollTrackIndexIntoView(index, { force: true });
     const activeEl = trackListEl.querySelector(`.w-t-item[data-index="${index}"]`);
@@ -1407,10 +1421,32 @@ function setupSettingsModal() {
         document.getElementById('set-music-mode').checked = Boolean(appSettings.musicMode);
         document.getElementById('set-recommendation-enabled').checked = appSettings.recommendationEnabled !== false;
         document.getElementById('set-recommendation-behavior').value = appSettings.recommendationLaunchBehavior || 'panel';
-        document.getElementById('set-recommendation-scope').value = appSettings.recommendationLaunchScope || 'library';
+        const recommendationScope = document.getElementById('set-recommendation-scope');
+        const savedScope = appSettings.recommendationLaunchScope || 'library';
+        if (![...recommendationScope.options].some(option => option.value === savedScope)) {
+            const option = document.createElement('option'); option.value = savedScope;
+            if (savedScope.startsWith('folder:')) {
+                try { option.textContent = `フォルダ：${decodeURIComponent(savedScope.slice(7))}`; }
+                catch (_) { option.textContent = '保存済みの選曲対象'; }
+            } else option.textContent = savedScope === 'site:youtube' ? 'YouTubeのみ' : savedScope === 'site:niconico' ? 'ニコニコのみ' : '保存済みの選曲対象';
+            recommendationScope.appendChild(option);
+        }
+        recommendationScope.value = savedScope;
         document.getElementById('set-recommendation-profile').value = appSettings.recommendationProfile || 'standard';
+        if (document.getElementById('set-recommendation-mode')) document.getElementById('set-recommendation-mode').value = appSettings.recommendationMode || 'smartRandom';
+        if (document.getElementById('set-recommendation-confirm')) document.getElementById('set-recommendation-confirm').checked = appSettings.recommendationConfirmBeforePlay !== false;
         document.getElementById('set-recommendation-length').value = Math.max(1, Math.min(200, Number(appSettings.recommendationLength) || 20));
         document.getElementById('set-recommendation-excluded-tags').value = window.CMSRecommendationEngine.normalizeExcludedTags(appSettings.recommendationExcludedTags).join(', ');
+        const excludedFolders = document.getElementById('set-recommendation-excluded-folders');
+        if (excludedFolders) {
+            const selected = new Set(window.CMSRecommendationEngine.normalizeExcludedFolders(appSettings.recommendationExcludedFolders));
+            const actual = new Set(allItems.flatMap(item => [...(Array.isArray(item.folders) ? item.folders : []), item.folder]).filter(Boolean));
+            excludedFolders.replaceChildren();
+            for (const name of window.CMSRecommendationEngine.normalizeExcludedFolders([...actual, ...selected])) {
+                const option = document.createElement('option'); option.value = name; option.selected = selected.has(name);
+                option.textContent = name + (actual.has(name) ? '' : '（現在ライブラリにありません）'); excludedFolders.appendChild(option);
+            }
+        }
         document.getElementById('set-vocaloid-collection').checked = Boolean(appSettings.vocaloidCollectionEnabled);
         document.getElementById('set-resume-last-playback').checked = appSettings.resumeLastPlayback !== false;
         document.getElementById('set-show-thumbnails').checked = appSettings.showThumbnails;
@@ -1492,10 +1528,13 @@ function setupSettingsModal() {
         const previousVocaloidCollectionEnabled = Boolean(appSettings.vocaloidCollectionEnabled);
         appSettings.recommendationEnabled = document.getElementById('set-recommendation-enabled').checked;
         appSettings.recommendationLaunchBehavior = document.getElementById('set-recommendation-behavior').value;
-        appSettings.recommendationLaunchScope = document.getElementById('set-recommendation-scope').value;
+        appSettings.recommendationLaunchScope = document.getElementById('set-recommendation-scope').value || appSettings.recommendationLaunchScope || 'library';
         appSettings.recommendationProfile = document.getElementById('set-recommendation-profile').value;
+        appSettings.recommendationMode = document.getElementById('set-recommendation-mode')?.value || appSettings.recommendationMode || 'smartRandom';
+        appSettings.recommendationConfirmBeforePlay = document.getElementById('set-recommendation-confirm')?.checked !== false;
         appSettings.recommendationLength = Math.max(1, Math.min(200, Math.round(Number(document.getElementById('set-recommendation-length').value) || 20)));
         appSettings.recommendationExcludedTags = window.CMSRecommendationEngine.normalizeExcludedTags(document.getElementById('set-recommendation-excluded-tags').value);
+        appSettings.recommendationExcludedFolders = window.CMSRecommendationEngine.normalizeExcludedFolders([...document.querySelectorAll('#set-recommendation-excluded-folders option:checked')].map(option => option.value));
         appSettings.theme = document.getElementById('set-theme').value; appSettings.colorMode = document.getElementById('set-color-mode').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
         appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.vocaloidCollectionEnabled = document.getElementById('set-vocaloid-collection').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.pocketFullscreenMode = document.getElementById('set-pocket-fullscreen-mode').value; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         appSettings.windowColorsLinked = true; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = appSettings.windowPanelColor; appSettings.windowTitleAlpha = appSettings.windowPanelAlpha;
@@ -1660,9 +1699,67 @@ window.CmsWebPlayer = {
         return { count: allItems.length, source };
     },
     getUseFirebase: () => Boolean(appSettings.useFirebase),
+    getNicoPlaybackDiagnostics,
+    setUseFirebase(value) {
+        appSettings.useFirebase = value === true; saveSettings();
+        if (appSettings.useFirebase) void window.CmsWebFirebase?.flushLibraryAdditions?.().catch(() => {});
+    },
+    getRemoteState() {
+        const clock = getPlaybackClock();
+        return { item: currentPlayingItem, playlist: currentPlaylist.map(item => ({ ...item, queueItemId: item._cmsQueueItemId })), index: currentIndex,
+            queueId: currentPlaybackContext?.queueId || '', queueRevision: currentPlaybackContext?.queueRevision || 0,
+            currentQueueItemId: currentPlayingItem?._cmsQueueItemId || '',
+            playing: playbackMediaState === 'playing', intent: playbackIntent, mediaState: playbackMediaState,
+            time: Number(clock.currentTime) || 0, duration: Number(clock.duration) || 0, volume: appSettings.pocketVolume,
+            folderId: currentFolderId, folders: musicLibrary.map(folder => ({ id: folder.id, name: folder.name })),
+            locked: !document.getElementById('pocket-overlay').classList.contains('hidden'), notice: nicoPlaybackNotice,
+            settings: Object.fromEntries(['theme','performanceMode','dataSaverMode','musicMode','showThumbnails','showClock','resumeLastPlayback','recommendationEnabled','recommendationLaunchBehavior','recommendationProfile','recommendationLength','recommendationLaunchScope'].map(key => [key, appSettings[key]])) };
+    },
+    remotePlayback(action, args = {}) {
+        let operation;
+        if (action === 'play') { if (!currentPlayingItem) throw new Error('先に曲を選んでください。'); togglePlay(args.playing); }
+        else if (action === 'next') operation = playNextVideo();
+        else if (action === 'previous') operation = playPrevVideo();
+        else if (action === 'seek') { const duration = getPlaybackClock().duration; if (!duration) throw new Error('再生時間を取得できません。'); const seconds = duration * args.ratio; if (currentPlayingItem?.site === 'niconico') requestNicoSeek(seconds); else ytPlayer?.seekTo(seconds, true); }
+        else if (action === 'volume') { appSettings.pocketVolume = args.volume; applyVolume(); saveSettings(); }
+        else if (action === 'lock') { const overlay = document.getElementById('pocket-overlay'); overlay.classList.toggle('hidden', !args.locked); }
+        else if (action === 'track') {
+            if (args.queueItemId) {
+                const index = CmsStatePolicy.resolveQueueSelection(currentPlaylist, currentPlaybackContext, args);
+                if (index < 0) throw new Error('再生キューが変更されました。一覧を更新してください。');
+                operation = loadVideo(index);
+                window.dispatchEvent(new Event('cms-state-change'));
+                return operation;
+            }
+            const keyOf = item => window.CMSRecommendationEngine.normalizeContentKey(item);
+            let songs = args.folderId === '__smart_queue' ? currentPlaylist.slice() : allItems.filter(item => !item.deleted && (args.folderId === '__all' || getStatsItemFolders(item).includes(args.folderId)));
+            const field = args.sort || 'custom';
+            songs.sort((a,b) => field === 'newest' ? b.safeDate-a.safeDate : field === 'oldest' ? a.safeDate-b.safeDate : field === 'title_asc' ? String(a.title).localeCompare(String(b.title)) : field === 'playCount_desc' ? b.safePlayCount-a.safePlayCount : a.originalIndex-b.originalIndex);
+            const matches = songs.map((item, index) => keyOf(item) === args.contentKey ? index : -1).filter(index => index >= 0);
+            const index = matches.length === 1 ? matches[0] : -1;
+            if (index < 0) throw new Error('曲が変更されました。一覧を更新してください。');
+            if (musicLibrary.some(folder => folder.id === args.folderId)) selectFolder(args.folderId);
+            operation = playTrackFromView(songs, index, args.folderId);
+        } else throw new Error('未対応の再生操作です。');
+        window.dispatchEvent(new Event('cms-state-change'));
+        return operation;
+    },
+    remoteSettings(values) {
+        const booleanKeys = ['performanceMode','dataSaverMode','musicMode','showThumbnails','showClock','resumeLastPlayback','recommendationEnabled'];
+        const choices = { theme:['modern','nerv','toyota','niconico'], recommendationProfile:['standard','stable','explore','rediscover'], recommendationLaunchBehavior:['panel','play'], recommendationLaunchScope:['library','currentFolder','favorites','vocaloid'] };
+        for (const [key, value] of Object.entries(values)) {
+            if (booleanKeys.includes(key) && typeof value === 'boolean' || choices[key]?.includes(value) || key === 'recommendationLength' && Number.isInteger(value) && value >= 1 && value <= 200) continue;
+            throw new Error('この設定はPCで操作してください。');
+        }
+        Object.assign(appSettings, values); saveSettings(); applyThemeSettings();
+        window.dispatchEvent(new Event('cms-recommendation-settings-change')); window.dispatchEvent(new Event('cms-state-change'));
+    },
     getRecords: () => allItems.slice(),
     getVisibleRecords: () => currentRenderSongs.slice(),
     getCurrentItem: () => currentPlayingItem,
+    getQueuePreview: (limit = 3) => ({queueId:currentPlaybackContext?.queueId || '',queueRevision:currentPlaybackContext?.queueRevision || 0,
+        items:currentPlaylist.slice(currentIndex + 1,currentIndex + 1 + Math.max(1,Math.min(10,Number(limit)||3))).map(item=>({
+            queueItemId:item._cmsQueueItemId,title:item.title,artist:item.channelName || item.uploader || '',thumbnail:item.thumbnail || ''}))}),
     getRecommendationAttempt: () => recommendationAttempt,
     getActiveRecommendationQueue: () => activeRecommendationQueue,
     getRecommendationLaunchSettings: () => ({
@@ -1671,8 +1768,30 @@ window.CmsWebPlayer = {
         scope: appSettings.recommendationLaunchScope || 'library',
         profile: appSettings.recommendationProfile || 'standard',
         length: appSettings.recommendationLength || 20,
-        excludedTags: window.CMSRecommendationEngine.normalizeExcludedTags(appSettings.recommendationExcludedTags)
+        mode: appSettings.recommendationMode || 'smartRandom',
+        confirmBeforePlay: appSettings.recommendationConfirmBeforePlay !== false,
+        excludedTags: window.CMSRecommendationEngine.normalizeExcludedTags(appSettings.recommendationExcludedTags),
+        excludedFolders: window.CMSRecommendationEngine.normalizeExcludedFolders(appSettings.recommendationExcludedFolders)
     }),
+    setRecommendationLaunchSettings(values = {}) {
+        if (Object.hasOwn(values, 'mode')) {
+            if (!['smartRandom','uniformRandom'].includes(values.mode)) throw new Error('選曲モードを確認してください。');
+        }
+        if (Object.hasOwn(values, 'profile') && !['standard','stable','explore','rediscover'].includes(values.profile)) throw new Error('選び方を確認してください。');
+        if (Object.hasOwn(values, 'length') && (!Number.isInteger(Number(values.length)) || Number(values.length) < 1 || Number(values.length) > 200)) throw new Error('曲数は1〜200で指定してください。');
+        if (Object.hasOwn(values, 'scope') && !(typeof values.scope === 'string' && (['library','currentFolder','favorites','vocaloid','site:youtube','site:niconico'].includes(values.scope) || /^folder:.{1,2000}$/.test(values.scope)))) throw new Error('選曲対象を確認してください。');
+        if (Object.hasOwn(values, 'confirmBeforePlay') && typeof values.confirmBeforePlay !== 'boolean') throw new Error('再生前の確認設定を確認してください。');
+        if (Object.hasOwn(values, 'mode')) appSettings.recommendationMode = values.mode;
+        if (Object.hasOwn(values, 'profile')) appSettings.recommendationProfile = values.profile;
+        if (Object.hasOwn(values, 'length')) appSettings.recommendationLength = Number(values.length);
+        if (Object.hasOwn(values, 'scope')) appSettings.recommendationLaunchScope = values.scope;
+        if (Object.hasOwn(values, 'confirmBeforePlay')) appSettings.recommendationConfirmBeforePlay = values.confirmBeforePlay;
+        if (Object.hasOwn(values, 'excludedTags')) appSettings.recommendationExcludedTags = window.CMSRecommendationEngine.normalizeExcludedTags(values.excludedTags);
+        if (Object.hasOwn(values, 'excludedFolders')) appSettings.recommendationExcludedFolders = window.CMSRecommendationEngine.normalizeExcludedFolders(values.excludedFolders);
+        saveSettings();
+        window.dispatchEvent(new Event('cms-recommendation-settings-change'));
+        return this.getRecommendationLaunchSettings();
+    },
     setRecommendationExcludedTags(tags) {
         appSettings.recommendationExcludedTags = window.CMSRecommendationEngine.normalizeExcludedTags(tags);
         saveSettings();
@@ -1680,6 +1799,12 @@ window.CmsWebPlayer = {
         return appSettings.recommendationExcludedTags.slice();
     },
     getRecommendationCurrentScope: () => ({ type: 'records', recordIds: (musicLibrary.find(folder => folder.id === currentFolderId)?.songs || []).map(item => item.id) }),
+    setRecommendationExcludedFolders(folders) {
+        appSettings.recommendationExcludedFolders = window.CMSRecommendationEngine.normalizeExcludedFolders(folders);
+        saveSettings();
+        window.dispatchEvent(new CustomEvent('cms-recommendation-settings-change', { detail: { excludedTagsOnly: true } }));
+        return appSettings.recommendationExcludedFolders.slice();
+    },
     getRecommendationVocaloidScope: () => ({ type: 'records', recordIds: allItems.filter(item => item?.vocaloidInfo?.matched === true).map(item => item.id) }),
     startRecommendation(items, context, queue) {
         activeRecommendationQueue=queue || null;
@@ -1700,9 +1825,11 @@ window.CmsWebPlayer = {
         if (queue.items?.length!==currentPlaylist.length+items.length ||
             currentPlaylist.some((item,index)=>keyOf(item)!==queue.items[index].contentKey) ||
             items.some((item,index)=>keyOf(item)!==queue.items[currentPlaylist.length+index].contentKey)) throw new Error('キューの順序が変わりました。再生成してください。');
-        currentPlaylist.push(...items);
+        const appended = CmsStatePolicy.createQueueItems(items, currentPlaybackContext.queueId)
+            .map((item, index) => ({ ...item, _cmsQueueItemId: `${currentPlaybackContext.queueId}:item:${currentPlaylist.length + index}` }));
+        currentPlaylist.push(...appended);
         activeRecommendationQueue={...queue,queueId:head.queueId,queueRevision:head.queueRevision+1};
-        currentPlaybackContext.queueRevision=activeRecommendationQueue.queueRevision;
+        currentPlaybackContext.queueRevision=(Number(currentPlaybackContext.queueRevision) || 1)+1;
         refreshPlaybackQueueFolder();
         updatePlayerUI(currentPlayingItem);
         window.dispatchEvent(new Event('cms-state-change'));
@@ -1719,9 +1846,10 @@ function startPlaybackFromCurrentLibrary() {
         const items = saved.finiteItems.map(ref => {
             const record = allItems.find(item => item.id === ref.id && window.CMSRecommendationEngine.normalizeContentKey(item) === ref.contentKey)
                 || allItems.find(item => window.CMSRecommendationEngine.normalizeContentKey(item) === ref.contentKey);
-            return record ? { ...record, _cmsPlayContext: ref._cmsPlayContext } : null;
+            return record ? { ...record, _cmsPlayContext: ref._cmsPlayContext, _cmsQueueId: ref._cmsQueueId, _cmsQueueItemId: ref._cmsQueueItemId } : null;
         }).filter(Boolean);
-        const index = items.findIndex(item => item.id === saved.itemId);
+        const occurrence = items.findIndex(item => item._cmsQueueItemId === saved.queueItemId);
+        const index = occurrence >= 0 ? occurrence : Math.min(Math.max(Number(saved.index) || 0, 0), items.length - 1);
         if (items.length) { startPlaylist(items, Math.max(0, index), { ...saved.playbackContext, restoredAttempt: saved.recommendationAttempt }); seekSavedPlaybackTime(saved); return true; }
     }
     restoreViewStateFromSession(saved);
@@ -1761,7 +1889,7 @@ function refreshPlaybackQueueFolder({ select = false } = {}) {
     buildLibrary();
     renderFolders();
     if (select && getPlaybackQueueFolder()) {
-        selectFolder(PLAYBACK_QUEUE_FOLDER_ID, { preserveScroll: true, skipSave: true, followPlayback: true });
+        selectFolder(PLAYBACK_QUEUE_FOLDER_ID, { preserveScroll: false, skipSave: true, followPlayback: true });
     } else if (currentFolderId === PLAYBACK_QUEUE_FOLDER_ID) {
         selectFolder(getPlaybackQueueFolder() ? PLAYBACK_QUEUE_FOLDER_ID : '__all', { preserveScroll: true, skipSave: true });
     }
@@ -1769,13 +1897,12 @@ function refreshPlaybackQueueFolder({ select = false } = {}) {
 
 function playTrackFromView(songs, index, folderId = currentFolderId) {
     if (folderId === PLAYBACK_QUEUE_FOLDER_ID) {
-        if (!currentPlaybackContext?.finite || !isSameMediaItem(songs[index], currentPlaylist[index])) return;
+        if (!currentPlaybackContext?.finite || !CmsStatePolicy.sameQueueItem(songs[index], currentPlaylist[index])) return;
         playbackIntent = 'playing';
         playbackMediaState = 'loading';
-        void loadVideo(index);
-        return;
+        return loadVideo(index);
     }
-    startPlaylist(songs, index, { folderId });
+    return startPlaylist(songs, index, { folderId });
 }
 
 function buildLibrary() {
@@ -2203,7 +2330,6 @@ function renderStats(historyData = { events: [], source: 'library', days: 90 }) 
         <article class="stats-summary-card"><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong><small title="${escapeHTML(note)}">${escapeHTML(note)}</small></article>`).join('');
     const highlights = [
         ['今日の視聴時間', formatStatsDuration(todaySeconds), model.history.length ? '履歴と動画時間から推定' : '履歴取得後に集計'],
-        ['平均完走率', '未計測', '現在の履歴に視聴位置なし'],
         ['未再生動画', `${Math.max(0, model.totalItems - model.playedItems).toLocaleString()}件`, '再生回数0の登録動画'],
         ['推定最長セッション', formatStatsDuration(longestSessionSeconds), '30分以内の連続記録']
     ];
@@ -2312,11 +2438,13 @@ async function restoreAnalysisExportDirectory() {
 }
 
 function setAnalysisExportStatus(message, state = '') {
-    const status = document.getElementById('analysis-export-status');
-    if (!status) return;
-    status.textContent = message;
-    if (state) status.dataset.state = state;
-    else delete status.dataset.state;
+    for (const id of ['analysis-export-status', 'settings-analysis-export-status']) {
+        const status = document.getElementById(id);
+        if (!status) continue;
+        status.textContent = message;
+        if (state) status.dataset.state = state;
+        else delete status.dataset.state;
+    }
 }
 
 function getAnalysisExportTimeText(value = Date.now()) {
@@ -2368,16 +2496,14 @@ async function buildLatestAnalysisPayload({ automatic = false } = {}) {
 
 async function saveAnalysisJSON({ automatic = false, notify = true } = {}) {
     if (analysisExportWriteInProgress) return false;
-    const button = document.getElementById('btn-export-analysis-json');
+    const buttons = ['btn-export-analysis-json', 'btn-settings-export-analysis-json'].map(id => document.getElementById(id)).filter(Boolean);
     let handle = analysisExportDirectoryHandle;
     if (!handle && automatic) return false;
-    if (!handle && window.showDirectoryPicker) {
-        setAnalysisExportStatus('先に「保存先」を押して、出力フォルダを選択してください。', 'warning');
-        if (notify) window.CmsUI?.notify('先に分析JSONの保存先フォルダを選択してください。', { type: 'warning', title: '分析用JSON' });
-        return false;
-    }
+    // Public Web exports use the browser's normal download destination. A
+    // directory grant from an older version must not make this button unusable.
+    if (!automatic) handle = null;
     analysisExportWriteInProgress = true;
-    if (button) button.disabled = true;
+    buttons.forEach(button => { button.disabled = true; });
     setAnalysisExportStatus(automatic ? '分析用JSONを自動更新しています…' : '最新の履歴を取得して保存しています…');
     try {
         if (handle) {
@@ -2416,28 +2542,16 @@ async function saveAnalysisJSON({ automatic = false, notify = true } = {}) {
         return false;
     } finally {
         analysisExportWriteInProgress = false;
-        if (button) button.disabled = false;
+        buttons.forEach(button => { button.disabled = false; });
     }
 }
 
 async function initializeAnalysisExport() {
-    analysisExportDirectoryHandle = await restoreAnalysisExportDirectory();
-    if (analysisExportDirectoryHandle) {
-        let lastSaved = 0;
-        try { lastSaved = Number(localStorage.getItem(ANALYSIS_EXPORT_LAST_SAVED_KEY)) || 0; } catch (_) {}
-        const permission = await analysisExportDirectoryHandle.queryPermission({ mode: 'readwrite' }).catch(() => 'prompt');
-        setAnalysisExportStatus(permission === 'granted'
-            ? `保存先: ${analysisExportDirectoryHandle.name} — 1時間ごとに自動更新します（CMSを開いている間）。`
-            : `保存先: ${analysisExportDirectoryHandle.name} — ブラウザの再許可が必要です。更新ボタンから保存してください。`,
-        permission === 'granted' ? '' : 'warning');
-        analysisExportNextAttemptAt = lastSaved ? lastSaved + ANALYSIS_EXPORT_INTERVAL_MS : Date.now() + ANALYSIS_EXPORT_INTERVAL_MS;
-    }
-    if (!analysisExportAutoTimer) {
-        analysisExportAutoTimer = window.setInterval(async () => {
-            if (!analysisExportDirectoryHandle || analysisExportWriteInProgress || !allItems.length || Date.now() < analysisExportNextAttemptAt) return;
-            await saveAnalysisJSON({ automatic: true, notify: false });
-        }, 60 * 1000);
-    }
+    // Directory auto-export remains a separate PC/extension capability. Do not
+    // prompt for a folder or run stale automatic writes in the public Web UI.
+    analysisExportDirectoryHandle = null;
+    if (analysisExportAutoTimer) { clearInterval(analysisExportAutoTimer); analysisExportAutoTimer = 0; }
+    setAnalysisExportStatus('「分析用JSONを更新・保存」で、最新データをダウンロードします。');
 }
 
 async function downloadAnalysisJSON() {
@@ -2456,6 +2570,7 @@ function setupStatsModal() {
     document.getElementById('btn-close-stats')?.addEventListener('click', close);
     document.getElementById('btn-refresh-stats')?.addEventListener('click', refreshStatsHistory);
     document.getElementById('btn-export-analysis-json')?.addEventListener('click', downloadAnalysisJSON);
+    document.getElementById('btn-settings-export-analysis-json')?.addEventListener('click', downloadAnalysisJSON);
     document.getElementById('btn-set-analysis-export-folder')?.addEventListener('click', chooseAnalysisExportFolder);
     initializeAnalysisExport();
     document.getElementById('stats-recent-list')?.addEventListener('click', event => {
@@ -2591,8 +2706,8 @@ function scrollTrackIndexIntoView(index, { force = false } = {}) {
 
 function updateActiveTrackUI({ ensureVisible = true } = {}) {
     if (!currentRenderSongs) return;
-    const followsAll=window.__cmsFollowPlaybackView && currentFolderId==='__all';
-    const tIdx = followsAll ? currentRenderSongs.findIndex(item=>isSameMediaItem(item,currentPlayingItem)) : CmsStatePolicy.activeIndex(currentRenderSongs, currentPlayingItem, currentPlaybackContext, currentFolderId);
+    const followsAll=false;
+    const tIdx = CmsStatePolicy.activeIndex(currentRenderSongs, currentPlayingItem, currentPlaybackContext, currentFolderId);
     document.querySelectorAll('.w-t-item').forEach(el => {
         el.classList.remove('active');
         el.removeAttribute('aria-current');
@@ -2736,7 +2851,7 @@ function setupUrlAdd() {
             const metadata = await fetchVideoUrlMetadata(info);
             const now = new Date().toISOString();
             const item = {
-                id: crypto.randomUUID(),
+                id: CmsStatePolicy.createIdentity('media'),
                 url: info.canonicalUrl,
                 title: metadata.title,
                 thumbnail: metadata.thumbnail,
@@ -2752,6 +2867,10 @@ function setupUrlAdd() {
                 safeDate: Date.now(),
                 safePlayCount: 0
             };
+            // Journal first, before changing the live library. The ID is fixed
+            // across retries; an unavailable cloud SDK must not lose this video.
+            const policy = await import('./shared/library-sync-policy.mjs');
+            policy.enqueueAdditions(localStorage, [item], [{ folderName: folder }]);
             allItems.push(item);
             if (!folderSettings.some(setting => setting.folderName === folder)) {
                 folderSettings.push({ folderName: folder, order: folderSettings.length });
@@ -2759,12 +2878,10 @@ function setupUrlAdd() {
             buildLibrary();
             renderFolders();
             selectFolder(folder);
-            await saveEditedLibraryTargets({ cloud: false });
-            if (appSettings.useFirebase && window.CmsWebFirebase?.saveLibrary && confirm('追加した動画をFirebaseにも保存しますか？')) {
-                await saveEditedLibraryTargets({ cloud: true });
-            }
-            setStatus(`追加しました：${item.title}`, 'success');
-            window.CmsUI?.notify(`「${item.title}」を追加しました。`, { type: 'success', title: '動画追加' });
+            await saveEditedLibraryTargets({ cloud: false }).catch(error => console.warn('[url-add] cache deferred; durable addition retained', error));
+            await window.CmsWebFirebase?.queueLibraryAdditions?.([item], folderSettings).catch(error => console.warn('[url-add] cloud deferred; durable addition retained', error));
+            setStatus(`PCに追加しました：${item.title}。Firebaseは送信待ちです。`, 'success');
+            window.CmsUI?.notify(`「${item.title}」をこのPCに保存しました。Firebaseへは接続後に自動送信します。`, { type: 'success', title: '動画追加' });
             setTimeout(close, 900);
         } catch (error) {
             const friendly = window.CmsUI?.friendlyError(error, '動画追加') || { message: error.message || String(error), detail: error?.stack || '' };
@@ -2872,6 +2989,8 @@ function createAnalysisExportPayload(historyData = latestStatsHistoryData) {
             title: String(item.title || '無題'),
             url,
             playCount: Math.max(0, Math.floor(Number(item.playCount) || 0)),
+            folders: [...new Set([...(Array.isArray(item.folders) ? item.folders : []), item.folder]
+                .filter(value => typeof value === 'string').map(value => value.trim()).filter(Boolean))],
             lastPlayedDate: formatAnalysisDate(item.lastPlayedAt)
         };
     });
@@ -2933,7 +3052,8 @@ function createLibraryExportPayload() {
 async function saveEditedLibraryTargets({ cloud = false } = {}) {
     const payload = createLibraryExportPayload();
     if (cloud && window.CmsWebFirebase?.saveLibrary) {
-        await window.CmsWebFirebase.saveLibrary(payload);
+        await window.CmsWebFirebase.saveLibrary({ ...payload, deletedIds: [...pendingLibraryDeletedIds] });
+        pendingLibraryDeletedIds.clear();
     } else {
         await window.CmsWebFirebase?.cacheImportedData(payload);
     }
@@ -2949,6 +3069,7 @@ function setupEditMode() {
     document.getElementById('btn-edit-delete').onclick = () => {
         if (selectedItems.size === 0) return;
         if (confirm(`${selectedItems.size}件のアイテムを削除しますか？`)) {
+            allItems.forEach(item => { if (selectedItems.has(item.originalIndex)) pendingLibraryDeletedIds.add(item.id); });
             allItems = allItems.filter(item => !selectedItems.has(item.originalIndex));
             selectedItems.clear(); buildLibrary(); selectFolder(currentFolderId || '__all');
         }
@@ -3110,11 +3231,15 @@ function handleProgressClick(e) {
 function startPlaylist(items, idx = 0, context = {}) {
     if (!items.length) return;
     const hadPlaybackQueue = Boolean(getPlaybackQueueFolder());
-    if (!['smartRandom','uniformRandom'].includes(context.source)) activeRecommendationQueue=null;
-    currentPlaybackContext = { ...context, folderId: context.finite ? PLAYBACK_QUEUE_FOLDER_ID : (context.folderId ?? currentFolderId ?? '__all'), source: context.finite ? context.source : (context.source === 'unknown' ? 'unknown' : 'manual') };
-    playbackIntent = 'playing'; playbackMediaState = 'loading'; currentPlaylist = items.slice(); currentIndex = idx;
+    if (!['smartRandom','uniformRandom','generatedFolder'].includes(context.source)) activeRecommendationQueue=null;
+    // Playing the same saved selection again is a new playback instance. Keep
+    // recommendation provenance separate so old remote commands cannot target it.
+    const queueId = CmsStatePolicy.createIdentity('queue');
+    currentPlaybackContext = { ...context, recommendationQueueId: context.recommendationQueueId || context.queueId || null,
+        queueId, queueRevision: 1, folderId: context.finite ? PLAYBACK_QUEUE_FOLDER_ID : (context.folderId ?? currentFolderId ?? '__all'), source: context.finite ? context.source : (context.source === 'unknown' ? 'unknown' : 'manual') };
+    playbackIntent = 'playing'; playbackMediaState = 'loading'; currentPlaylist = CmsStatePolicy.createQueueItems(items, queueId); currentIndex = idx;
     if (context.finite || hadPlaybackQueue) refreshPlaybackQueueFolder({ select: Boolean(context.finite) });
-    void loadVideo(currentIndex);
+    return loadVideo(currentIndex);
 }
 function movePlaylist(offset) {
     if (!currentPlaylist.length || isTransitioning) return;
@@ -3130,13 +3255,74 @@ function movePlaylist(offset) {
     if (!currentPlaybackContext?.finite) currentPlaybackContext = { ...currentPlaybackContext, source: 'sequential' };
     cancelPlaybackWatchdog(); playbackIntent = 'playing'; playbackMediaState = 'loading'; isTransitioning = true;
     setTimeout(() => { isTransitioning = false; }, 1000);
-    currentIndex = (next + currentPlaylist.length) % currentPlaylist.length; void loadVideo(currentIndex);
+    currentIndex = (next + currentPlaylist.length) % currentPlaylist.length;
+    return loadVideo(currentIndex);
 }
-function playNextVideo() { movePlaylist(1); }
-function playPrevVideo() { movePlaylist(-1); }
+function playNextVideo() { return movePlaylist(1); }
+function playPrevVideo() { return movePlaylist(-1); }
 
 function getYouTubeId(url) { try { return new URL(url).searchParams.get('v') || url.split('/').pop(); } catch(e) { const m = url.match(/[?&]v=([^&]+)/); return m ? m[1] : url.split('/').pop(); } }
-function getNicoId(url) { return url.split('?')[0].split('/').pop(); }
+function getNicoId(url) { return window.CmsNicoPlayback.videoId(url); }
+let nicoReadinessTimer = 0;
+let nicoPlaybackNotice = '';
+let nicoLastEvent = '';
+let nicoLastError = null;
+let nicoFrameLoaded = false;
+function getNicoPlaybackDiagnostics() {
+    const videoId = currentPlayingItem?.site === 'niconico' ? getNicoId(currentPlayingItem.url) : '';
+    return {
+        videoId, watchUrl: videoId ? `https://www.nicovideo.jp/watch/${videoId}` : '',
+        pageOrigin: window.location?.origin || '', playerOrigin: 'https://embed.nicovideo.jp',
+        frameLoaded: nicoFrameLoaded, apiReady: nicoPlayerReady, playbackStarted: nicoPlaybackStarted,
+        intent: playbackIntent, mediaState: playbackMediaState, lastEvent: nicoLastEvent,
+        error: nicoLastError ? { ...nicoLastError } : null,
+        pageHasUserActivation: navigator.userActivation?.hasBeenActive ?? null
+    };
+}
+function revealNicoPlayer() {
+    appSettings.musicMode = false; saveSettings(); applyThemeSettings();
+    document.getElementById('widget-player')?.classList.remove('window-minimized', 'window-closed');
+    document.getElementById('widget-player')?.scrollIntoView({ block: 'nearest' });
+    document.getElementById('nico-player')?.focus();
+}
+function showNicoPlaybackNotice(message) {
+    nicoPlaybackNotice = message;
+    let notice = document.getElementById('nico-playback-notice');
+    if (!notice) {
+        notice = document.createElement('div'); notice.id = 'nico-playback-notice'; notice.setAttribute('role', 'status');
+        notice.style.cssText = 'padding:10px;background:#15232f;color:#fff;line-height:1.6;font-size:13px;flex:none;max-height:180px;overflow:auto;';
+        // The player panel is clipped and is hidden entirely in music mode.
+        document.getElementById('widget-controls').prepend(notice);
+    }
+    notice.hidden = !message; notice.replaceChildren();
+    if (message) {
+        const text = document.createElement('span'); text.textContent = message; notice.append(text);
+        for (const [label, action] of [['再生を試す', () => togglePlay(true)], ['プレーヤーを表示', revealNicoPlayer], ['次の曲', playNextVideo]]) {
+            const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+            button.style.cssText = 'margin:4px;padding:8px;'; button.onclick = action; notice.append(button);
+        }
+        const diagnostics = getNicoPlaybackDiagnostics();
+        if (diagnostics.watchUrl) {
+            const link = document.createElement('a'); link.textContent = '公式ページで確認';
+            link.href = diagnostics.watchUrl; link.target = '_blank'; link.rel = 'noopener';
+            link.style.cssText = 'color:inherit;margin:4px;display:inline-block;'; notice.append(link);
+        }
+        const details = document.createElement('details');
+        const summary = document.createElement('summary'); summary.textContent = '診断情報（共有用）';
+        const output = document.createElement('pre'); output.textContent = JSON.stringify(diagnostics, null, 2);
+        output.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;';
+        details.append(summary, output); notice.append(details);
+    }
+    window.dispatchEvent(new Event('cms-state-change'));
+}
+function waitForNicoPlayback(serial, message) {
+    clearTimeout(nicoReadinessTimer);
+    nicoReadinessTimer = setTimeout(() => {
+        if (serial !== recommendationLoadSerial || currentPlayingItem?.site !== 'niconico' || playbackMediaState === 'playing' || playbackIntent !== 'playing') return;
+        playbackMediaState = 'waiting'; isPlaying = false; stopProgressTimer(); cancelPlaybackWatchdog(); updatePlayPauseIcon();
+        showNicoPlaybackNotice(message);
+    }, 15000);
+}
 
 function createYouTubePlayer(vId) {
     if (window.YT && window.YT.Player) {
@@ -3194,7 +3380,7 @@ async function loadVideo(idx) {
             if (idx+1<currentPlaylist.length) return loadVideo(idx+1);
             movePlaylist(1); return;
         }
-        selected={...fresh,_cmsPlayContext:selected._cmsPlayContext || null};
+        selected={...fresh,_cmsPlayContext:selected._cmsPlayContext || null,_cmsQueueId:selected._cmsQueueId,_cmsQueueItemId:selected._cmsQueueItemId};
         currentPlaylist[idx]=selected;
     }
     try {
@@ -3209,8 +3395,10 @@ async function loadVideo(idx) {
         // Playback remains available, but an unpersisted attempt must not be counted.
         recommendationAttempt = null; console.error('[recommendation] attempt unavailable', error);
     }
-    cancelPlaybackWatchdog();
-    currentIndex = idx; isTransitioning = false; currentPlayingItem = currentPlaylist[idx]; playbackIntent = 'playing'; playbackMediaState = 'loading'; isPlaying = true; nicoDuration = 0; nicoCurrentTime = 0; nicoEndedFlag = false; nicoPlayerReady = false; nicoPendingSeekSeconds = null; nicoSeekAttemptCount = 0; nicoSeekLastSentAt = 0;
+    cancelPlaybackWatchdog(); clearTimeout(nicoReadinessTimer); showNicoPlaybackNotice('');
+    currentIndex = idx; isTransitioning = false; currentPlayingItem = currentPlaylist[idx]; playbackIntent = 'playing'; playbackMediaState = 'loading'; isPlaying = currentPlayingItem.site !== 'niconico'; nicoDuration = 0; nicoCurrentTime = 0; nicoEndedFlag = false; nicoPlayerReady = false; nicoPlaybackStarted = false; nicoPendingSeekSeconds = null; nicoSeekAttemptCount = 0; nicoSeekLastSentAt = 0;
+    userTrackScrollHoldUntil = 0;
+    nicoLastEvent = ''; nicoLastError = null; nicoFrameLoaded = false;
     playbackWatchdogToken = `${Date.now()}:${idx}:${currentPlayingItem.id || currentPlayingItem.url || currentPlayingItem.title || ''}`;
     savePlaybackState({ force: true, currentTime: 0 });
     updatePlayerUI(currentPlayingItem); updateActiveTrackUI();
@@ -3224,7 +3412,16 @@ async function loadVideo(idx) {
     } else {
         if (ytPlayer) { try { ytPlayer.destroy(); } catch(e){} ytPlayer = null; }
         c.innerHTML = ''; 
-        if (currentPlayingItem.site === 'niconico') { const nId = getNicoId(currentPlayingItem.url); setTimeout(() => { const i = document.createElement('iframe'); i.id = 'nico-player'; i.src = `https://embed.nicovideo.jp/watch/${nId}?jsapi=1&playerId=1&loop=0`; i.setAttribute('allow', 'autoplay; fullscreen; encrypted-media'); i.style.width = '100%'; i.style.height = '100%'; i.style.border = 'none'; c.appendChild(i); }, 50); } 
+        if (currentPlayingItem.site === 'niconico') {
+            const nId = getNicoId(currentPlayingItem.url);
+            if (!nId) { playbackMediaState = 'error'; showNicoPlaybackNotice('ニコニコの動画URLを確認してください。'); return; }
+            const i = document.createElement('iframe'); i.id = 'nico-player'; i.title = 'ニコニコ動画プレーヤー';
+            i.src = `https://embed.nicovideo.jp/watch/${nId}?jsapi=1&playerId=1&loop=0`;
+            i.setAttribute('allow', 'autoplay; fullscreen; encrypted-media'); i.referrerPolicy = 'strict-origin-when-cross-origin';
+            i.addEventListener('load', () => { if (serial === recommendationLoadSerial && i === document.getElementById('nico-player')) nicoFrameLoaded = true; });
+            i.style.cssText = 'width:100%;height:100%;border:none'; c.appendChild(i);
+            waitForNicoPlayback(serial, 'ニコニコの準備を確認できません。PCの埋め込み画面とネット接続を確認してください。');
+        }
         else { c.innerHTML = `<iframe src="${currentPlayingItem.url}" allowfullscreen allow="autoplay" style="width:100%; height:100%; border:none;"></iframe>`; }
     }
     schedulePlaybackRecovery();
@@ -3232,9 +3429,15 @@ async function loadVideo(idx) {
 }
 
 function handleNicoMessage(e) {
-    if (e.origin !== 'https://embed.nicovideo.jp' || !currentPlayingItem || currentPlayingItem.site !== 'niconico' || !e.data || !e.data.eventName) return;
+    if (currentPlayingItem?.site !== 'niconico' || !window.CmsNicoPlayback.messageMatches(e, document.getElementById('nico-player'))) return;
     const ev = e.data.eventName; const d = e.data.data;
-    if (ev === 'loadComplete') { const i = document.getElementById('nico-player'); if (i && i.contentWindow) { nicoPlayerReady = true; setTimeout(() => { i.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: "play" }, 'https://embed.nicovideo.jp'); postPendingNicoSeek(); applyVolume(); startProgressTimer(); startSilentAudio(); schedulePlaybackRecovery(); }, 150); } }
+    nicoLastEvent = ev.slice(0, 80);
+    if (ev === 'loadComplete') {
+        const i = document.getElementById('nico-player'); nicoPlayerReady = true;
+        if (playbackIntent === 'playing') i.contentWindow.postMessage({ sourceConnectorType: 1, playerId: '1', eventName: 'play' }, 'https://embed.nicovideo.jp');
+        postPendingNicoSeek(); applyVolume();
+        waitForNicoPlayback(recommendationLoadSerial, '再生開始を確認できません。初回はPCのニコニコ画面内の再生ボタンを押してください。動画側の制限がある場合は公式ページでも確認してください。');
+    }
     else if (ev === 'playerMetadataChange') {
         if (Number.isFinite(Number(d?.duration)) && Number(d.duration) > 0) nicoDuration = Number(d.duration) / 1000;
         if (d?.currentTime !== undefined && d?.currentTime !== null && Number.isFinite(Number(d.currentTime))) {
@@ -3249,8 +3452,35 @@ function handleNicoMessage(e) {
             armPlaybackWatchdog(false);
         }
     }
-    else if (ev === 'playerStatusChange') { const s = d.playerStatus; if (s === 4 && !nicoEndedFlag) { completeWebPlayback('niconico-ended'); } else if (s === 2) { playbackIntent = 'playing'; playbackMediaState = 'playing'; isPlaying = true; updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); armPlaybackWatchdog(true); } else if (s === 3) { if (document.visibilityState !== 'visible' && playbackIntent === 'playing') { playbackMediaState = 'suspended'; isPlaying = true; stopProgressTimer(); savePlaybackState({ force: true, currentTime: nicoCurrentTime }); } else { playbackIntent = 'paused'; playbackMediaState = 'paused'; isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); cancelPlaybackWatchdog(); } } }
-    else if (ev === 'error') schedulePlaybackErrorSkip(5000);
+    else if (ev === 'playerStatusChange') {
+        const status = Number(d?.playerStatus);
+        if (status === 4 && !nicoEndedFlag) { completeWebPlayback('niconico-ended'); }
+        else if (status === 2) {
+            nicoPlaybackStarted = true;
+            clearTimeout(nicoReadinessTimer); showNicoPlaybackNotice('');
+            playbackIntent = 'playing'; playbackMediaState = 'playing'; isPlaying = true;
+            updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); armPlaybackWatchdog(true);
+        } else if (status === 3) {
+            if (!nicoPlaybackStarted && playbackIntent === 'playing') {
+                // An initial paused player has not acknowledged the play request yet.
+                // Keep that request for loadComplete/recovery, and keep its timeout active.
+                isPlaying = false; updatePlayPauseIcon(); stopProgressTimer(); cancelPlaybackWatchdog();
+            } else if (document.visibilityState !== 'visible' && playbackIntent === 'playing') {
+                playbackMediaState = 'suspended'; isPlaying = true; stopProgressTimer();
+                savePlaybackState({ force: true, currentTime: nicoCurrentTime });
+            } else {
+                playbackIntent = 'paused'; playbackMediaState = 'paused'; isPlaying = false;
+                updatePlayPauseIcon(); stopProgressTimer(); stopSilentAudio(); cancelPlaybackWatchdog();
+            }
+        }
+    }
+    else if (ev === 'error') {
+        const error = d ?? e.data;
+        nicoLastError = window.CmsNicoPlayback.errorDetails(error);
+        clearTimeout(nicoReadinessTimer); playbackMediaState = 'error'; isPlaying = false;
+        stopProgressTimer(); stopSilentAudio(); cancelPlaybackWatchdog(); updatePlayPauseIcon();
+        showNicoPlaybackNotice('ニコニコを再生できません：' + window.CmsNicoPlayback.errorText(error));
+    }
 }
 
 function togglePlay(fPlay) {
@@ -3262,7 +3492,7 @@ function togglePlay(fPlay) {
     if (isPlaying) { startProgressTimer(); startSilentAudio(); applyVolume(); armPlaybackWatchdog(true); } else { stopProgressTimer(); stopSilentAudio(); cancelPlaybackWatchdog(); }
     savePlaybackState({ force: true, currentTime: getPlaybackClock().currentTime });
     if (currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.playVideo === 'function') { if (isPlaying) ytPlayer.playVideo(); else ytPlayer.pauseVideo(); } 
-    else if (currentPlayingItem.site === 'niconico') { const i = document.getElementById('nico-player'); if (i && i.contentWindow) i.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: isPlaying ? "play" : "pause" }, 'https://embed.nicovideo.jp'); }
+    else if (currentPlayingItem.site === 'niconico') { const requested = isPlaying; const i = document.getElementById('nico-player'); if (i && i.contentWindow) i.contentWindow.postMessage({ sourceConnectorType: 1, playerId: "1", eventName: requested ? "play" : "pause" }, 'https://embed.nicovideo.jp'); if (requested) { isPlaying = false; stopProgressTimer(); updatePlayPauseIcon(); waitForNicoPlayback(recommendationLoadSerial, 'PCのニコニコ画面内の再生ボタンで、再生を許可してください。'); } }
 }
 
 function updatePlayerUI(i) {
