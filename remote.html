@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="dark">
+  <title>CMS Remote — PCの音楽を操作</title>
+  <link rel="stylesheet" href="remote-client.css?v=2026103102">
+  <script src="remote-client.js?v=2026103102" defer></script>
+  <script src="remote-mobile.js?v=2026103102" defer></script>
+</head>
+<body>
+  <header class="remote-topbar">
+    <div class="remote-brand"><span class="remote-brand-icon" aria-hidden="true">⌁</span><div><strong>CMS <span>REMOTE</span></strong><small id="remote-status" role="status">接続を待っています</small></div></div>
+    <div class="remote-actions">
+      <button id="remote-refresh" type="button" title="PCの表示を更新" aria-label="PCの表示を更新" disabled>↻</button>
+      <button id="remote-disconnect" type="button" title="接続を解除" aria-label="接続を解除" disabled>⏻</button>
+    </div>
+  </header>
+  <div class="remote-context" id="remote-context"><span class="remote-connection-dot" id="remote-connection-dot"></span><span id="remote-context-text">音はPCから再生されます</span><button id="remote-layout" type="button" aria-pressed="false" hidden>PC表示</button></div>
+  <main id="remote-main">
+    <section class="remote-welcome" id="remote-welcome">
+      <div class="remote-welcome-icon" aria-hidden="true">♫</div>
+      <p class="remote-eyebrow">YOUR PC. YOUR MUSIC.</p>
+      <h1>手元から、PCの音楽を。</h1>
+      <p>PCのCMSで「▣ リモコン」を開き、QRコードを読み取ってください。同じネットワーク内のブラウザから操作できます。</p>
+      <form id="remote-pair-form" autocomplete="off">
+        <label for="remote-invite">接続リンク・接続コードを入力</label>
+        <input id="remote-invite" type="text" inputmode="url" placeholder="PCに表示された接続リンク" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="4096" required>
+        <label class="remote-label" for="remote-device-label">このブラウザの名前（任意）</label>
+        <input id="remote-device-label" type="text" placeholder="例：手元のスマホ" autocomplete="off" maxlength="60">
+        <button class="remote-primary" id="remote-connect" type="submit">PCへ接続をリクエスト <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="remote-note">接続にはPC側の承認が必要です。この端末で音声再生やFirebaseへのログインは行いません。</p>
+    </section>
+    <section class="remote-waiting" id="remote-waiting" hidden aria-live="polite">
+      <div class="remote-waiting-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
+      <h1 id="remote-waiting-title">PCの承認を待っています</h1>
+      <p id="remote-waiting-text">PCに表示された接続リクエストを承認してください。</p>
+      <button id="remote-cancel" type="button" class="remote-secondary">接続を取り消す</button>
+    </section>
+    <section class="remote-view" id="remote-view" hidden aria-label="PCのCMS遠隔操作画面">
+      <section id="remote-mobile" hidden aria-label="CMS A1 モバイルリモコン"></section>
+      <iframe id="remote-frame" title="PCのCMS操作画面" sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>
+      <div class="remote-view-curtain" id="remote-view-curtain" hidden><span class="remote-spinner" aria-hidden="true"></span><strong id="remote-curtain-text">再接続しています…</strong><p>接続が戻るまで操作を停止します。操作を自動で再送することはありません。</p></div>
+    </section>
+  </main>
+  <div class="remote-toast" id="remote-toast" role="status" aria-live="polite" hidden></div>
+  <noscript>遠隔操作にはJavaScriptを有効にしてください。</noscript>
+</body>
+</html>
