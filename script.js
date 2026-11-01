@@ -1401,7 +1401,7 @@ function setupSettingsModal() {
     const recommendationHeading = recommendationToggleRow.previousElementSibling;
     const recommendationOptions = document.getElementById('set-recommendation-behavior').closest('.setting-row');
     smartTab.append(recommendationHeading, recommendationToggleRow, recommendationOptions);
-    advancedTab.prepend(document.getElementById('settings-data-management'), document.getElementById('set-data-saver').closest('.setting-row'));
+    advancedTab.prepend(document.getElementById('settings-data-management'), document.getElementById('set-data-saver').closest('.setting-row'), document.getElementById('set-use-firebase').closest('.setting-row'));
     window.setupSettingsRefinement?.();
     for (const id of ['set-force-pc-layout', 'set-window-mode', 'set-desktop-folder-width', 'set-clock-type']) {
         document.getElementById(id)?.closest('.setting-row')?.classList.add('settings-pc-only');
