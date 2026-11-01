@@ -25,6 +25,28 @@ body.cms-experience-v3 {--experience-font:'Noto Sans JP','Yu Gothic UI','Meiryo'
 body.cms-experience-v3.theme-sf {--experience-font:'Rajdhani','Noto Sans JP','Yu Gothic UI',sans-serif;}
 body.cms-experience-v3.theme-nerv {--experience-font:'Oswald','Noto Serif JP','Yu Mincho','MS Mincho',serif;}
 body.cms-experience-v3 :is(button,input,select,textarea) {font-family:inherit;}
+html body.cms-experience-v3 :is(#main-app,#pocket-overlay,#settings-modal,.cms-rec-overlay) :not(i):not(svg):not(path):not(cms-icon):not(#clock-time):not(#pocket-clock-text) {font-family:var(--experience-font)!important;}
+html body.cms-experience-v3:not(.settings-assist) #settings-modal :is(.setting-section-label,.setting-help,.device-settings-note) {display:none!important;}
+html body.cms-experience-v3 .settings-assist-toggle {display:flex;align-items:center;gap:8px;padding:8px 16px;font-size:.9rem;}
+html body.cms-experience-v3 .settings-category {margin:12px 0;border:1px solid var(--experience-edge);border-radius:8px;padding:10px 14px;}
+html body.cms-experience-v3 .settings-category>summary {cursor:pointer;font-weight:700;padding:5px 0;}
+html body.cms-experience-v3 .settings-category .setting-row {border:0!important;margin:0!important;padding:12px 0!important;gap:8px;}
+html body.cms-experience-v3 .cms-background-settings {border:0;padding:0;margin:0;min-width:0;}
+html body.cms-experience-v3 .cms-background-settings label {display:block;margin:10px 0;}
+html body.cms-experience-v3 .cms-background-settings input[type=range] {width:100%;}
+html body.cms-experience-v3 #settings-modal .settings-window {width:min(960px,96vw)!important;max-height:94dvh!important;}
+html body.cms-experience-v3 #settings-modal {align-items:center!important;justify-content:center!important;}
+html body.cms-experience-v3 .settings-category {align-self:start;}
+html body.cms-experience-v3 .settings-category:has(>.cms-background-settings) {grid-column:1/-1;}
+html body.cms-experience-v3 .cms-background-settings legend {display:none;}
+html body.cms-experience-v3 #settings-modal .setting-scroll-area {min-height:0;overflow:auto;}
+html body.cms-experience-v3.window-mode .wm-panel :is(.w-f-name,.track-title-text,.marquee-content,.cms-rec-open,.window-title,.cms-next-track small) {font-size:calc(16px * var(--cms-window-scale,1))!important;}
+html body.cms-experience-v3.window-mode .wm-panel .cms-next-track strong {font-size:calc(18px * var(--cms-window-scale,1))!important;}
+html body.cms-experience-v3.window-mode .wm-panel #widget-title {font-size:calc(22px * var(--cms-window-scale,1))!important;}
+html body.cms-experience-v3.window-mode .wm-panel button {font-size:calc(15px * var(--cms-window-scale,1))!important;}
+html body.cms-experience-v3.is-mobile #widget-library {background:rgba(var(--experience-surface),var(--panel-alpha,.5))!important;box-shadow:none!important;}
+html body.cms-redesign.cms-studio.cms-experience-v3.is-mobile :is(#mobile-tools-wrapper,.m-folder-header,#right-pane,#widget-track-list-wrapper,.library-lists-container) {background:transparent!important;box-shadow:none!important;backdrop-filter:none!important;}
+html body.cms-experience-v3.is-mobile #mobile-tools-wrapper .m-folder-header {background:transparent!important;}
 body.cms-experience-v3.theme-nerv :is(h1,h2,h3,.pc-appbar-brand,.window-title,.pc-section-heading) {font-weight:800;letter-spacing:.06em;}
 body.cms-experience-v3.theme-nerv { --experience-accent:#ff9800; --experience-edge:#f3a13880; --experience-surface:18,21,25; --experience-radius:2px; --experience-muted:#c3cab5; }
 body.cms-experience-v3.color-light { --experience-surface:240,246,253; --experience-text:#172c41; --experience-muted:#435d77; --experience-edge:#345b805c; --experience-accent-ink:#fff; }

@@ -1,5 +1,5 @@
 const defaultSettings = {
-    theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, nicoBoost: 1.0,
+    theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, nicoBoost: 1.0, settingAssist: false, artworkBackgroundMode: null, artworkBlur: null,
     baseFontSize: 100, pcLeftWidth: 350, desktopLeftRatio: 36, desktopFolderWidth: 260, desktopPlayerWidth: 480, desktopPlayerHeight: 360, desktopControlsHeight: 200, desktopTrackHeight: 76, showClock: true, clockFeatureV1: true, clockType: 'digital1', pocketClockType: 'digital1', showThumbnails: true,
     performanceMode: false, dataSaverMode: false, colorMode: 'system',
     customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff', blurBaseColor: '#000000',
@@ -1296,7 +1296,7 @@ function setupPocketLayoutDrag() {
                     handle.removeEventListener('pointermove', resize);
                     handle.removeEventListener('pointerup', endResize);
                     handle.removeEventListener('pointercancel', endResize);
-                    saveSettings();
+                    // Keep the layout draft until the settings Apply button.
                 };
                 handle.addEventListener('pointermove', resize);
                 handle.addEventListener('pointerup', endResize);
@@ -1318,12 +1318,12 @@ function setupPocketLayoutDrag() {
                 const x = Math.max(0, Math.min(100, safeX / rect.width * 100)); const y = Math.max(0, Math.min(100, safeY / rect.height * 100));
                 el.style.left = `${x}%`; el.style.top = `${y}%`; appSettings.pocketLayout[key] = { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) };
             };
-            const end = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', end); el.removeEventListener('pointercancel', end); saveSettings(); };
+            const end = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', end); el.removeEventListener('pointercancel', end); };
             el.addEventListener('pointermove', move); el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
         });
     });
     document.getElementById('pocket-layout-done').addEventListener('click', (e) => {
-        e.stopPropagation(); overlay.classList.remove('layout-editing'); overlay.classList.add('hidden'); document.body.classList.remove('pocket-active'); e.currentTarget.classList.add('hidden'); saveSettings(); applyPocketAppearance();
+        e.stopPropagation(); overlay.classList.remove('layout-editing'); overlay.classList.add('hidden'); document.body.classList.remove('pocket-active'); e.currentTarget.classList.add('hidden'); applyPocketAppearance(); window.dispatchEvent(new Event('cms-settings-editor-return'));
     });
 }
 
@@ -1364,9 +1364,9 @@ function beginBackgroundPositionEditor() {
         window.removeEventListener('pointercancel', up, true);
         layer.remove();
         hint.remove();
-        saveSettings();
         applyThemeSettings();
         applyPocketAppearance();
+        window.dispatchEvent(new Event('cms-settings-editor-return'));
     };
     const down = (e) => {
         if (e.target === hint) return;
@@ -1402,6 +1402,7 @@ function setupSettingsModal() {
     const recommendationOptions = document.getElementById('set-recommendation-behavior').closest('.setting-row');
     smartTab.append(recommendationHeading, recommendationToggleRow, recommendationOptions);
     advancedTab.prepend(document.getElementById('settings-data-management'), document.getElementById('set-data-saver').closest('.setting-row'));
+    window.setupSettingsRefinement?.();
     for (const id of ['set-force-pc-layout', 'set-window-mode', 'set-desktop-folder-width', 'set-clock-type']) {
         document.getElementById(id)?.closest('.setting-row')?.classList.add('settings-pc-only');
     }
@@ -1433,12 +1434,26 @@ function setupSettingsModal() {
         saveStatus.classList.remove('is-saved');
     };
     const markSettingsDirty = () => { settingsManualDirty = true; updateSettingsDirtyState(); };
+    window.addEventListener('cms-settings-editor-return',()=>{
+        document.getElementById('set-bg-position').value=appSettings.bgPosition;
+        for(const key of ['clock','art','title','progress','controls','unlock']){
+            const value=Number(appSettings.pocketLayoutScale?.[key]||100);
+            document.getElementById(`set-pocket-scale-${key}`).value=value;
+            document.getElementById(`pocket-scale-${key}-val`).textContent=value;
+        }
+        window.CmsUI?.openDialog(modal,{labelledBy:'settings-title',onEscape:()=>closeSettings({restore:true})});
+        markSettingsDirty();
+    });
     const closeSettings = ({ restore = false } = {}) => {
         if (restore && settingsOpenSnapshot) {
             appSettings = { ...settingsOpenSnapshot };
+            window.CmsArtworkSettings?.open(appSettings);
+            document.body.classList.toggle('settings-assist',Boolean(appSettings.settingAssist));
+            applyThemeSettings();applyPocketAppearance();
             window.CmsDesktopLargeUI?.refreshSizing();
         }
         window.CmsUI?.closeDialog(modal);
+        window.CmsArtworkSettings?.finish();
         settingsBaseline = '';
         settingsManualDirty = false;
         settingsOpenSnapshot = null;
@@ -1451,6 +1466,8 @@ function setupSettingsModal() {
     document.getElementById('btn-open-settings').onclick = () => {
         updateDeviceSettingsVisibility();
         settingsOpenSnapshot = JSON.parse(JSON.stringify(appSettings));
+        window.CmsArtworkSettings?.open(appSettings);
+        const assist=document.getElementById('set-setting-assist');if(assist){assist.checked=Boolean(appSettings.settingAssist);assist.dispatchEvent(new Event('change'));}
         window.CmsDesktopLargeUI?.refreshSizing();
         document.getElementById('set-theme').value = appSettings.theme; document.getElementById('set-color-mode').value = appSettings.colorMode; document.getElementById('set-font-size').value = appSettings.baseFontSize; document.getElementById('font-val').textContent = appSettings.baseFontSize;
         document.getElementById('set-bg-position').value = appSettings.bgPosition; document.getElementById('set-bg-size').value = appSettings.bgSize;
@@ -1561,9 +1578,9 @@ function setupSettingsModal() {
     };
     document.getElementById('btn-reset-pocket-layout').onclick = () => {
         appSettings.pocketLayout = {};
-        saveSettings();
+        markSettingsDirty();
         applyPocketAppearance();
-        window.CmsUI?.notify('ロック画面を標準配置へ戻しました。この操作はすぐに保存されます。', { type: 'success' });
+        window.CmsUI?.notify('ロック画面を標準配置へ戻しました。保存して適用してください。', { type: 'info' });
     };
 
     document.getElementById('btn-save-settings').onclick = async () => {
@@ -1588,6 +1605,8 @@ function setupSettingsModal() {
         const fInput = document.getElementById('set-bg-img'); 
         if (fInput.files.length > 0) { await saveBgImageToDB(fInput.files[0]); }
         
+        window.CmsArtworkSettings?.commit(appSettings);
+        appSettings.settingAssist=document.getElementById('set-setting-assist')?.checked===true;
         saveSettings(); applyVolume(); updateLayoutMode(); applyThemeSettings(); applyWindowMode(); scheduleMarqueeUpdate();
         window.dispatchEvent(new Event('cms-recommendation-settings-change'));
         if (previousVocaloidCollectionEnabled !== Boolean(appSettings.vocaloidCollectionEnabled)) {
