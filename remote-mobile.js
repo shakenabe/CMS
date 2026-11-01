@@ -126,7 +126,7 @@
   const cloud=el('section',null,settings);cloud.className='native-cloud';el('h3','Firebaseライブラリ',cloud);el('p','',cloud).id='native-cloud-status';el('small','',cloud).id='native-cloud-time';
   button('PCで更新を確認',()=>void send('cloud.refresh'),cloud).id='native-cloud-refresh';
   el('p','Google接続はPCで一度行います。JSON読み込みはPCの手動・復旧用として残っています。',cloud);
-  const theme=select('表示スタイル',[['modern','P1 / A1'],['nerv','P2'],['toyota','P3'],['niconico','P4']],settings,'native-theme');theme.onchange=()=>void send('settings',{theme:theme.value});
+  const theme=select('テーマ',[['sf','SF'],['modern','現代風'],['nerv','EVA風']],settings,'native-theme');theme.onchange=()=>void send('settings',{theme:theme.value});
   const settingsControls=[];
   for(const [key,label] of [['performanceMode','軽量化モード'],['dataSaverMode','通信量を抑える'],['musicMode','音楽モード'],['showThumbnails','サムネイルを表示'],['showClock','時計を表示'],['resumeLastPlayback','前回の再生位置を保持']]) {
     const wrap=el('label',null,settings),input=el('input',null,wrap);input.type='checkbox';input.dataset.setting=key;el('span',label,wrap);input.onchange=()=>void send('settings',{[key]:input.checked});settingsControls.push(input);

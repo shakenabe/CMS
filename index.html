@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>CMS Web Player</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;800&amp;family=Noto+Serif+JP:wght@500;700;900&amp;family=Oswald:wght@500;700&amp;family=Rajdhani:wght@500;700&amp;display=swap">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="legacy-base.css?v=2026092401">
@@ -11,6 +12,7 @@
     <link rel="stylesheet" href="desktop-workspace.css?v=2026103101">
     <link rel="stylesheet" href="remote-host.css?v=2026103101">
     <link rel="stylesheet" href="player-studio.css?v=2026103101">
+    <link rel="stylesheet" href="experience-v3.css?v=2026110101">
 </head>
 <body class="theme-modern is-pc">
 
@@ -192,7 +194,7 @@
                                 <option value="channel">チャンネル別</option>
                             </select>
                             <select id="widget-sort-select" class="widget-search">
-                                <option value="custom">カスタム順</option><option value="newest">新しい順</option><option value="oldest">古い順</option><option value="playCount_desc">再生数順</option>
+                                <option value="custom">カスタム順</option><option value="newest">新しい順</option><option value="oldest">古い順</option><option value="playCount_desc">再生数順</option><option value="recommended">おすすめ順</option>
                             </select>
                             <input type="text" id="widget-search-box" class="widget-search" placeholder="曲名・投稿者・タグを検索" aria-label="曲名・投稿者・タグを検索">
                         </div>
@@ -277,6 +279,7 @@
             <h2 id="settings-title" class="theme-text" style="margin-top:0; padding-bottom:5px;"><i class="fas fa-cog"></i> システム設定</h2>
             <div class="settings-tabs">
                 <button class="tab-btn active" data-tab="basic">基本設定</button>
+                <button class="tab-btn" data-tab="smart">スマート選曲</button>
                 <button class="tab-btn" data-tab="advanced">詳細設定</button>
             </div>
 
@@ -292,7 +295,7 @@
                     <div class="setting-section-label"><strong>表示と並び順</strong><span>日常的に変更する項目です</span></div>
                     <div class="setting-row">
                         <label>テーマ</label>
-                        <select id="set-theme" class="widget-search"><option value="modern">P1 モダンスクエア</option><option value="nerv">P2 ウィンドエアロ</option><option value="toyota">P3 AURA</option><option value="niconico">P4 ニコニコ・クラシック</option></select>
+                        <select id="set-theme" class="widget-search"><option value="sf">SF</option><option value="modern">現代風</option><option value="nerv">EVA風</option></select>
                     </div>
                     <div class="setting-row">
                         <label>カラーモード</label>
@@ -309,6 +312,7 @@
                             <option value="newest">新しい順</option>
                             <option value="oldest">古い順</option>
                             <option value="playCount_desc">再生数順</option>
+                            <option value="recommended">おすすめ順</option>
                         </select>
                     </div>
 
@@ -318,7 +322,7 @@
                     </div>
                     <div class="setting-section-label"><strong>再生と一覧</strong><span>通信量・表示要素・前回位置を調整します</span></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-performance-mode"> <cms-icon name="performance"></cms-icon>軽量化 (動作を軽くする)</label></div>
-                    <div class="setting-row"><label><input type="checkbox" id="set-music-mode"> <cms-icon name="music"></cms-icon>音楽モード (モバイルSpotify風UI)</label></div>
+                    <div class="setting-row"><label><input type="checkbox" id="set-music-mode"> <cms-icon name="music"></cms-icon>音楽モード（サムネイルを中心に表示）</label></div>
                     <div class="setting-section-label"><strong>おすすめ選曲</strong><span>ボタンから選曲を始める方法を選べます</span></div>
                     <div class="setting-row"><label><input type="checkbox" id="set-recommendation-enabled"> おすすめ選曲を有効にする</label></div>
                     <div class="setting-row">
@@ -350,6 +354,10 @@
                     <div class="setting-row"><label><input type="checkbox" id="set-show-clock"> <cms-icon name="clock"></cms-icon>時計を表示</label></div>
                 </div>
 
+                <div id="tab-smart" class="tab-content">
+                    <div class="setting-row"><label><input type="checkbox" id="set-show-recommendation-launcher"> 選曲ツールバーを表示する</label><span class="setting-help">非表示でも、このタブから選曲条件を変更できます。</span></div>
+                </div>
+
                 <!-- 詳細設定タブ -->
                <div id="tab-advanced" class="tab-content">
                     <div class="setting-section-label"><strong>画面モード</strong><span>端末別レイアウトとウィンドウ配置</span></div>
@@ -367,7 +375,7 @@
                         <label><input type="checkbox" id="set-window-mode"> <cms-icon name="window"></cms-icon>ウィンドウモード (パネル自由配置・サイズ変更)</label>
                         <button id="btn-reset-window" class="theme-btn" style="padding: 5px; font-size:0.8rem; margin-top:5px; width:150px;">配置をリセット</button>
                     </div>
-                    <div class="setting-section-label"><strong>PCレイアウトのサイズ</strong><span>P1〜P4のパネル幅・高さを調整</span></div>
+                    <div class="setting-section-label settings-pc-only"><strong>PCレイアウトのサイズ</strong><span>PC表示のパネル幅・高さを調整</span></div>
                     <div class="setting-row desktop-size-settings">
                         <label for="set-desktop-folder-width">フォルダ一覧の幅: <output id="desktop-folder-width-value">260px</output></label>
                         <input type="range" id="set-desktop-folder-width" min="200" max="420" step="10" value="260">
@@ -512,16 +520,18 @@
     <script src="state-policy.js?v=2026103101"></script>
     <script src="ui-runtime.js?v=2026100801"></script>
     <script src="shared/recommendation-engine.js?v=2026101201"></script>
-    <script src="shared/recommendation-cloud.js?v=2026101001"></script>
-    <script src="recommendation-store-web.js?v=2026101001"></script>
+    <script src="recommendation-order.js?v=2026110101"></script>
+    <script src="shared/recommendation-cloud.js?v=2026110101"></script>
+    <script src="recommendation-store-web.js?v=2026110101"></script>
     <script src="shared/nico-playback.js?v=2026101205"></script>
-    <script src="script.js?v=2026103102"></script>
-    <script src="recommendation-web.js?v=2026103101"></script>
-    <script src="shared/recommendation-ui.js?v=2026103101"></script>
+    <script src="script.js?v=2026110101"></script>
+    <script src="recommendation-web.js?v=2026110101"></script>
+    <script src="shared/recommendation-ui.js?v=2026110101"></script>
     <script src="desktop-large-ui-v2.js?v=2026100802"></script>
-    <script src="redesign.js?v=2026100901"></script>
+    <script src="redesign.js?v=2026110101"></script>
     <script src="remote-model.js?v=2026103101"></script>
     <script src="remote-host.js?v=2026103101"></script>
-    <script src="player-studio.js?v=2026103101"></script>
+    <script src="player-studio.js?v=2026110101"></script>
+    <script src="experience-v3.js?v=2026110101"></script>
 </body>
 </html>

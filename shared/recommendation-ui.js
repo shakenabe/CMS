@@ -438,12 +438,18 @@
     }
     if(snapshot.deletedFolders?.length && typeof adapter.restoreFolder==='function') {
       const removed=element('details',null,savedSection);element('summary','削除済みの選曲フォルダ（'+snapshot.deletedFolders.length+'件）',removed);
-      for(const folder of snapshot.deletedFolders) {
+      for(const folder of snapshot.deletedFolders.filter(folder=>!folder.purged)) {
         const row=element('div',null,removed);row.className='cms-rec-row cms-rec-deleted-folder';row.dataset.folderId=folder.folderId;
         element('span',folder.name+' · '+(folder.items?.length || 0)+'曲',row);
         button('元に戻す',async()=>{
           const restored=await adapter.restoreFolder(folder.folderId,folder.folderRevision);
           await refresh();status.textContent='「'+restored.name+'」を選曲フォルダに戻しました。';
+        },row);
+        if(typeof adapter.purgeFolder==='function') button('完全に削除',async isCurrent=>{
+          const answer=await askConfirmation({title:'選曲リストを完全に削除',confirmText:'完全に削除',danger:true,message:'「'+folder.name+'」の保存した曲順と旧版を完全に削除します。元に戻せません。\n登録動画・音源・再生履歴・お気に入りは削除しません。'});
+          if(!answer.confirmed || !isCurrent())return;
+          await adapter.purgeFolder(folder.folderId,folder.folderRevision);
+          await refresh();status.textContent='選曲リストを完全に削除しました。登録動画や履歴は残しています。';
         },row);
       }
     }

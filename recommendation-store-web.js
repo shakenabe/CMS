@@ -142,15 +142,24 @@
         if ((pref.favoriteRevision || 0) >= (old.favoriteRevision || 0)) for (const field of ['favorite', 'excludedFromRecommendations', 'favoriteRevision', 'lastMutationId', 'serverCommittedAt']) if (pref[field] !== undefined) next[field] = pref[field];
         data.preferences[pref.contentKey] = next;
     }
+    async function removeFolderArchives(store,ns,folderId) {
+        const prefix=ns+':folderVersion:'+folderId+':v';
+        for(const key of await value(store.getAllKeys())) if(typeof key==='string' && (key===ns+':folderSnapshot:'+folderId || key.startsWith(prefix))) store.delete(key);
+    }
     async function adoptShared(payload, owner = namespace()) {
         if (!owner.startsWith('user:')) throw new Error('共有状態はローカル領域へ保存できません');
-        return mutate(data => {
+        return mutate(async(data,store) => {
             if (payload.state?.ready) data.migration = { ...data.migration, ...payload.state, ready: true, snapshot: data.migration?.snapshot || [] };
             for (const pref of payload.preferences || []) mergePreference(data, pref);
             for (const remote of payload.folders || []) {
                 const index = data.folders.findIndex(folder => folder.folderId === remote.folderId);
+                if(remote.purged) {
+                    await removeFolderArchives(store,owner,remote.folderId);delete data.folderOutbox[remote.folderId];
+                    if(index<0)data.folders.push(remote);else data.folders[index]=remote;
+                    continue;
+                }
                 if (index < 0) data.folders.push(remote);
-                else if (!data.folderOutbox[remote.folderId] && remote.folderRevision > data.folders[index].folderRevision) data.folders[index] = remote;
+                else if (!data.folders[index].purged && !data.folderOutbox[remote.folderId] && remote.folderRevision > data.folders[index].folderRevision) data.folders[index] = remote;
             }
             return clone(data);
         }, owner);
@@ -187,13 +196,14 @@
     }
     async function acknowledgeFolder(id, owner) { return mutate(data => { delete data.folderOutbox[id]; }, owner); }
     async function folderVersion(folderId,revision) {
+        if((await read()).folders.some(folder=>folder.folderId===folderId && folder.purged)) return null;
         const ns=namespace(),database=await open(),tx=database.transaction(STORE,'readonly'),completed=done(tx);
         const row=await value(tx.objectStore(STORE).get(ns+':folderVersion:'+folderId+':v'+revision));
         await completed;database.close();return row?.value || null;
     }
     async function cacheFolderVersion(version) {
         const ns=namespace();
-        return mutate((data,store)=>store.put({key:ns+':folderVersion:'+version.folderId+':v'+version.folderRevision,value:clone(version)}),ns);
+        return mutate((data,store)=>{ if(data.folders.some(folder=>folder.folderId===version.folderId && folder.purged)) throw new Error('完全削除した選曲は復元できません。'); store.put({key:ns+':folderVersion:'+version.folderId+':v'+version.folderRevision,value:clone(version)}); },ns);
     }
     async function updateFolder(folderId,expectedRevision,queue) {
         if (!queue?.items?.length) throw new Error('空のフォルダには更新できません。');
@@ -224,6 +234,7 @@
         const result=await mutate(async(data,store)=>{
             const index=data.folders.findIndex(folder=>folder.folderId===folderId),old=data.folders[index];
             if (!old || old.folderRevision!==expectedRevision) throw new Error('フォルダが変更されています。再確認してください。');
+            if (old.purged) throw new Error('完全削除した選曲は復元できません。');
             if (operation==='restore' ? !old.deleted : old.deleted) throw new Error(operation==='restore'?'このフォルダは削除されていません。':'削除したフォルダは先に復元してください。');
             let name=operation==='rename'?String(requestedName || '').trim():old.name;
             if (!name || name.length>120) throw new Error('フォルダ名は1〜120文字で入力してください。');
@@ -256,6 +267,22 @@
     const renameFolder=(folderId,expectedRevision,name)=>changeFolder(folderId,expectedRevision,'rename',name);
     const deleteFolder=(folderId,expectedRevision)=>changeFolder(folderId,expectedRevision,'delete');
     const restoreFolder=(folderId,expectedRevision)=>changeFolder(folderId,expectedRevision,'restore');
+    async function purgeFolder(folderId, expectedRevision) {
+        const ns=namespace();
+        const result=await mutate(async(data,store)=>{
+            const index=data.folders.findIndex(folder=>folder.folderId===folderId),old=data.folders[index];
+            if(!old || !old.deleted || old.purged || old.folderRevision!==expectedRevision) throw new Error('削除済みの選曲を再確認してください。');
+            // Retain only a non-restorable identity tombstone: removing it would let an old cloud snapshot revive the list.
+            const next={folderId,folderRevision:old.folderRevision+1,deleted:true,purged:true,purgedAt:new Date().toISOString()};
+            await removeFolderArchives(store,ns,folderId);
+            data.folders[index]=next;
+            if(ns!=='local') data.folderOutbox[folderId]={...next,revisionHistory:[...(old.revisionHistory || []).map(item=>({folderRevision:item.folderRevision})),{folderRevision:old.folderRevision}],
+                folderOperation:'purge',folderMutationId:uuid(),expectedRemoteRevision:data.folderOutbox[folderId]?.expectedRemoteRevision ?? old.folderRevision};
+            return clone(next);
+        },ns);
+        if(ns!=='local') global.CmsWebFirebase?.scheduleRecommendationSync?.();
+        return result;
+    }
     async function addDiagnostic(reason, item) { return mutate(data => { data.diagnostics.unshift({ reason, contentKey: keyOf(item), at: new Date().toISOString() }); data.diagnostics = data.diagnostics.slice(0, 100); }); }
     async function mergeHistory(events, owner = namespace()) {
         return mutate(data => {
@@ -265,7 +292,7 @@
         }, owner);
     }
     async function applySynchronization(payload, accepted, owner) {
-        return mutate(data => {
+        return mutate(async(data,store) => {
             if (!payload.state?.ready) throw new Error('共有baselineが未確定です。');
             data.migration = { ...data.migration, ...payload.state, ready:true, snapshot:data.migration?.snapshot || [] };
             for (const pref of payload.preferences || []) mergePreference(data,pref);
@@ -285,10 +312,15 @@
             }
             for (const folder of payload.folders || []) {
                 const index=data.folders.findIndex(value=>value.folderId===folder.folderId);
+                if(folder.purged) {
+                    await removeFolderArchives(store,owner,folder.folderId);delete data.folderOutbox[folder.folderId];
+                    if(index<0)data.folders.push(folder);else data.folders[index]=folder;
+                    continue;
+                }
                 if (index<0) data.folders.push(folder);
-                else if (!data.folderOutbox[folder.folderId] && folder.folderRevision>data.folders[index].folderRevision) data.folders[index]=folder;
+                else if (!data.folders[index].purged && !data.folderOutbox[folder.folderId] && folder.folderRevision>data.folders[index].folderRevision) data.folders[index]=folder;
             }
         }, owner);
     }
-    global.CmsRecommendationStore = { ensure, read, peek, preferences, recordCountedPlay, beginAttempt, setPreference, adoptShared, acknowledgeEvent, acknowledgeMutation, saveQueue, setActiveQueue, saveFolder, acknowledgeFolder, folderVersion, cacheFolderVersion, updateFolder, renameFolder, deleteFolder, restoreFolder, addDiagnostic, mergeHistory, applySynchronization, namespace, ownerUid: OWNER_UID };
+    global.CmsRecommendationStore = { ensure, read, peek, preferences, recordCountedPlay, beginAttempt, setPreference, adoptShared, acknowledgeEvent, acknowledgeMutation, saveQueue, setActiveQueue, saveFolder, acknowledgeFolder, folderVersion, cacheFolderVersion, updateFolder, renameFolder, deleteFolder, restoreFolder, purgeFolder, addDiagnostic, mergeHistory, applySynchronization, namespace, ownerUid: OWNER_UID };
 })(window);
