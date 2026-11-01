@@ -21,6 +21,9 @@ html body.cms-redesign.cms-experience-v3:is(.theme-sf,.theme-modern,.theme-nerv)
 body.cms-experience-v3.theme-sf { --experience-accent:#38dcf2; --experience-edge:#43cbe96b; --experience-surface:5,24,37; --experience-radius:5px; }
 body.cms-experience-v3.theme-sf {font-family:'Rajdhani','Noto Sans JP','Yu Gothic UI',sans-serif;}
 body.cms-experience-v3.theme-nerv {font-family:'Oswald','Noto Serif JP','Yu Mincho','MS Mincho',serif;}
+body.cms-experience-v3 {--experience-font:'Noto Sans JP','Yu Gothic UI','Meiryo',sans-serif;--font-family:var(--experience-font);--font-ui:var(--experience-font);--font-display:var(--experience-font);--rd-font:var(--experience-font);}
+body.cms-experience-v3.theme-sf {--experience-font:'Rajdhani','Noto Sans JP','Yu Gothic UI',sans-serif;}
+body.cms-experience-v3.theme-nerv {--experience-font:'Oswald','Noto Serif JP','Yu Mincho','MS Mincho',serif;}
 body.cms-experience-v3 :is(button,input,select,textarea) {font-family:inherit;}
 body.cms-experience-v3.theme-nerv :is(h1,h2,h3,.pc-appbar-brand,.window-title,.pc-section-heading) {font-weight:800;letter-spacing:.06em;}
 body.cms-experience-v3.theme-nerv { --experience-accent:#ff9800; --experience-edge:#f3a13880; --experience-surface:18,21,25; --experience-radius:2px; --experience-muted:#c3cab5; }
