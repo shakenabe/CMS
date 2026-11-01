@@ -9,7 +9,7 @@ const userDocument = (uid, name, key) => doc(firestore, 'users', uid, name, key)
 // Dedicated recommendation data never enters the legacy settings snapshot.
 const recommendationKey = value => encodeURIComponent(String(value));
 function compactFolder(folder) {
-  const result=cleanValue(folder);
+  const result=folder.purged?{folderId:folder.folderId,folderRevision:folder.folderRevision,deleted:true,purged:true,purgedAt:folder.purgedAt,revisionHistory:[]}:cleanValue(folder);
   delete result.key;delete result.account;delete result.versions;
   delete result.folderMutationId;delete result.expectedRemoteRevision;delete result.folderOperation;
   for (const field of ['queue','generationSnapshot']) if (result[field]) {
@@ -60,13 +60,15 @@ async function acceptRecommendationOperation(entry) {
       const [receipt,existing,state]=await Promise.all([tx.get(receiptRef),tx.get(ref),tx.get(stateRef)]);
       if (receipt.exists()) return {accepted:true,alreadyApplied:true};
       const current=existing.exists()?existing.data():null;
+      if (current?.purged) throw new Error('完全削除した選曲は復元・更新できません。');
       const expected=value.expectedRemoteRevision ?? value.folderRevision-1;
       if ((current?.folderRevision || 0)!==expected) throw new Error('生成フォルダが別端末で更新されています。古い内容では上書きできません。');
       if (!Number.isSafeInteger(expected) || expected<0 || value.folderRevision<=expected) throw new Error('Invalid folder revision');
       // A tombstone can only be revived by an explicit, current-revision restore.
       // Older clients' queued updates must never silently recreate a deleted head.
       if (current?.deleted===true && value.deleted!==true && value.folderOperation!=='restore') throw new Error('削除された生成フォルダは、最新版を確認してから明示的に復元してください。');
-      if (current?.folderRevision) {
+      if(value.purged && (!value.deleted || value.folderOperation!=='purge')) throw new Error('削除済みの選曲だけ完全削除できます。');
+      if (current?.folderRevision && !value.purged) {
         const oldVersionRef=userDocument(user.uid,'recommendationFolderVersions',recommendationKey(value.folderId)+':v'+current.folderRevision);
         const oldVersion=await tx.get(oldVersionRef);
         if (!oldVersion.exists()) tx.set(oldVersionRef,compactFolder(current));
@@ -77,12 +79,26 @@ async function acceptRecommendationOperation(entry) {
       tx.set(receiptRef,{folderId:value.folderId,folderRevision:value.folderRevision,mutationId,acceptedAt:serverTimestamp()});
       return {accepted:true,alreadyApplied:false};
     });
+    // Remove archived content, but retain the head tombstone so stale clients cannot recreate this identity.
+    if(value.purged) {
+      const archived=await getDocs(query(userCollection(user.uid,'recommendationFolderVersions'),where('folderId','==',value.folderId)));
+      for(let offset=0;offset<archived.docs.length;offset+=100) {
+        const group=archived.docs.slice(offset,offset+100);
+        await runTransaction(firestore,async tx=>{
+          const head=await tx.get(ref);
+          if(!head.exists() || !head.data().purged) throw new Error('完全削除状態を再確認してください。');
+          for(const entry of group) tx.delete(entry.ref || userDocument(user.uid,'recommendationFolderVersions',entry.id));
+        });
+      }
+      return result;
+    }
     const versions=value.versions || [];
     for(let offset=0;offset<versions.length;offset+=50) {
       const group=versions.slice(offset,offset+50);
       await runTransaction(firestore,async tx=>{
         const refs=group.map(version=>userDocument(user.uid,'recommendationFolderVersions',recommendationKey(value.folderId)+':v'+version.folderRevision));
-        const docs=await Promise.all(refs.map(ref=>tx.get(ref)));
+        const [head,...docs]=await Promise.all([tx.get(ref),...refs.map(ref=>tx.get(ref))]);
+        if(head.exists() && head.data().purged)return;
         group.forEach((version,index)=>{
           if(version.folderId!==value.folderId || !Number.isSafeInteger(version.folderRevision) || version.folderRevision<1 || version.folderRevision>=value.folderRevision) throw new Error('Invalid archived folder version');
           if(!docs[index].exists()) tx.set(refs[index],compactFolder(version));
@@ -185,6 +201,8 @@ async function fetchRecommendationState(options = {}) {
 async function fetchRecommendationFolderVersion(folderId,revision) {
   if (!folderId || !Number.isSafeInteger(revision) || revision<1) throw new Error('Invalid archived folder version');
   const user=requireUser();
+  const head=await getDoc(userDocument(user.uid,'recommendationFolders',folderId));
+  if(head.exists() && head.data().purged) return null;
   const value=await getDoc(userDocument(user.uid,'recommendationFolderVersions',recommendationKey(folderId)+':v'+revision));
   return value.exists()?value.data():null;
 }

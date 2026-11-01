@@ -1,0 +1,159 @@
+/* Three visual themes; playback, data and viewport mode remain independent. */
+body.cms-experience-v3 {
+  font-family:'Noto Sans JP','Yu Gothic UI','Meiryo',sans-serif;
+  --experience-accent:#64b5f6; --experience-accent-ink:#07131f;
+  --experience-edge:#829bb94d; --experience-surface:20,28,43;
+  --experience-text:#eef4fc; --experience-muted:#adbed3; --experience-radius:13px;
+}
+html body.cms-redesign.cms-experience-v3:is(.theme-sf,.theme-modern,.theme-nerv) {
+  --studio-accent:var(--experience-accent); --studio-edge:var(--experience-edge);
+  --studio-card:rgba(var(--experience-surface),var(--panel-alpha,.8));
+  --studio-text:var(--experience-text); --studio-muted:var(--experience-muted);
+  --rd-accent:var(--experience-accent); --rd-text:var(--experience-text); --rd-muted:var(--experience-muted);
+  --rd-border:var(--experience-edge); --rd-panel:var(--experience-surface);
+  --text-color:var(--experience-text); --sub-text-color:var(--experience-muted);
+  --accent-color:var(--experience-accent); --border-color:var(--experience-edge);
+  --theme-accent:var(--experience-accent); --theme-text:var(--experience-text);
+  --theme-text-muted:var(--experience-muted); --theme-border:var(--experience-edge);
+  --theme-border-active:var(--experience-accent); --border-radius:var(--experience-radius);
+  --theme-radius:var(--experience-radius); --panel-rgb:var(--experience-surface);
+}
+body.cms-experience-v3.theme-sf { --experience-accent:#38dcf2; --experience-edge:#43cbe96b; --experience-surface:5,24,37; --experience-radius:5px; }
+body.cms-experience-v3.theme-sf {font-family:'Rajdhani','Noto Sans JP','Yu Gothic UI',sans-serif;}
+body.cms-experience-v3.theme-nerv {font-family:'Oswald','Noto Serif JP','Yu Mincho','MS Mincho',serif;}
+body.cms-experience-v3 :is(button,input,select,textarea) {font-family:inherit;}
+body.cms-experience-v3.theme-nerv :is(h1,h2,h3,.pc-appbar-brand,.window-title,.pc-section-heading) {font-weight:800;letter-spacing:.06em;}
+body.cms-experience-v3.theme-nerv { --experience-accent:#ff9800; --experience-edge:#f3a13880; --experience-surface:18,21,25; --experience-radius:2px; --experience-muted:#c3cab5; }
+body.cms-experience-v3.color-light { --experience-surface:240,246,253; --experience-text:#172c41; --experience-muted:#435d77; --experience-edge:#345b805c; --experience-accent-ink:#fff; }
+body.cms-experience-v3.color-light.theme-sf { --experience-accent:#006f91; }
+body.cms-experience-v3.color-light.theme-modern { --experience-accent:#215da5; }
+body.cms-experience-v3.color-light.theme-nerv { --experience-accent:#9c4800; }
+html body.cms-redesign.cms-experience-v3 :is(#pc-appbar,#widget-controls,#widget-player,#widget-library,#widget-folder-list-wrapper,#widget-track-list-wrapper,#library-nav-wrapper,.cms-rec-launcher,.library-lists-container,.cms-next-preview) {
+  color:var(--experience-text); background:rgba(var(--rd-panel),var(--panel-alpha,.8))!important;
+  border-color:var(--experience-edge)!important; border-radius:var(--experience-radius)!important;
+  backdrop-filter:blur(var(--panel-blur,0px)); -webkit-backdrop-filter:blur(var(--panel-blur,0px));
+  box-shadow:none!important;
+}
+html body.cms-experience-v3 :is(#widget-controls,#widget-library,#widget-folder-list-wrapper)::before,
+html body.cms-experience-v3 :is(#widget-controls,#widget-library,#widget-folder-list-wrapper)::after { background:none!important; pointer-events:none; }
+html body.cms-experience-v3 .cms-player-artwork { display:none!important; }
+html body.cms-experience-v3 #pocket-overlay .pocket-content { border:0!important; outline:0!important; box-shadow:none!important; }
+html body.cms-experience-v3.music-mode cms-icon { color:inherit!important; background:transparent!important; border-radius:4px; }
+html body.cms-experience-v3 :is(.cms-rec-open,.cms-rec-details) { border-radius:5px!important; }
+html body.cms-experience-v3.rec-launcher-hidden .cms-rec-launcher { display:none!important; }
+html body.cms-experience-v3 :is(.settings-window,.cms-rec-dialog,.stats-window) {background:rgba(var(--experience-surface),.97)!important;color:var(--experience-text);border-color:var(--experience-edge)!important;}
+html body.cms-experience-v3 .cms-rec-launcher #widget-sort-select { flex:0 1 200px!important; width:200px; min-width:140px; }
+html body.cms-experience-v3 .cms-rec-launcher .filter-option { white-space:nowrap; margin-left:auto; }
+html body.cms-experience-v3 :is(.theme-btn,.control-tool-btn) { color:var(--experience-text); }
+html body.cms-experience-v3 .controls-main .play-btn { color:var(--experience-accent-ink)!important; background:var(--experience-accent)!important; border-color:var(--experience-accent)!important; }
+html body.cms-experience-v3.theme-sf .controls-main .play-btn { box-shadow:0 0 16px #38dcf238; }
+html body.cms-experience-v3.theme-nerv .controls-main .play-btn { border-radius:7px!important; clip-path:polygon(18% 0,82% 0,100% 25%,100% 75%,82% 100%,18% 100%,0 75%,0 25%); }
+html body.cms-experience-v3.theme-nerv :is(.pc-section-heading,.window-titlebar) { border-top:2px solid var(--experience-accent)!important; }
+html body.cms-experience-v3.theme-nerv .pc-appbar-brand strong { letter-spacing:.12em; }
+html body.cms-experience-v3.theme-sf :is(.pc-section-heading,.window-titlebar) { border-bottom:1px solid var(--experience-edge); letter-spacing:.08em; }
+html body.cms-experience-v3 .w-f-item { border-radius:var(--experience-radius)!important; }
+html body.cms-experience-v3 .w-f-item.active,html body.cms-experience-v3 .w-t-item.active {
+  background:color-mix(in srgb,var(--experience-accent) 18%,transparent)!important; border-color:var(--experience-accent)!important;
+  box-shadow:inset 3px 0 var(--experience-accent)!important;
+}
+html body.cms-experience-v3 .pc-track-heading { padding:9px 14px!important; }
+html body.cms-experience-v3 .pc-track-heading strong { font-size:1rem!important; }
+html body.cms-experience-v3 .w-f-count { min-width:48px; text-align:right; justify-self:end; }
+html body.cms-experience-v3 .cms-next-preview { display:none; }
+
+@media(min-width:901px) {
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) #main-app { height:100dvh!important; padding:0!important; display:flex; flex-direction:column; overflow:hidden; }
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) #main-app.hidden {display:none!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) #pc-appbar { display:flex!important; flex:none; min-height:60px; margin:0!important; padding:10px 16px!important; border-radius:0!important; }
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) #widget-container {
+   display:grid!important; flex:1; min-height:0; width:100%!important; height:auto!important; padding:12px!important;
+   grid-template-columns:minmax(185px,min(var(--cms-folder-width,240px),23vw)) minmax(230px,min(var(--cms-player-width,360px),30vw)) minmax(0,1fr)!important;
+   grid-template-rows:minmax(205px,min(var(--cms-player-height,300px),40dvh)) minmax(160px,1fr)!important;
+   grid-template-areas:'folders player controls' 'folders library library'!important; gap:12px!important; align-content:stretch!important;
+ }
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv).show-clock #widget-container {
+   grid-template-rows:42px minmax(205px,min(var(--cms-player-height,300px),36dvh)) minmax(160px,1fr)!important;
+   grid-template-areas:'clock clock clock' 'folders player controls' 'folders library library'!important;
+ }
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) :is(#left-pane,#right-pane) {display:contents!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) #widget-clock {grid-area:clock!important;height:42px!important;min-height:0!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):not(.show-clock) #widget-clock {display:none!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) #widget-player {grid-area:player!important;position:relative!important;inset:auto!important;width:auto!important;height:100%!important;min-height:0!important;margin:0!important;padding:0!important;opacity:1;overflow:hidden!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) #player-container {position:absolute!important;inset:0!important;min-height:0!important;height:100%!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) #widget-controls {grid-area:controls!important;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;margin:0!important;padding:18px!important;overflow:auto!important;display:flex!important;justify-content:center!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode) #widget-controls .player-controls-inner {display:flex;flex-direction:column;width:100%;min-width:0;gap:12px;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):not(.music-mode) #widget-controls #widget-art {display:none!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode) #widget-controls .widget-info-container {width:100%!important;min-width:0;padding:0!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode) #widget-controls .widget-info {text-align:left!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode) #widget-folder-list-wrapper {grid-area:folders!important;position:relative!important;inset:auto!important;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;align-self:stretch!important;margin:0!important;padding:10px!important;display:flex!important;flex-direction:column;overflow:hidden!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode) #widget-folder-list {display:flex!important;flex-direction:column;min-height:0;flex:1;overflow:auto!important;gap:4px;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode) .w-f-item {width:100%!important;min-height:42px!important;display:grid!important;grid-template-columns:auto minmax(0,1fr) auto;gap:9px;padding:8px!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) #widget-library {grid-area:library!important;position:relative!important;inset:auto!important;width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;margin:0!important;padding:0!important;display:flex!important;flex-direction:column;overflow:hidden!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode) :is(.library-lists-container,#widget-track-list-wrapper) {position:relative!important;inset:auto!important;display:flex!important;flex-direction:column;flex:1;min-height:0!important;height:auto!important;margin:0!important;padding:0!important;overflow:hidden!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode) #widget-track-list {min-height:0!important;height:auto!important;flex:1;overflow:auto!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode) :is(#desktop-pane-resizer,.cms-panel-resizer,#library-nav-wrapper,.cms-next-preview) {display:none!important;}
+ /* Music mode keeps the original embed tiny, while an ordinary image occupies the visible player area. */
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode).music-mode #widget-player {position:fixed!important;left:0!important;top:0!important;width:2px!important;height:2px!important;opacity:.01;pointer-events:none;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode).music-mode #widget-controls {grid-area:player / player / controls / controls!important;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode).music-mode #widget-controls .player-controls-inner {flex-direction:row!important;align-items:center;gap:22px;}
+ html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode).music-mode #widget-art {display:block!important;width:min(29vw,250px)!important;height:100%!important;max-height:260px!important;object-fit:contain!important;aspect-ratio:1;margin:0!important;flex:none;box-shadow:none!important;border:0!important;}
+}
+
+html body.cms-experience-v3.window-mode .cms-next-preview {display:flex;flex-direction:column;padding:12px;max-height:none;margin:0;overflow:hidden;}
+/* All floating panels share the workspace origin, including the nested track list. */
+html body.cms-experience-v3.window-mode :is(#left-pane,#right-pane,#widget-library,.library-lists-container) {display:contents!important;}
+html body.cms-experience-v3.window-mode #widget-container {position:relative!important;display:block!important;height:calc(100dvh - 56px)!important;}
+html body.cms-experience-v3.window-mode #widget-controls {min-height:300px!important;overflow:auto!important;}
+html body.cms-experience-v3.window-mode #library-nav-wrapper {min-height:150px!important;overflow:auto!important;}
+html body.cms-experience-v3.theme-nerv #pc-appbar {border-bottom:2px solid var(--experience-accent)!important;}
+html body.cms-experience-v3.theme-nerv .pc-appbar-brand::before {content:'';display:block;width:30px;height:20px;flex:none;background:repeating-linear-gradient(125deg,transparent 0 5px,var(--experience-accent) 5px 10px);}
+html body.cms-experience-v3.theme-sf #pc-appbar {border-bottom:1px solid var(--experience-accent)!important;}
+html body.cms-experience-v3.theme-sf .pc-appbar-brand strong {font-style:italic;letter-spacing:.1em;}
+html body.cms-experience-v3.window-mode #widget-controls .player-controls-inner {display:flex!important;flex-direction:row!important;align-items:flex-start!important;gap:12px!important;min-width:0;}
+html body.cms-experience-v3.window-mode #widget-controls #widget-art {display:block!important;width:76px!important;height:76px!important;object-fit:contain!important;flex:none;margin:4px 0!important;}
+html body.cms-experience-v3.window-mode #widget-controls .widget-info-container {min-width:0!important;flex:1;}
+html body.cms-experience-v3.window-mode #widget-controls .cms-player-tags {max-height:28px;overflow:hidden;}
+html body.cms-experience-v3.window-mode .cms-next-preview>h3 {display:none;}
+html body.cms-experience-v3.window-mode .cms-next-preview>div:not(.window-titlebar):not(.window-resize-handle) {flex:1;overflow:auto;min-height:0;}
+html body.cms-experience-v3.window-mode .cms-next-preview .cms-next-track>span:last-child {overflow:hidden;}
+html body.cms-experience-v3.window-mode .cms-next-preview strong {width:max-content;max-width:none;min-width:100%;text-overflow:clip;}
+html body.cms-experience-v3.window-mode .cms-next-preview strong.cms-next-overflow {animation:cms-next-title-scroll 9s ease-in-out infinite alternate;}
+html body.cms-experience-v3.window-mode .window-titlebar {background:rgba(var(--rd-panel),var(--panel-alpha,.8))!important;border-color:var(--experience-edge)!important;}
+html body.cms-experience-v3.window-mode :is(#widget-controls,#widget-player,#widget-folder-list-wrapper,#widget-track-list-wrapper,#cms-next-preview) {border-radius:var(--experience-radius)!important;border:1px solid var(--experience-edge)!important;}
+html body.cms-experience-v3.window-mode .cms-next-preview:is(.window-closed,.window-minimized) {display:none!important;}
+@keyframes cms-next-title-scroll {0%,15%{transform:translateX(0)}85%,100%{transform:translateX(var(--cms-next-scroll,0px))}}
+html body.cms-experience-v3.performance-mode .cms-next-overflow {animation:none!important;transform:none!important;}
+html body.cms-experience-v3.performance-mode :is(#cms-artwork-ambient img,.cms-player-artwork) {filter:none!important;transition:none!important;}
+
+/* Small-screen controls have a bounded footprint; library tools never sit below a full-height player. */
+html body.cms-experience-v3.is-mobile #main-app {height:100dvh!important;min-height:0;}
+html body.cms-experience-v3.is-mobile #widget-container {display:flex!important;flex-direction:column;min-height:0;height:100%!important;gap:0!important;overflow:hidden;}
+html body.cms-experience-v3.is-mobile .cms-player-tags {display:none!important;}
+html body.cms-experience-v3.is-mobile #widget-player {flex:0 0 auto!important;height:min(27dvh,56.25vw)!important;max-height:27dvh;min-height:0!important;aspect-ratio:auto!important;}
+html body.cms-experience-v3.is-mobile #widget-controls {flex:0 0 auto!important;min-height:0!important;height:auto!important;max-height:30dvh!important;padding:10px 14px!important;gap:6px!important;overflow:auto!important;justify-content:flex-start!important;}
+html body.cms-experience-v3.is-mobile #widget-controls .player-controls-inner {min-height:0;gap:6px!important;}
+html body.cms-experience-v3.is-mobile #widget-title {font-size:1rem!important;line-height:1.35!important;}
+html body.cms-experience-v3.is-mobile #widget-artist {font-size:.8rem!important;}
+html body.cms-experience-v3.is-mobile #widget-controls .widget-info {margin:0!important;}
+html body.cms-experience-v3.is-mobile #widget-controls .widget-controls {padding:4px 0!important;margin:0!important;}
+html body.cms-experience-v3.is-mobile .controls-main .play-btn {width:44px!important;height:44px!important;min-height:44px!important;font-size:1.1rem!important;}
+html body.cms-experience-v3.is-mobile .m-play-btn-circle {background:var(--experience-accent)!important;color:var(--experience-accent-ink)!important;border:1px solid var(--experience-accent)!important;width:42px!important;height:42px!important;}
+html body.cms-experience-v3.is-mobile .m-play-btn-circle :is(i,cms-icon,svg) {color:var(--experience-accent-ink)!important;opacity:1!important;}
+html body.cms-experience-v3.is-mobile #right-pane {display:flex!important;flex:1!important;min-height:0!important;height:auto!important;position:relative;}
+html body.cms-experience-v3.is-mobile #widget-library {display:flex!important;flex-direction:column;flex:1;min-height:0!important;height:auto!important;}
+html body.cms-experience-v3.is-mobile #mobile-tools-wrapper {flex:none!important;padding:8px 12px!important;}
+html body.cms-experience-v3.is-mobile :is(.cms-rec-launcher,#recommendation-toolbar-slot) {flex:none!important;}
+html body.cms-experience-v3.is-mobile .cms-rec-launcher {padding:8px!important;gap:8px!important;flex-wrap:wrap!important;}
+html body.cms-experience-v3.is-mobile :is(.library-lists-container,#widget-track-list-wrapper) {flex:1!important;min-height:0!important;height:auto!important;overflow:hidden!important;}
+html body.cms-experience-v3.is-mobile .w-track-list {min-height:0!important;overflow:auto!important;}
+html body.cms-experience-v3.is-mobile.music-mode #widget-player {position:fixed!important;width:2px!important;height:2px!important;max-height:2px!important;opacity:.01;}
+html body.cms-experience-v3.is-mobile.music-mode #widget-controls {max-height:48dvh!important;min-height:0!important;}
+html body.cms-experience-v3.is-mobile.music-mode .player-controls-inner {display:grid!important;grid-template-columns:minmax(80px,26vw) minmax(0,1fr)!important;align-items:center!important;gap:12px!important;}
+html body.cms-experience-v3.is-mobile.music-mode #widget-art {display:block!important;width:100%!important;height:auto!important;max-height:26dvh!important;object-fit:contain!important;aspect-ratio:1;margin:0!important;box-shadow:none!important;}
+html body.cms-experience-v3.is-mobile.music-mode .widget-info-container {min-width:0!important;width:100%!important;padding:0!important;}
+html body.cms-experience-v3.is-mobile.music-mode .widget-controls {display:flex!important;justify-content:center!important;flex-wrap:wrap!important;gap:5px!important;}
+html body.cms-experience-v3.is-mobile.music-mode .control-tools {display:flex;justify-content:center!important;}
+html body.cms-experience-v3.is-mobile.mobile-list-focus #right-pane {position:fixed!important;inset:0!important;z-index:9000!important;height:100dvh!important;}
+html body.cms-experience-v3.is-mobile.mobile-list-focus #mobile-tools-wrapper {display:none!important;}
+@media(max-width:360px) {html body.cms-experience-v3.is-mobile.music-mode .player-controls-inner {grid-template-columns:70px minmax(0,1fr)!important;}html body.cms-experience-v3.is-mobile .control-tool-btn {width:28px!important;height:28px!important;}}
+@media(prefers-reduced-motion:reduce) {html body.cms-experience-v3 .cms-next-overflow {animation:none!important;transform:none!important;}}

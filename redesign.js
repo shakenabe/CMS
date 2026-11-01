@@ -1,14 +1,15 @@
 /* Native theme/origin bridge. No duplicate switcher or framework runtime. */
 (() => {
-    const themeNames = { modern:'p1', nerv:'p2', toyota:'p3', niconico:'p4' };
     let frame = 0;
     function update() {
         frame = 0;
-        const state = window.CmsRedesign.snapshot(), theme = themeNames[state.theme] || 'p1';
+        const state = window.CmsRedesign.snapshot();
         document.body.classList.add('cms-redesign');
         document.body.classList.toggle('color-light', state.light);
         document.body.classList.toggle('color-dark', !state.light);
-        for (const name of Object.values(themeNames)) document.body.classList.toggle('theme-'+name, name===theme);
+        // P1-P4 were coupled visual/layout presets. Themes now have a separate
+        // identity from desktop, window and mobile presentation.
+        for (const name of ['p1','p2','p3','p4']) document.body.classList.remove('theme-'+name);
         const origin = document.getElementById('cms-playing-origin');
         if (!origin) return;
         const folder = state.folder==='__all'?'すべて':state.folder==='__history'?'再生履歴':state.folder==='__vocaloid'?'ボカロ / Kiite':state.folder==='__smart_queue'?'再生キュー':state.folder;

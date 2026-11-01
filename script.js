@@ -7,13 +7,13 @@ const defaultSettings = {
     pocketBgManual: false, pocketBgX: 50, pocketBgY: 50, pocketBgScale: 100,
     pocketShowClock: true, pocketShowArt: true, pocketShowTitle: true, pocketShowProgress: true, pocketShowControls: true, pocketShowUnlock: true,
     pocketLayout: {}, pocketLayoutScale: {}, forcePcLayout: false,
-    musicMode: false, autoScrollActiveTrack: true, vocaloidCollectionEnabled: false, vocaloidGroupMode: 'videos',
+    musicMode: false, showRecommendationLauncher: true, autoScrollActiveTrack: true, vocaloidCollectionEnabled: false, vocaloidGroupMode: 'videos',
     recommendationEnabled: true, recommendationLaunchBehavior: 'panel', recommendationLaunchScope: 'library', recommendationProfile: 'standard', recommendationLength: 20, recommendationMode: 'smartRandom', recommendationConfirmBeforePlay: true, recommendationExcludedTags: [], recommendationExcludedFolders: [],
     windowMode: false, windowPositions: {}, windowStates: {}, windowColorsLinked: true,
     windowPanelColor: '#000000', windowPanelAlpha: 55, windowTitleColor: '#1f4f8f', windowTitleAlpha: 100,
     defaultSortOrder: 'custom', useFirebase: false, resumeLastPlayback: true, desktopPanelHeights: {}
 };
-const MOBILE_LAYOUT_MAX = 720;
+const MOBILE_LAYOUT_MAX = 900;
 const TABLET_LAYOUT_MAX = 1100;
 let appSettings = { ...defaultSettings };
 
@@ -273,10 +273,22 @@ async function completeWebPlayback(reason, token = playbackWatchdogToken) {
     finally { completionInFlight = false; }
 }
 
+let playbackErrorSkipTimer = 0, consecutivePlaybackFailures = 0;
 function schedulePlaybackErrorSkip(delay = 5000) {
-    const token = playbackWatchdogToken;
-    setTimeout(() => {
-        if (token && token === playbackWatchdogToken && currentPlayingItem) playNextVideo();
+    if (delay < 45000) playbackMediaState = 'error';
+    const serial = recommendationLoadSerial;
+    clearTimeout(playbackErrorSkipTimer);
+    playbackErrorSkipTimer = setTimeout(() => {
+        if (serial !== recommendationLoadSerial || !currentPlayingItem || playbackIntent !== 'playing' || playbackMediaState === 'playing') return;
+        consecutivePlaybackFailures++;
+        if (consecutivePlaybackFailures >= Math.max(1,currentPlaylist.length)) {
+            playbackIntent = 'paused'; playbackMediaState = 'error'; isPlaying = false;
+            stopProgressTimer(); stopSilentAudio(); cancelPlaybackWatchdog(); updatePlayPauseIcon();
+            window.CmsUI?.notify?.('再生できない曲が続いたため停止しました。接続状態を確認して再生してください。',{type:'warning'});
+            return;
+        }
+        window.CmsUI?.notify?.('この曲を再生できないため、次の曲へ進みます。',{type:'warning'});
+        playNextVideo();
     }, delay);
 }
 
@@ -522,7 +534,8 @@ function loadSettings() {
         } else {
             const isMobile = window.innerWidth <= 900; if (isMobile) appSettings.performanceMode = true;
         }
-        if (!['modern', 'nerv', 'toyota', 'niconico'].includes(appSettings.theme)) appSettings.theme = defaultSettings.theme;
+        appSettings.theme = ({ toyota: 'sf', niconico: 'nerv' })[appSettings.theme] || appSettings.theme;
+        if (!['sf', 'modern', 'nerv'].includes(appSettings.theme)) appSettings.theme = defaultSettings.theme;
         if (!['dark', 'light', 'system'].includes(appSettings.colorMode)) appSettings.colorMode = defaultSettings.colorMode;
         // motionMode was a separate setting until 2026-09. Keep old saved data readable,
         // but make the lightweight flag the single source of truth from now on.
@@ -876,10 +889,10 @@ function setupControlsReturnGesture() {
     });
 }
 
-const WINDOW_PANEL_IDS = ['widget-player', 'widget-controls', 'widget-clock', 'widget-folder-list-wrapper', 'widget-track-list-wrapper', 'library-nav-wrapper'];
+const WINDOW_PANEL_IDS = ['widget-player', 'widget-controls', 'widget-clock', 'widget-folder-list-wrapper', 'widget-track-list-wrapper', 'library-nav-wrapper', 'cms-next-preview'];
 const WINDOW_PANEL_TITLES = {
     'widget-player': 'Player', 'widget-controls': 'Now Playing', 'widget-clock': 'Clock', 'widget-folder-list-wrapper': 'Folders',
-    'widget-track-list-wrapper': 'Tracks', 'library-nav-wrapper': 'Library Tools'
+    'widget-track-list-wrapper': 'Tracks', 'library-nav-wrapper': 'Library Tools', 'cms-next-preview': 'Next Tracks'
 };
 
 function applyWindowMode() {
@@ -916,7 +929,8 @@ function getDefaultWindowRect(id, index) {
         'widget-clock': { top: 558, left: 16, width: 230, height: 120 },
         'widget-folder-list-wrapper': { top: 16, left: 482, width: 250, height: 526 },
         'widget-track-list-wrapper': { top: 16, left: 748, width: 410, height: 526 },
-        'library-nav-wrapper': { top: 558, left: 482, width: 676, height: 130 }
+        'library-nav-wrapper': { top: 558, left: 482, width: 676, height: 130 },
+        'cms-next-preview': { top: 332, left: 482, width: 250, height: 190 }
     };
     if (window.innerWidth >= 1200) return windowRectToCss(wideDefaults[id] || { top: 30, left: 30, width: 360, height: 240 });
     const availableHeight = Math.max(180, window.innerHeight - 56);
@@ -964,7 +978,7 @@ function setupWindowPanel(el) {
     el.dataset.windowReady = '1';
     const titlebar = document.createElement('div');
     titlebar.className = 'window-titlebar';
-    titlebar.innerHTML = `<span class="window-title">${WINDOW_PANEL_TITLES[el.id] || el.id}</span><span class="window-actions"><button type="button" class="window-minimize" aria-label="最小化"><i class="fas fa-window-minimize"></i></button><button type="button" class="window-maximize" aria-label="最大化・復元"><i class="far fa-square"></i></button><button type="button" class="window-close" aria-label="閉じる"><i class="fas fa-xmark"></i></button></span>`;
+    titlebar.innerHTML = `<span class="window-title">${WINDOW_PANEL_TITLES[el.id] || el.id}</span><span class="window-actions"><button type="button" class="window-minimize" aria-label="最小化">−</button><button type="button" class="window-maximize" aria-label="最大化・復元">□</button><button type="button" class="window-close" aria-label="閉じる">×</button></span>`;
     const resizeHandle = document.createElement('div');
     resizeHandle.className = 'window-resize-handle';
     el.prepend(titlebar); el.appendChild(resizeHandle);
@@ -1140,7 +1154,9 @@ function makeAdaptiveGradient(hex) {
 }
 
 function applyThemeSettings() {
-    document.body.classList.remove('theme-modern', 'theme-nerv', 'theme-toyota', 'theme-niconico');
+    appSettings.theme = ({ toyota:'sf', niconico:'nerv' })[appSettings.theme] || appSettings.theme;
+    if (!['sf','modern','nerv'].includes(appSettings.theme)) appSettings.theme = 'modern';
+    document.body.classList.remove('theme-sf', 'theme-modern', 'theme-nerv', 'theme-toyota', 'theme-niconico');
     document.body.classList.add(`theme-${appSettings.theme}`);
     applyColorAndMotionModeClasses();
     document.body.classList.toggle('has-custom-background', hasCustomBackgroundImage);
@@ -1149,6 +1165,7 @@ function applyThemeSettings() {
     document.body.classList.toggle('show-list-thumbnails', appSettings.showThumbnails);
     document.body.classList.toggle('performance-mode', appSettings.performanceMode);
     document.body.classList.toggle('music-mode', Boolean(appSettings.musicMode));
+    document.body.classList.toggle('rec-launcher-hidden', appSettings.showRecommendationLauncher === false);
     document.body.classList.toggle('show-clock', Boolean(appSettings.showClock) && document.body.classList.contains('is-pc'));
     
     document.documentElement.style.setProperty('--base-font-size', `${appSettings.baseFontSize}%`); 
@@ -1190,13 +1207,14 @@ function applyThemeSettings() {
         document.documentElement.style.removeProperty('--bg-gradient');
     }
     
-    const op = parseFloat(appSettings.bgOpacity); const panelAlpha = 0.12 + ((100 - op) / 100 * 0.68); document.documentElement.style.setProperty('--panel-alpha', panelAlpha); document.documentElement.style.setProperty('--panel-blur', appSettings.performanceMode ? '0px' : `${((100 - op) / 100 * 20)}px`);
+    const op = Math.max(0, Math.min(100, Number(appSettings.bgOpacity) || 0)); const panelAlpha = (100 - op) / 100 * 0.8; document.documentElement.style.setProperty('--panel-alpha', panelAlpha); document.documentElement.style.setProperty('--panel-blur', appSettings.performanceMode ? '0px' : `${((100 - op) / 100 * 20)}px`);
     const windowPanelColor = appSettings.windowPanelColor || baseColor;
-    const windowPanelAlpha = Math.max(0.1, Math.min(1, Number(appSettings.windowPanelAlpha) / 100 || panelAlpha));
+    const rawWindowAlpha = Number(appSettings.windowPanelAlpha);
+    const windowPanelAlpha = op === 100 ? 0 : Math.max(0, Math.min(1, Number.isFinite(rawWindowAlpha) ? rawWindowAlpha / 100 : panelAlpha));
     document.documentElement.style.setProperty('--window-panel-rgb', hexToRgbString(windowPanelColor));
     document.documentElement.style.setProperty('--window-panel-alpha', windowPanelAlpha);
     document.documentElement.style.setProperty('--window-title-rgb', hexToRgbString(windowPanelColor));
-    document.documentElement.style.setProperty('--window-title-alpha', Math.max(0.35, windowPanelAlpha));
+    document.documentElement.style.setProperty('--window-title-alpha', windowPanelAlpha);
     updateMobileBackgroundStart();
     const pOverlay = document.getElementById('pocket-overlay'); if (appSettings.pocketAlwaysOn) pOverlay.classList.add('always-on'); else pOverlay.classList.remove('always-on');
     applyPocketAppearance();
@@ -1376,6 +1394,28 @@ function beginBackgroundPositionEditor() {
 
 function setupSettingsModal() {
     const modal = document.getElementById('settings-modal');
+    // Keep one set of controls/event handlers while giving each task a dedicated tab.
+    const smartTab = document.getElementById('tab-smart');
+    const advancedTab = document.getElementById('tab-advanced');
+    const recommendationToggleRow = document.getElementById('set-recommendation-enabled').closest('.setting-row');
+    const recommendationHeading = recommendationToggleRow.previousElementSibling;
+    const recommendationOptions = document.getElementById('set-recommendation-behavior').closest('.setting-row');
+    smartTab.append(recommendationHeading, recommendationToggleRow, recommendationOptions);
+    advancedTab.prepend(document.getElementById('settings-data-management'), document.getElementById('set-data-saver').closest('.setting-row'));
+    for (const id of ['set-force-pc-layout', 'set-window-mode', 'set-desktop-folder-width', 'set-clock-type']) {
+        document.getElementById(id)?.closest('.setting-row')?.classList.add('settings-pc-only');
+    }
+    document.querySelector('.window-style-settings')?.classList.add('settings-pc-only');
+    const updateDeviceSettingsVisibility = () => {
+        const mobile = document.body.classList.contains('is-mobile');
+        modal.querySelectorAll('.settings-pc-only').forEach(row => {
+            row.hidden = mobile;
+            if (mobile) row.style.setProperty('display', 'none', 'important');
+            else row.style.removeProperty('display');
+        });
+    };
+    window.addEventListener('resize', updateDeviceSettingsVisibility);
+    window.addEventListener('cms-state-change', updateDeviceSettingsVisibility);
     const saveButton = document.getElementById('btn-save-settings');
     const saveStatus = document.getElementById('settings-save-status');
     let settingsBaseline = '';
@@ -1409,6 +1449,7 @@ function setupSettingsModal() {
     document.querySelectorAll('.tab-btn').forEach(btn => { btn.addEventListener('click', () => { document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); btn.classList.add('active'); document.getElementById('tab-' + btn.dataset.tab).classList.add('active'); }); });
 
     document.getElementById('btn-open-settings').onclick = () => {
+        updateDeviceSettingsVisibility();
         settingsOpenSnapshot = JSON.parse(JSON.stringify(appSettings));
         window.CmsDesktopLargeUI?.refreshSizing();
         document.getElementById('set-theme').value = appSettings.theme; document.getElementById('set-color-mode').value = appSettings.colorMode; document.getElementById('set-font-size').value = appSettings.baseFontSize; document.getElementById('font-val').textContent = appSettings.baseFontSize;
@@ -1420,6 +1461,7 @@ function setupSettingsModal() {
         document.getElementById('set-performance-mode').checked = appSettings.performanceMode; document.getElementById('set-data-saver').checked = appSettings.dataSaverMode;
         document.getElementById('set-music-mode').checked = Boolean(appSettings.musicMode);
         document.getElementById('set-recommendation-enabled').checked = appSettings.recommendationEnabled !== false;
+        document.getElementById('set-show-recommendation-launcher').checked = appSettings.showRecommendationLauncher !== false;
         document.getElementById('set-recommendation-behavior').value = appSettings.recommendationLaunchBehavior || 'panel';
         const recommendationScope = document.getElementById('set-recommendation-scope');
         const savedScope = appSettings.recommendationLaunchScope || 'library';
@@ -1527,6 +1569,7 @@ function setupSettingsModal() {
     document.getElementById('btn-save-settings').onclick = async () => {
         const previousVocaloidCollectionEnabled = Boolean(appSettings.vocaloidCollectionEnabled);
         appSettings.recommendationEnabled = document.getElementById('set-recommendation-enabled').checked;
+        appSettings.showRecommendationLauncher = document.getElementById('set-show-recommendation-launcher').checked;
         appSettings.recommendationLaunchBehavior = document.getElementById('set-recommendation-behavior').value;
         appSettings.recommendationLaunchScope = document.getElementById('set-recommendation-scope').value || appSettings.recommendationLaunchScope || 'library';
         appSettings.recommendationProfile = document.getElementById('set-recommendation-profile').value;
@@ -1713,7 +1756,7 @@ window.CmsWebPlayer = {
             time: Number(clock.currentTime) || 0, duration: Number(clock.duration) || 0, volume: appSettings.pocketVolume,
             folderId: currentFolderId, folders: musicLibrary.map(folder => ({ id: folder.id, name: folder.name })),
             locked: !document.getElementById('pocket-overlay').classList.contains('hidden'), notice: nicoPlaybackNotice,
-            settings: Object.fromEntries(['theme','performanceMode','dataSaverMode','musicMode','showThumbnails','showClock','resumeLastPlayback','recommendationEnabled','recommendationLaunchBehavior','recommendationProfile','recommendationLength','recommendationLaunchScope'].map(key => [key, appSettings[key]])) };
+            settings: Object.fromEntries(['theme','performanceMode','dataSaverMode','musicMode','showThumbnails','showClock','resumeLastPlayback','recommendationEnabled','showRecommendationLauncher','recommendationLaunchBehavior','recommendationProfile','recommendationLength','recommendationLaunchScope'].map(key => [key, appSettings[key]])) };
     },
     remotePlayback(action, args = {}) {
         let operation;
@@ -1745,8 +1788,8 @@ window.CmsWebPlayer = {
         return operation;
     },
     remoteSettings(values) {
-        const booleanKeys = ['performanceMode','dataSaverMode','musicMode','showThumbnails','showClock','resumeLastPlayback','recommendationEnabled'];
-        const choices = { theme:['modern','nerv','toyota','niconico'], recommendationProfile:['standard','stable','explore','rediscover'], recommendationLaunchBehavior:['panel','play'], recommendationLaunchScope:['library','currentFolder','favorites','vocaloid'] };
+        const booleanKeys = ['performanceMode','dataSaverMode','musicMode','showThumbnails','showClock','resumeLastPlayback','recommendationEnabled','showRecommendationLauncher'];
+        const choices = { theme:['sf','modern','nerv'], recommendationProfile:['standard','stable','explore','rediscover'], recommendationLaunchBehavior:['panel','play'], recommendationLaunchScope:['library','currentFolder','favorites','vocaloid'] };
         for (const [key, value] of Object.entries(values)) {
             if (booleanKeys.includes(key) && typeof value === 'boolean' || choices[key]?.includes(value) || key === 'recommendationLength' && Number.isInteger(value) && value >= 1 && value <= 200) continue;
             throw new Error('この設定はPCで操作してください。');
@@ -1755,6 +1798,10 @@ window.CmsWebPlayer = {
         window.dispatchEvent(new Event('cms-recommendation-settings-change')); window.dispatchEvent(new Event('cms-state-change'));
     },
     getRecords: () => allItems.slice(),
+    refreshRecommendedOrder() {
+        if (currentSortOrder !== 'recommended' || !allItems.length) return;
+        buildLibrary(); selectFolder(currentFolderId || musicLibrary[0]?.id);
+    },
     getVisibleRecords: () => currentRenderSongs.slice(),
     getCurrentItem: () => currentPlayingItem,
     getQueuePreview: (limit = 3) => ({queueId:currentPlaybackContext?.queueId || '',queueRevision:currentPlaybackContext?.queueRevision || 0,
@@ -1905,7 +1952,14 @@ function playTrackFromView(songs, index, folderId = currentFolderId) {
     return startPlaylist(songs, index, { folderId });
 }
 
+let libraryRecommendationRanks = null;
 function buildLibrary() {
+    libraryRecommendationRanks = null;
+    if (currentSortOrder === 'recommended' && window.CmsRecommendationOrdering) {
+        const store = window.CmsRecommendationStore, snapshot = store?.peek?.();
+        const ranked = window.CmsRecommendationOrdering.order(allItems, { history: snapshot?.history || [], preferences: store?.preferences?.(snapshot) || [] });
+        libraryRecommendationRanks = new Map(ranked.map((record,index)=>[record,index]));
+    }
     const fMap = new Map(); const fOrderIndex = new Map();
     folderSettingsByName = new Map(folderSettings.map(setting => [setting.folderName, setting]));
     const items = allItems.filter(i => {
@@ -1945,7 +1999,12 @@ function buildLibrary() {
     }
     musicLibrary = [...virtualFolders, ...fNames.map(n => ({ id: n, name: n, songs: sortSongs(fMap.get(n)) }))];
 }
-function sortSongs(songs) { return[...songs].sort((a, b) => { const sf = (s) => s || ""; switch (currentSortOrder) { case 'title_asc': return sf(a.title).localeCompare(sf(b.title)); case 'title_desc': return sf(b.title).localeCompare(sf(a.title)); case 'newest': return b.safeDate - a.safeDate; case 'oldest': return a.safeDate - b.safeDate; case 'playCount_desc': return b.safePlayCount - a.safePlayCount; case 'custom': default: return a.originalIndex - b.originalIndex; } }); }
+function sortSongs(songs) {
+    if (currentSortOrder === 'recommended' && libraryRecommendationRanks) {
+        return [...songs].sort((a,b)=>(libraryRecommendationRanks.get(a)??Infinity)-(libraryRecommendationRanks.get(b)??Infinity));
+    }
+    return[...songs].sort((a, b) => { const sf = (s) => s || ""; switch (currentSortOrder) { case 'title_asc': return sf(a.title).localeCompare(sf(b.title)); case 'title_desc': return sf(b.title).localeCompare(sf(a.title)); case 'newest': return b.safeDate - a.safeDate; case 'oldest': return a.safeDate - b.safeDate; case 'playCount_desc': return b.safePlayCount - a.safePlayCount; case 'custom': default: return a.originalIndex - b.originalIndex; } });
+}
 
 function renderFolders() {
     folderListEl.innerHTML = ''; const mList = document.getElementById('mobile-folder-list-modal'); if (mList) mList.innerHTML = '';
@@ -3321,16 +3380,19 @@ function waitForNicoPlayback(serial, message) {
         if (serial !== recommendationLoadSerial || currentPlayingItem?.site !== 'niconico' || playbackMediaState === 'playing' || playbackIntent !== 'playing') return;
         playbackMediaState = 'waiting'; isPlaying = false; stopProgressTimer(); cancelPlaybackWatchdog(); updatePlayPauseIcon();
         showNicoPlaybackNotice(message);
+        schedulePlaybackErrorSkip(3000);
     }, 15000);
 }
 
-function createYouTubePlayer(vId) {
+function createYouTubePlayer(vId, serial = recommendationLoadSerial) {
+    if (serial !== recommendationLoadSerial) return;
     if (window.YT && window.YT.Player) {
         ytPlayer = new YT.Player('yt-player-mount', { height: '100%', width: '100%', videoId: vId, playerVars: { 'playsinline': 1, 'autoplay': 1, 'rel': 0 }, events: { 'onReady': (e) => { if(appSettings.dataSaverMode && typeof e.target.setPlaybackQuality === 'function') e.target.setPlaybackQuality('tiny'); playbackIntent = 'playing'; playbackMediaState = 'loading'; isPlaying = true; try { e.target.playVideo(); } catch (_) {} updatePlayPauseIcon(); applyVolume(); startProgressTimer(); startSilentAudio(); schedulePlaybackRecovery(); armPlaybackWatchdog(true); }, 'onStateChange': onPlayerStateChange, 'onPlaybackRateChange': () => armPlaybackWatchdog(true), 'onError': () => schedulePlaybackErrorSkip(5000) } });
-    } else setTimeout(() => createYouTubePlayer(vId), 1000);
+    } else setTimeout(() => createYouTubePlayer(vId, serial), 1000);
 }
 function onPlayerStateChange(e) {
     if (e.data === YT.PlayerState.PLAYING) {
+        consecutivePlaybackFailures = 0; clearTimeout(playbackErrorSkipTimer);
         playbackIntent = 'playing';
         playbackMediaState = 'playing';
         isPlaying = true;
@@ -3414,7 +3476,7 @@ async function loadVideo(idx) {
         c.innerHTML = ''; 
         if (currentPlayingItem.site === 'niconico') {
             const nId = getNicoId(currentPlayingItem.url);
-            if (!nId) { playbackMediaState = 'error'; showNicoPlaybackNotice('ニコニコの動画URLを確認してください。'); return; }
+            if (!nId) { playbackMediaState = 'error'; showNicoPlaybackNotice('ニコニコの動画URLを確認してください。'); schedulePlaybackErrorSkip(3000); return; }
             const i = document.createElement('iframe'); i.id = 'nico-player'; i.title = 'ニコニコ動画プレーヤー';
             i.src = `https://embed.nicovideo.jp/watch/${nId}?jsapi=1&playerId=1&loop=0`;
             i.setAttribute('allow', 'autoplay; fullscreen; encrypted-media'); i.referrerPolicy = 'strict-origin-when-cross-origin';
@@ -3426,6 +3488,8 @@ async function loadVideo(idx) {
     }
     schedulePlaybackRecovery();
     armPlaybackWatchdog(true);
+    // Loading without any provider acknowledgement must not stall the queue forever.
+    schedulePlaybackErrorSkip(45000);
 }
 
 function handleNicoMessage(e) {
@@ -3456,6 +3520,7 @@ function handleNicoMessage(e) {
         const status = Number(d?.playerStatus);
         if (status === 4 && !nicoEndedFlag) { completeWebPlayback('niconico-ended'); }
         else if (status === 2) {
+            consecutivePlaybackFailures = 0; clearTimeout(playbackErrorSkipTimer);
             nicoPlaybackStarted = true;
             clearTimeout(nicoReadinessTimer); showNicoPlaybackNotice('');
             playbackIntent = 'playing'; playbackMediaState = 'playing'; isPlaying = true;
@@ -3480,6 +3545,7 @@ function handleNicoMessage(e) {
         clearTimeout(nicoReadinessTimer); playbackMediaState = 'error'; isPlaying = false;
         stopProgressTimer(); stopSilentAudio(); cancelPlaybackWatchdog(); updatePlayPauseIcon();
         showNicoPlaybackNotice('ニコニコを再生できません：' + window.CmsNicoPlayback.errorText(error));
+        schedulePlaybackErrorSkip(3000);
     }
 }
 
