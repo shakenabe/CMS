@@ -64,9 +64,13 @@ html body.cms-experience-v3 :is(#widget-controls,#widget-library,#widget-folder-
 html body.cms-experience-v3 .cms-player-artwork { display:none!important; }
 html body.cms-experience-v3 #pocket-overlay .pocket-content { border:0!important; outline:0!important; box-shadow:none!important; }
 html body.cms-experience-v3.music-mode cms-icon { color:inherit!important; background:transparent!important; border-radius:4px; }
-html body.cms-experience-v3 :is(.cms-rec-open,.cms-rec-details) { border-radius:5px!important; }
+html body.cms-experience-v3 :is(.cms-rec-open,.cms-rec-details) { border-radius:5px!important;background:color-mix(in srgb,var(--experience-accent) 22%,var(--studio-card))!important;color:var(--experience-text)!important;border-color:var(--experience-accent)!important; }
 html body.cms-experience-v3.rec-launcher-hidden .cms-rec-launcher { display:none!important; }
 html body.cms-experience-v3 :is(.settings-window,.cms-rec-dialog,.stats-window) {background:rgba(var(--experience-surface),.97)!important;color:var(--experience-text);border-color:var(--experience-edge)!important;}
+html body.cms-experience-v3 #cms-recommendations {--cms-rec-bg:var(--studio-card);--cms-rec-fg:var(--experience-text);background:var(--cms-rec-bg)!important;color:var(--cms-rec-fg)!important;backdrop-filter:blur(var(--panel-blur,0px));-webkit-backdrop-filter:blur(var(--panel-blur,0px));}
+html body.cms-experience-v3.window-mode #cms-recommendations {--cms-rec-bg:rgba(var(--window-panel-rgb),var(--window-panel-alpha));}
+html body.cms-experience-v3 #cms-recommendations .cms-rec-tabs button[aria-selected="true"] {border-color:var(--experience-accent);background:color-mix(in srgb,var(--experience-accent) 15%,var(--cms-rec-bg));}
+html body.cms-experience-v3.window-mode :is(.window-titlebar,.window-title,.window-actions button,.cms-next-track,.cms-next-number,.cms-player-tags,.cms-player-tags span) {color:var(--experience-text)!important;}
 html body.cms-experience-v3 .cms-rec-launcher #widget-sort-select { flex:0 1 200px!important; width:200px; min-width:140px; }
 html body.cms-experience-v3 .cms-rec-launcher .filter-option { white-space:nowrap; margin-left:auto; }
 html body.cms-experience-v3 :is(.theme-btn,.control-tool-btn) { color:var(--experience-text); }
@@ -141,13 +145,10 @@ html body.cms-experience-v3.window-mode #widget-controls .cms-player-tags {max-h
 html body.cms-experience-v3.window-mode .cms-next-preview>h3 {display:none;}
 html body.cms-experience-v3.window-mode .cms-next-preview>div:not(.window-titlebar):not(.window-resize-handle) {flex:1;overflow:auto;min-height:0;}
 html body.cms-experience-v3.window-mode .cms-next-preview .cms-next-track>span:last-child {overflow:hidden;}
-html body.cms-experience-v3.window-mode .cms-next-preview strong {width:max-content;max-width:none;min-width:100%;text-overflow:clip;}
-html body.cms-experience-v3.window-mode .cms-next-preview strong.cms-next-overflow {animation:cms-next-title-scroll 9s ease-in-out infinite alternate;}
+html body.cms-experience-v3.window-mode .cms-next-info>.marquee-wrapper {display:block;}
 html body.cms-experience-v3.window-mode .window-titlebar {background:rgba(var(--rd-panel),var(--panel-alpha,.8))!important;border-color:var(--experience-edge)!important;}
 html body.cms-experience-v3.window-mode :is(#widget-controls,#widget-player,#widget-folder-list-wrapper,#widget-track-list-wrapper,#cms-next-preview) {border-radius:var(--experience-radius)!important;border:1px solid var(--experience-edge)!important;}
 html body.cms-experience-v3.window-mode .cms-next-preview:is(.window-closed,.window-minimized) {display:none!important;}
-@keyframes cms-next-title-scroll {0%,15%{transform:translateX(0)}85%,100%{transform:translateX(var(--cms-next-scroll,0px))}}
-html body.cms-experience-v3.performance-mode .cms-next-overflow {animation:none!important;transform:none!important;}
 html body.cms-experience-v3.performance-mode :is(#cms-artwork-ambient img,.cms-player-artwork) {filter:none!important;transition:none!important;}
 
 /* Small-screen controls have a bounded footprint; library tools never sit below a full-height player. */
@@ -181,4 +182,3 @@ html body.cms-experience-v3.is-mobile.music-mode .control-tools {display:flex;ju
 html body.cms-experience-v3.is-mobile.mobile-list-focus #right-pane {position:fixed!important;inset:0!important;z-index:9000!important;height:100dvh!important;}
 html body.cms-experience-v3.is-mobile.mobile-list-focus #mobile-tools-wrapper {display:none!important;}
 @media(max-width:360px) {html body.cms-experience-v3.is-mobile.music-mode .player-controls-inner {grid-template-columns:70px minmax(0,1fr)!important;}html body.cms-experience-v3.is-mobile .control-tool-btn {width:28px!important;height:28px!important;}}
-@media(prefers-reduced-motion:reduce) {html body.cms-experience-v3 .cms-next-overflow {animation:none!important;transform:none!important;}}
