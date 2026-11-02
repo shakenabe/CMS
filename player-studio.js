@@ -25,14 +25,6 @@
     ambient.style.setProperty('--cms-art-blur',options.blur+'px');ambient.style.opacity=String(useArtwork?options.opacity/100:0);
     // Only the ambient layer carries artwork: transparent panels must reveal it without a second tint.
     playerBackdrop.style.opacity='0';
-    refreshMarquees();
-  }
-  function refreshMarquees(){
-    for(const title of nextList.querySelectorAll('strong')){
-      const overflow=Math.max(0,title.scrollWidth-title.parentElement.clientWidth);
-      title.classList.toggle('cms-next-overflow',overflow>1);
-      title.style.setProperty('--cms-next-scroll',(-overflow)+'px');
-    }
   }
   function render(){
     frame=0;
@@ -49,10 +41,14 @@
       const button=node('button',null,nextList);button.type='button';button.className='cms-next-track';
       node('span',String(index+1),button).className='cms-next-number';
       if(item.thumbnail){const image=node('img',null,button);image.src=item.thumbnail;image.alt='';image.loading='lazy';}
-      const info=node('span',null,button);node('strong',item.title||'タイトル未取得',info);node('small',item.artist||'',info);
+      const info=node('span',null,button);info.className='cms-next-info';
+      const titleWrapper=node('span',null,info);titleWrapper.className='marquee-wrapper';
+      node('strong',item.title||'タイトル未取得',titleWrapper).className='marquee-content';
+      const artistWrapper=node('span',null,info);artistWrapper.className='marquee-wrapper';
+      node('small',item.artist||'',artistWrapper).className='marquee-content';
       button.addEventListener('click',()=>{try{window.CmsWebPlayer.remotePlayback('track',{queueId:queue.queueId,queueRevision:queue.queueRevision,queueItemId:item.queueItemId});}catch(error){window.CmsUI?.notify?.(error.message,{type:'warning'});}});
     }
-    refreshMarquees();
+    window.scheduleMarqueeUpdate?.();
   }
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(render);};
   // Essential controls remain readable offline, without the external icon font.
@@ -91,7 +87,6 @@
   }
   new MutationObserver(schedule).observe(document.getElementById('widget-art'),{attributes:true,attributeFilter:['src']});
   window.addEventListener('cms-state-change',schedule);window.addEventListener('resize',schedule);
-  if(typeof ResizeObserver==='function')new ResizeObserver(refreshMarquees).observe(section);
   if(document.body.classList.contains('window-mode')&&typeof window.applyWindowMode==='function')window.applyWindowMode();
   apply();render();
 })();

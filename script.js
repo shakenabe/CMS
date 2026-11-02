@@ -1175,6 +1175,10 @@ function applyThemeSettings() {
     
     document.body.classList.toggle('custom-color-enabled', Boolean(appSettings.customColorEnabled));
     if (appSettings.customColorEnabled) {
+        document.body.style.setProperty('--experience-text', appSettings.customAccentColor);
+        document.body.style.setProperty('--experience-accent', appSettings.customAccentColor);
+        document.body.style.setProperty('--experience-edge', appSettings.customBorderColor);
+        document.body.style.setProperty('--experience-muted', `color-mix(in srgb, ${appSettings.customAccentColor} 70%, transparent)`);
         document.body.style.setProperty('--rd-text', appSettings.customAccentColor);
         document.body.style.setProperty('--rd-accent', appSettings.customAccentColor);
         document.body.style.setProperty('--rd-border', appSettings.customBorderColor);
@@ -1189,17 +1193,20 @@ function applyThemeSettings() {
         document.body.style.setProperty('--theme-border', appSettings.customBorderColor);
         document.body.style.setProperty('--theme-border-active', appSettings.customBorderColor);
     } else {
+        ['--experience-text','--experience-accent','--experience-edge','--experience-muted'].forEach(name => document.body.style.removeProperty(name));
         ['--rd-text', '--rd-accent', '--rd-border', '--rd-muted'].forEach(name => document.body.style.removeProperty(name));
         ['--text-color', '--sub-text-color', '--accent-color', '--border-color', '--theme-text', '--theme-text-muted', '--theme-accent', '--theme-border', '--theme-border-active'].forEach(name => document.body.style.removeProperty(name));
     }
     const baseColor = appSettings.blurBaseColor || '#000000';
     if (hasCustomBackgroundImage) {
+        document.body.style.setProperty('--experience-surface', hexToRgbString(baseColor));
         document.body.style.setProperty('--rd-panel', hexToRgbString(baseColor));
         document.body.style.setProperty('--rd-bg', baseColor);
         document.body.style.setProperty('--panel-rgb', hexToRgbString(baseColor));
         document.body.style.setProperty('--bg-color', baseColor);
         document.documentElement.style.setProperty('--bg-gradient', makeAdaptiveGradient(baseColor));
     } else {
+        document.body.style.removeProperty('--experience-surface');
         document.body.style.removeProperty('--rd-panel');
         document.body.style.removeProperty('--rd-bg');
         document.body.style.removeProperty('--panel-rgb');
@@ -1397,6 +1404,7 @@ function setupSettingsModal() {
     // Keep one set of controls/event handlers while giving each task a dedicated tab.
     const smartTab = document.getElementById('tab-smart');
     const advancedTab = document.getElementById('tab-advanced');
+    document.getElementById('set-color-mode').closest('.setting-row').after(document.getElementById('set-window-mode').closest('.setting-row'));
     const recommendationToggleRow = document.getElementById('set-recommendation-enabled').closest('.setting-row');
     const recommendationHeading = recommendationToggleRow.previousElementSibling;
     const recommendationOptions = document.getElementById('set-recommendation-behavior').closest('.setting-row');
@@ -1671,7 +1679,7 @@ function updateMarquee() {
         if (generation !== marqueeUpdateGeneration) return;
         const paired = new Set();
         const groups = [];
-        const pairRoots = [document.querySelector('.widget-info'), ...document.querySelectorAll('.w-t-info')].filter(Boolean);
+        const pairRoots = [document.querySelector('.widget-info'), ...document.querySelectorAll('.w-t-info,.cms-next-info')].filter(Boolean);
         pairRoots.forEach(root => {
             const pair = [...root.querySelectorAll('.marquee-content')].slice(0, 2);
             if (!pair.length) return;
@@ -1702,7 +1710,7 @@ function scheduleMarqueeUpdate() {
 function setupMarqueeResizeObserver() {
     if (marqueeResizeObserver || typeof ResizeObserver !== 'function') return;
     marqueeResizeObserver = new ResizeObserver(() => scheduleMarqueeUpdate());
-    ['widget-controls', 'widget-track-list-wrapper', 'right-pane'].forEach(id => {
+    ['widget-controls', 'widget-track-list-wrapper', 'right-pane', 'cms-next-preview'].forEach(id => {
         const element = document.getElementById(id);
         if (element) marqueeResizeObserver.observe(element);
     });
