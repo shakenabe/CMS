@@ -1214,7 +1214,7 @@ function applyThemeSettings() {
         document.documentElement.style.removeProperty('--bg-gradient');
     }
     
-    const op = Math.max(0, Math.min(100, Number(appSettings.bgOpacity) || 0)); const panelAlpha = (100 - op) / 100 * 0.8; document.documentElement.style.setProperty('--panel-alpha', panelAlpha); document.documentElement.style.setProperty('--panel-blur', appSettings.performanceMode ? '0px' : `${((100 - op) / 100 * 20)}px`);
+    const op = Math.max(0, Math.min(100, Number(appSettings.bgOpacity) || 0)); const panelAlpha = (100 - op) / 100 * 0.8; document.documentElement.style.setProperty('--panel-alpha', panelAlpha); document.documentElement.style.setProperty('--panel-blur', '0px');
     const windowPanelColor = appSettings.windowPanelColor || baseColor;
     const rawWindowAlpha = Number(appSettings.windowPanelAlpha);
     const windowPanelAlpha = op === 100 ? 0 : Math.max(0, Math.min(1, Number.isFinite(rawWindowAlpha) ? rawWindowAlpha / 100 : panelAlpha));

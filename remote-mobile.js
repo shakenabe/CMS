@@ -65,7 +65,7 @@
     const songs=view==='library'?filteredSongs():model.records.filter(item=>item.favorite);
     if(view==='library' && !showFolders && folder==='__smart_queue')limit=Math.max(limit,Math.ceil(((Number(model.player.index)||0)+1)/80)*80);
     const rows=view==='smart'&&smartTab==='saved'?model.smart.folders:showFolders?model.folders:songs;
-    const key=JSON.stringify([view,smartTab,showFolders,folder,limit,rows,model.player.item?.contentKey]);if(key===listKey)return;listKey=key;
+    const key=JSON.stringify([view,smartTab,showFolders,folder,limit,rows,model.player.item?.contentKey,model.player.queueId,model.player.queueRevision,model.player.currentQueueItemId]);if(key===listKey)return;listKey=key;
     const context=JSON.stringify([view,smartTab,showFolders,folder,$('native-sort').value,$('native-search').value,folder==='__smart_queue'?model.player.queueId:'']);
     if(renderedListContext)scrollPositions.set(renderedListContext,list.scrollTop);
     const oldTop=context===renderedListContext?list.scrollTop:scrollPositions.get(context)||0;
