@@ -5,8 +5,9 @@
   document.body.classList.add('cms-experience-v3');
   const clamp=(value,min,max,fallback)=>Number.isFinite(Number(value))?Math.min(max,Math.max(min,Number(value))):fallback;
   let saved={};try{saved=JSON.parse(localStorage.getItem(key)||'{}');}catch(_){}
-  const options={background:appSettings.artworkBackgroundMode || (saved.backgroundMode==='artwork'?'artwork':'auto'),blur:clamp(appSettings.artworkBlur??saved.blur,0,60,18),opacity:100};
-  appSettings.artworkBackgroundMode ||= options.background;appSettings.artworkBlur ??= options.blur;
+  const normalizeBackground=value=>['image','artwork','color'].includes(value)?value:value==='manual'?'image':hasCustomBackgroundImage?'image':'artwork';
+  const options={background:normalizeBackground(appSettings.artworkBackgroundMode || saved.backgroundMode),opacity:100};
+  appSettings.artworkBackgroundMode=options.background;appSettings.artworkBlur=0;
   const node=(tag,text,parent)=>{const value=document.createElement(tag);if(text)value.textContent=text;parent?.append(value);return value;};
   const ambient=node('div',null,document.body);ambient.id='cms-artwork-ambient';ambient.setAttribute('aria-hidden','true');
   const backdrop=node('img',null,ambient);backdrop.alt='';backdrop.decoding='async';
@@ -20,15 +21,20 @@
   function apply(){
     document.body.classList.add('cms-studio');
     const hasArtwork=Boolean(artwork)&&!/^data:image\/svg\+xml,[^<]*<svg\b[^>]*\/>$/.test(artwork);
-    const useArtwork=hasArtwork&&(options.background==='artwork'||(options.background==='auto'&&!document.body.classList.contains('has-custom-background')));
+    const useArtwork=hasArtwork&&options.background==='artwork';
     document.body.classList.toggle('cms-artwork-background',useArtwork);
-    ambient.style.setProperty('--cms-art-blur',options.blur+'px');ambient.style.opacity=String(useArtwork?options.opacity/100:0);
+    document.body.dataset.backgroundSource=options.background;
+    document.body.style.setProperty('--cms-solid-background',appSettings.blurBaseColor||'#101824');
+    ambient.style.setProperty('--cms-art-blur','0px');ambient.style.opacity=String(useArtwork?options.opacity/100:0);
+    const accent=getComputedStyle(document.body).getPropertyValue('--experience-accent').trim();
+    const rgb=/^#([0-9a-f]{6})$/i.exec(accent);
+    if(rgb){const c=[0,2,4].map(i=>parseInt(rgb[1].slice(i,i+2),16)/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4);const l=c[0]*.2126+c[1]*.7152+c[2]*.0722;document.body.style.setProperty('--cms-play-ink',l>.179?'#07131f':'#ffffff');}
     // Only the ambient layer carries artwork: transparent panels must reveal it without a second tint.
     playerBackdrop.style.opacity='0';
   }
   function render(){
     frame=0;
-    if(!editing){options.background=appSettings.artworkBackgroundMode||options.background;options.blur=clamp(appSettings.artworkBlur??options.blur,0,60,18);}
+    if(!editing)options.background=normalizeBackground(appSettings.artworkBackgroundMode||options.background);
     const source=document.getElementById('widget-art')?.getAttribute('src')||'';
     if(source!==artwork){artwork=source;backdrop.src=source;playerImage.src=source;apply();}
     const item=window.CmsWebPlayer?.getCurrentItem?.();const itemKey=item?.id+':'+item?.url+':'+JSON.stringify(item?.tags||[]);
@@ -67,20 +73,14 @@
     const settings=node('fieldset',null,panel);settings.className='cms-background-settings';node('legend','背景と透過',settings);
     const label=node('label','背景の種類 ',settings),mode=node('select',null,label);mode.setAttribute('aria-label','背景の種類');
     mode.id='set-artwork-background';
-    for(const [value,text] of [['auto','自動（設定画像を優先）'],['manual','設定した背景画像・色'],['artwork','再生中のサムネイル（設定画像は保持）']]){const option=node('option',text,mode);option.value=value;}mode.value=options.background;
-    const ranges=[];
-    for(const [name,title,max] of [['blur','背景のぼかし',60]]){
-      const row=node('label',title+' ',settings),input=node('input',null,row),output=node('output',null,row);input.type='range';input.min='0';input.max=String(max);input.value=String(options[name]);input.setAttribute('aria-label',title);
-      input.id='set-artwork-'+name;
-      const update=()=>{options[name]=Number(input.value);output.textContent=input.value+(name==='blur'?' px':'%');apply();};input.addEventListener('input',update);update();ranges.push(input);
-    }
+    for(const [value,text] of [['artwork','再生中のサムネイル'],['image','保存した背景画像'],['color','背景色']]){const option=node('option',text,mode);option.value=value;}mode.value=options.background;
     const help=node('p','背景素材とパネルの透過は別です。下の「保存して適用」で他の設定とまとめて保存します。',settings);help.className='setting-help';
     mode.addEventListener('change',()=>{options.background=mode.value;apply();});
     for(const id of ['set-bg-img','set-bg-position','btn-edit-bg-position','set-opacity']){const row=document.getElementById(id)?.closest('.setting-row');if(row)settings.append(row);}
     const opacityLabel=document.querySelector('label:has(#op-val)');if(opacityLabel)opacityLabel.firstChild.textContent='パネルの透明度（100で透明）: ';
     window.CmsArtworkSettings={
-      open(values){editing=true;options.background=values.artworkBackgroundMode||options.background;options.blur=clamp(values.artworkBlur??options.blur,0,60,18);mode.value=options.background;ranges[0].value=String(options.blur);ranges[0].dispatchEvent(new Event('input'));},
-      commit(values){values.artworkBackgroundMode=mode.value;values.artworkBlur=Number(ranges[0].value);editing=false;},
+      open(values){editing=true;options.background=normalizeBackground(values.artworkBackgroundMode||options.background);mode.value=options.background;apply();},
+      commit(values){values.artworkBackgroundMode=mode.value;values.artworkBlur=0;editing=false;},
       finish(){editing=false;},
       snapshot:()=>({...options})
     };

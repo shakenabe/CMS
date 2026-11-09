@@ -194,7 +194,16 @@
         }
         throw new Error('この操作には対応していません');
     }
+    const publicHost=location.origin==='https://shakenabe.github.io'&&location.pathname.startsWith('/CMS/');
+    async function extensionRequest(path,method='GET',body){
+        const id=crypto.randomUUID();return new Promise((resolve,reject)=>{
+            const timeout=setTimeout(()=>{window.removeEventListener('message',receiveReply);reject(new Error('拡張機能を再読み込みし、CMS Music PCの「公開Webリモコン設定」を確認してください。'));},16000);
+            function receiveReply(event){const m=event.data;if(event.source!==window||event.origin!==location.origin||m?.type!=='CMS_PUBLIC_REMOTE_REPLY'||m.id!==id)return;clearTimeout(timeout);window.removeEventListener('message',receiveReply);if(m.result?.ok)resolve(m.result.data);else reject(new Error(m.result?.data?.error||'PCへの接続に失敗しました。'));}
+            window.addEventListener('message',receiveReply);window.postMessage({type:'CMS_PUBLIC_REMOTE_REQUEST',id,request:{path,method,body,token:hostToken}},location.origin);
+        });
+    }
     async function post(path, body = {}) {
+        if(publicHost)return extensionRequest(path,'POST',body);
         const controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),12000);
         try {
             const response = await fetch('/remote-api/'+path,{method:'POST',headers:{'Content-Type':'application/json',...(hostToken?{Authorization:'Bearer '+hostToken}:{})},body:JSON.stringify({...body,...(hostToken?{hostToken}:{})}),cache:'no-store',signal:controller.signal});
@@ -296,18 +305,22 @@
         if (hostToken) return;
         const button=document.getElementById('cms-remote-start');button.disabled=true;
         try {
-            let preferred=''; try { const info=await fetch('/remote-api/info',{cache:'no-store'}).then(response=>response.json());const saved=localStorage.getItem('cms_remote_address_v1');if(info.addresses?.includes(saved))preferred=saved; }catch(_) {}
-            const data=await post('host/open',preferred?{advertiseAddress:preferred}:{}); hostToken=data.hostToken;session=data;handled.clear();nodeKeys=new WeakMap();controls.clear();revision=0;previousSnapshot='';showInvite(data);
+            let preferred=''; try { const info=publicHost?await extensionRequest('info'):await fetch('/remote-api/info',{cache:'no-store'}).then(response=>response.json());const saved=localStorage.getItem('cms_remote_address_v1');if(info.addresses?.includes(saved))preferred=saved; }catch(error) {if(publicHost)throw error;}
+            const data=await post('host/open',{...(preferred?{advertiseAddress:preferred}:{}),...(publicHost?{transport:'poll'}:{})}); hostToken=data.hostToken;session=data;handled.clear();nodeKeys=new WeakMap();controls.clear();revision=0;previousSnapshot='';showInvite(data);
             await window.CmsRemoteModel?.refresh();
             observer=new MutationObserver(changes=>{if(changes.some(change=>!change.target.closest?.('[data-cms-remote-private]')))schedule();});
             observer.observe(document.body,{childList:true,subtree:true,attributes:true,characterData:true});
             document.addEventListener('input',schedule,true);document.addEventListener('change',schedule,true);window.addEventListener('cms-state-change',schedule);
             heartbeat=setInterval(()=>schedule(),1500);await publish(true);
             void connectHostEvents(hostToken);
-        } catch(error) { await stop(false);status(error.message+' — 同梱のPC起動スクリプトからCMSを開いてください。'); }
+        } catch(error) { await stop(false);status(error.message); }
         finally { button.disabled=false; }
     }
     async function connectHostEvents(token) {
+        if(publicHost){
+            const generation=++transportGeneration;
+            while(hostToken===token){try{const batch=await extensionRequest('host/poll');if(hostToken!==token)return;for(const item of batch.events||[])if(generation===transportGeneration)receive(item.event,item.data);await new Promise(resolve=>setTimeout(resolve,350));}catch(error){if(hostToken===token){await stop(false);status(error.message);}return;}}return;
+        }
         let disconnectedAt=0,delay=500;
         while(hostToken===token && token) {
             const generation=++transportGeneration;

@@ -182,3 +182,20 @@ html body.cms-experience-v3.is-mobile.music-mode .control-tools {display:flex;ju
 html body.cms-experience-v3.is-mobile.mobile-list-focus #right-pane {position:fixed!important;inset:0!important;z-index:9000!important;height:100dvh!important;}
 html body.cms-experience-v3.is-mobile.mobile-list-focus #mobile-tools-wrapper {display:none!important;}
 @media(max-width:360px) {html body.cms-experience-v3.is-mobile.music-mode .player-controls-inner {grid-template-columns:70px minmax(0,1fr)!important;}html body.cms-experience-v3.is-mobile .control-tool-btn {width:28px!important;height:28px!important;}}
+/* Background sources retain the saved image; only presentation changes. */
+html body.cms-experience-v3[data-background-source="color"] {background-image:none!important;background-color:var(--cms-solid-background)!important;}
+html body.cms-experience-v3[data-background-source="artwork"] {background-image:var(--bg-gradient)!important;}
+html body.cms-experience-v3 #cms-artwork-ambient img {filter:none!important;transform:none!important;}
+html body.cms-experience-v3 :is(.panel-glass,.wm-panel,.settings-window,.cms-rec-dialog,.stats-window) {backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
+html body.cms-experience-v3 :is(#widget-btn-play,.m-play-btn-circle),
+html body.cms-experience-v3 :is(#widget-btn-play,.m-play-btn-circle) :is(i,svg,cms-icon,path) {color:var(--cms-play-ink,var(--experience-accent-ink))!important;}
+html body.cms-experience-v3 :is(.settings-window,.cms-rec-dialog,.cms-rec-confirm,.stats-window) {--experience-text:#edf3fa;--experience-muted:#b6c5d5;background:rgb(18,27,40)!important;color:#edf3fa!important;}
+html body.cms-experience-v3.color-light :is(.settings-window,.cms-rec-dialog,.cms-rec-confirm,.stats-window) {--experience-text:#172c41;--experience-muted:#435d77;background:#f0f6fd!important;color:#172c41!important;}
+html body.cms-experience-v3 .cms-rec-confirm[open] {height:fit-content!important;min-height:0!important;max-height:calc(100dvh - 32px)!important;overflow:auto!important;display:block!important;padding:24px!important;}
+html body.cms-experience-v3 .cms-rec-confirm :is(.cms-rec-body,.cms-rec-content) {height:auto!important;min-height:0!important;flex:none!important;}
+html body.cms-experience-v3 #cms-recommendations,
+html body.cms-experience-v3.window-mode #cms-recommendations,
+html body.cms-experience-v3 #cms-rec-confirmation {--cms-rec-bg:#121b28;--cms-rec-fg:#edf3fa;background:#121b28!important;color:#edf3fa!important;}
+html body.cms-experience-v3.color-light #cms-recommendations,
+html body.cms-experience-v3.color-light.window-mode #cms-recommendations,
+html body.cms-experience-v3.color-light #cms-rec-confirmation {--cms-rec-bg:#f0f6fd;--cms-rec-fg:#172c41;background:#f0f6fd!important;color:#172c41!important;}
