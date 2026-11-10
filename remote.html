@@ -6,16 +6,16 @@
   <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="dark">
   <title>CMS Remote — PCの音楽を操作</title>
-  <link rel="stylesheet" href="remote-client.css?v=2026111003">
+  <link rel="stylesheet" href="remote-client.css?v=2026111101">
   <script src="remote-client.js?v=2026111003" defer></script>
-  <script src="remote-mobile.js?v=2026111003" defer></script>
+  <script src="remote-mobile.js?v=2026111101" defer></script>
 </head>
 <body>
   <header class="remote-topbar">
     <div class="remote-brand"><span class="remote-brand-icon" aria-hidden="true">⌁</span><div><strong>CMS <span>REMOTE</span></strong><small id="remote-status" role="status">接続を待っています</small></div></div>
     <div class="remote-actions">
-      <button id="remote-refresh" type="button" title="PCの表示を更新" aria-label="PCの表示を更新" disabled>↻</button>
-      <button id="remote-disconnect" type="button" title="接続を解除" aria-label="接続を解除" disabled>⏻</button>
+      <button id="remote-refresh" type="button" title="PCの表示を更新" aria-label="PCの表示を更新" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8a8 8 0 1 0 1 7M19 3v5h-5"/></svg></button>
+      <button id="remote-disconnect" type="button" title="接続を解除" aria-label="接続を解除" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9M7 5a8 8 0 1 0 10 0"/></svg></button>
     </div>
   </header>
   <div class="remote-context" id="remote-context"><span class="remote-connection-dot" id="remote-connection-dot"></span><span id="remote-context-text">音はPCから再生されます</span><button id="remote-layout" type="button" aria-pressed="false" hidden>PC表示</button></div>

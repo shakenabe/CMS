@@ -9,7 +9,19 @@
   const $=id=>document.getElementById(id);
   const el=(tag,text,parent)=>{const node=document.createElement(tag);if(text!=null)node.textContent=text;if(parent)parent.append(node);return node;};
   const button=(text,action,parent)=>{const node=el('button',text,parent);node.type='button';node.onclick=action;return node;};
-  const send=(action,args={})=>Promise.resolve(transport.send(action,args));
+  const hasCapability=name=>model?.capabilities?.[name]!==false&&(model?.source!=='pc-native'||model.capabilities?.[name]===true);
+  const send=(action,args={})=>{
+    const capability=action.startsWith('smart.')?'smart':action==='favorite'?'favorites':action.startsWith('cloud.')?'cloud':action==='settings'?'settings':action==='audio.settings'?'audio':null;
+    if(capability&&!hasCapability(capability)){transport.notify('この接続先では、この操作に対応していません。');return Promise.resolve(false);}
+    return Promise.resolve(transport.send(action,args));
+  };
+  const phoneSorts=['pc','custom','newest','oldest','playCount_desc','title_asc','title_desc'];
+  let localSort='pc';try{const saved=sessionStorage.getItem('cms-remote-phone-sort');if(phoneSorts.includes(saved))localSort=saved;}catch(_){}
+  function icon(node,name){
+    const paths={play:'M8 5l11 7-11 7z',pause:'M8 5v14M16 5v14',previous:'M6 5v14M18 5L8 12l10 7z',next:'M18 5v14M6 5l10 7-10 7z',volume:'M4 9h4l5-4v14l-5-4H4zM17 8c3 2 3 6 0 8'};
+    const svg=document.createElementNS('http://www.w3.org/2000/svg','svg'),path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width',name==='pause'?'4':'2');svg.setAttribute('stroke-linecap','round');path.setAttribute('d',paths[name]||paths.play);svg.append(path);node.replaceChildren(svg);
+  }
   const time=value=>Math.floor(Math.max(0,Number(value)||0)/60)+':'+String(Math.floor(Math.max(0,Number(value)||0)%60)).padStart(2,'0');
   root.innerHTML=`
     <section class="native-player" aria-label="PCで再生中">
@@ -51,6 +63,17 @@
   $('native-volume').oninput=()=>{$('native-volume-value').textContent=$('native-volume').value+'%';};
   $('native-star').onclick=()=>{const item=model?.player.item;if(item)void send('favorite',{contentKey:item.contentKey,favorite:!model.records.find(row=>row.contentKey===item.contentKey)?.favorite});};
   $('native-volume-toggle').onclick=()=>{const panel=$('native-volume-panel');panel.hidden=!panel.hidden;$('native-volume-toggle').setAttribute('aria-expanded',String(!panel.hidden));};
+  for(const [id,name]of [['native-play','play'],['native-prev','previous'],['native-next','next'],['native-volume-toggle','volume']])icon($(id),name);
+  function returnToPlaying(){
+    if(!model?.player.playlist?.length)return;
+    view='library';folder='__smart_queue';limit=Math.max(80,Math.ceil(((Number(model.player.index)||0)+1)/80)*80);listKey='';fullscreen(false);render();
+    requestAnimationFrame(()=>list.querySelector('.is-playing')?.scrollIntoView({block:'center'}));
+  }
+  $('native-title').tabIndex=0;$('native-title').setAttribute('role','button');$('native-title').setAttribute('aria-label','再生中の曲順へ戻る');
+  let titleTap=0;
+  $('native-title').addEventListener('pointerup',event=>{if(event.pointerType==='mouse')return;const now=Date.now();if(now-titleTap<350){returnToPlaying();titleTap=0;}else titleTap=now;});
+  $('native-title').addEventListener('dblclick',returnToPlaying);
+  $('native-title').addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();returnToPlaying();}});
   const folderDialog=$('native-folder-dialog');
   $('native-folders').onclick=()=>{renderFolders();folderDialog.showModal();$('native-folders').setAttribute('aria-expanded','true');};
   $('native-folder-close').onclick=()=>folderDialog.close();
@@ -60,7 +83,8 @@
     $('native-gesture-hint').textContent=value?'一覧の先頭から下にスワイプして再生画面へ':'曲一覧を上にスクロールして拡大';
   };
   $('native-expand').onclick=()=>fullscreen(true);$('native-back').onclick=()=>fullscreen(false);
-  $('native-search').oninput=()=>{limit=80;listKey='';renderList();};$('native-sort').onchange=()=>{limit=80;listKey='';renderList();};
+  $('native-sort').value=localSort;
+  $('native-search').oninput=()=>{limit=80;listKey='';renderList();};$('native-sort').onchange=()=>{localSort=phoneSorts.includes($('native-sort').value)?$('native-sort').value:'pc';try{sessionStorage.setItem('cms-remote-phone-sort',localSort);}catch(_){}limit=80;listKey='';renderList();};
   const list=$('native-list');
   // These gestures change the phone view only. They never forward scroll/DOM
   // events to the PC. Keep touch fallback for Safari's native pointercancel.
@@ -98,10 +122,11 @@
     for(const item of model.folders){const pick=button('',()=>{folder=item.id;limit=80;listKey='';folderDialog.close();render();},target);pick.className='native-folder';pick.dataset.folderId=item.id;pick.setAttribute('aria-current',String(item.id===folder));el('span',(item.id===folder?'✓ ':'▱ ')+item.name,pick);el('strong',String(item.count),pick);}
   }
   function row(item,parent,playAction) {
-    const article=el('article',null,parent);article.className='native-row';
+    const article=el('article',null,parent);article.className='native-row';article.dataset.queueItemId=item.queueItemId||'';
     const art=el('img',null,article);art.alt='';art.loading='lazy';safeArt(art,item.thumbnail);
     const main=button('',playAction,article);main.className='native-row-title';el('strong',item.title,main);el('small',item.artist || '',main);
     const star=button(item.favorite?'★':'☆',()=>void send('favorite',{contentKey:item.contentKey,favorite:!item.favorite}),article);star.setAttribute('aria-label',item.title+'のお気に入り');star.setAttribute('aria-pressed',String(Boolean(item.favorite)));
+    star.hidden=!hasCapability('favorites');
     article.classList.toggle('is-playing',folder==='__smart_queue' && item.queueItemId ? item.queueItemId===model.player.currentQueueItemId : item.contentKey===model.player.item?.contentKey);return article;
   }
   function filteredSongs() {
@@ -110,14 +135,15 @@
     const virtualKeys=model.folders.find(item=>item.id===folder)?.contentKeys;
     const membership=Array.isArray(virtualKeys)?new Set(virtualKeys):null;
     let songs=source.filter(item=>(folder==='__all'||folder==='__smart_queue'||(membership?membership.has(item.contentKey):item.folders.includes(folder)))&&(!query||(item.title+' '+item.artist+' '+(item.tags || []).join(' ')).toLocaleLowerCase().includes(query)));
-    const sort=$('native-sort').value;
+    if(folder==='__smart_queue')return songs;
+    const sort=localSort;
     if(sort==='pc' && folder!=='__smart_queue' && Array.isArray(model.player.sortKeys)){
       const ranks=new Map(model.player.sortKeys.map((key,index)=>[key,index]));songs=songs.slice().sort((a,b)=>(ranks.get(a.contentKey)??Infinity)-(ranks.get(b.contentKey)??Infinity));
     }else if(!['pc','custom'].includes(sort))songs=songs.slice().sort((a,b)=>sort==='newest'?b.savedAt-a.savedAt:sort==='oldest'?a.savedAt-b.savedAt:sort==='playCount_desc'?b.playCount-a.playCount:sort==='title_desc'?b.title.localeCompare(a.title):a.title.localeCompare(b.title));
     return songs;
   }
   const activeSort=()=>{
-    const selected=$('native-sort').value;
+    const selected=localSort;
     return selected!=='pc'?selected:['custom','newest','oldest','title_asc','title_desc','playCount_desc','recommended'].includes(model.player.sort)?model.player.sort:'custom';
   };
   function renderList() {
@@ -126,7 +152,7 @@
     const songs=view==='library'?filteredSongs():model.records.filter(item=>item.favorite);
     if(view==='library' && folder==='__smart_queue')limit=Math.max(limit,Math.ceil(((Number(model.player.index)||0)+1)/80)*80);
     const rows=view==='smart'&&smartTab==='saved'?model.smart.folders:songs;
-    const key=JSON.stringify([view,smartTab,folder,limit,rows,model.player.item?.contentKey,model.player.queueId,model.player.queueRevision,model.player.currentQueueItemId]);if(key===listKey)return;listKey=key;
+    const key=JSON.stringify([model.source,model.capabilities,view,smartTab,folder,limit,rows,model.player.item?.contentKey,model.player.queueId,model.player.queueRevision,model.player.currentQueueItemId]);if(key===listKey)return;listKey=key;
     const context=JSON.stringify([view,smartTab,folder,$('native-sort').value,$('native-search').value,folder==='__smart_queue'?model.player.queueId:'']);
     if(renderedListContext)scrollPositions.set(renderedListContext,list.scrollTop);
     const oldTop=context===renderedListContext?list.scrollTop:scrollPositions.get(context)||0;
@@ -197,6 +223,13 @@
   button('PCで更新を確認',()=>void send('cloud.refresh'),cloud).id='native-cloud-refresh';
   el('p','Google接続はPCで一度行います。JSON読み込みはPCの手動・復旧用として残っています。',cloud);
   const theme=select('テーマ',[['sf','SF'],['modern','現代風'],['nerv','EVA風']],settings,'native-theme');theme.onchange=()=>void send('settings',{theme:theme.value});
+  const audioSection=el('section',null,settings);el('h3','PCの音声を整える',audioSection);
+  const audioControls=[];
+  for(const [key,label]of [['limiter','大きな音を抑える'],['leveling','曲ごとの音量差を小さくする']]){
+    const wrap=el('label',null,audioSection),input=el('input',null,wrap);input.type='checkbox';input.id='native-audio-'+key;input.dataset.audio=key;el('span',label,wrap);
+    input.onchange=()=>void send('audio.settings',{limiter:$('native-audio-limiter').checked,leveling:$('native-audio-leveling').checked});audioControls.push(input);
+  }
+  el('p','CMS拡張機能との接続を確認しています。',audioSection).id='native-audio-reason';
   const settingsControls=[];
   for(const [key,label] of [['performanceMode','軽量化モード'],['dataSaverMode','通信量を抑える'],['musicMode','音楽モード'],['showThumbnails','サムネイルを表示'],['showClock','時計を表示'],['resumeLastPlayback','前回の再生位置を保持']]) {
     const wrap=el('label',null,settings),input=el('input',null,wrap);input.type='checkbox';input.dataset.setting=key;el('span',label,wrap);input.onchange=()=>void send('settings',{[key]:input.checked});settingsControls.push(input);
@@ -204,6 +237,11 @@
   const diagnostics=el('details',null,settings);el('summary','接続診断',diagnostics);el('p','',diagnostics).id='native-diagnostics';
   function render() {
     if(!model)return;markTabs();
+    root.querySelector('[data-view="smart"]').hidden=!hasCapability('smart');
+    $('native-star').hidden=!hasCapability('favorites');
+    cloud.hidden=!hasCapability('cloud');theme.closest('label').hidden=!hasCapability('settings');
+    for(const input of settingsControls)input.closest('label').hidden=!hasCapability('settings');
+    audioSection.hidden=!hasCapability('audio');
     $('native-smart-tabs').hidden=view!=='smart';$('native-library-tools').hidden=view!=='library';$('native-folders').hidden=view!=='library';
     list.hidden=view==='settings'||view==='smart'&&smartTab==='create';create.hidden=view!=='smart'||smartTab!=='create';settings.hidden=view!=='settings';
     $('native-list-title').textContent=view==='settings'?'設定':view==='smart'?smartTab==='saved'?'保存した選曲':smartTab==='favorites'?'すべてのお気に入り':'新しく選曲':model.folders.find(item=>item.id===folder)?.name || 'すべて';
@@ -212,16 +250,19 @@
   }
   let foldersKey='',initialized=false,lastKey='';
   function update(next) {
-    model=next;
+    model={...next,player:{...next.player,settings:next.player?.settings||{}},cloud:next.cloud||{connected:false,auto:false,message:'PC保存音源のリモコン'},smart:next.smart||{settings:{mode:'smartRandom',profile:'standard',length:200,scope:'library',excludedFolders:[],excludedTags:[]},folders:[],preview:null}};
+    if(view==='smart'&&!hasCapability('smart')){view='library';listKey='';}
     const p=model.player;
     if(!initialized && model.folders.some(item=>item.id===p.folderId))folder=p.folderId;
     const sortName={custom:'登録順',newest:'新しい順',oldest:'古い順',title_asc:'名前順 ↑',title_desc:'名前順 ↓',playCount_desc:'再生回数順',recommended:'おすすめ順'}[p.sort] || '登録順';
     $('native-sort').querySelector('[value="pc"]').textContent='PC：'+sortName;
+    $('native-sort').value=localSort;
     $('native-title').textContent=p.item?.title || '曲を選んでください';$('native-artist').textContent=p.item?.artist || '音声はPCから出ます';safeArt($('native-art'),p.item?.thumbnail);
     const artwork=transport.safeImageUrl(p.item?.thumbnail);root.style.setProperty('--native-artwork',artwork?'url('+JSON.stringify(artwork)+')':'none');
     root.dataset.theme=['sf','modern','nerv'].includes(p.settings.theme)?p.settings.theme:'sf';
+    document.body.dataset.theme=root.dataset.theme;
     $('native-art-empty').hidden=Boolean(artwork);$('native-source').textContent='再生元：'+(model.folders.find(item=>item.id===(p.playbackFolderId||p.folderId))?.name || p.item?.folders?.[0] || 'PCの再生キュー');
-    $('native-play').textContent=p.playing?'Ⅱ':'▶';$('native-play').setAttribute('aria-label',p.intent==='playing'?'PCで一時停止':'PCで再生');
+    icon($('native-play'),p.intent==='playing'?'pause':'play');$('native-play').setAttribute('aria-label',p.intent==='playing'?'PCで一時停止':'PCで再生');
     $('native-lock').textContent=p.locked?'▢ ロック解除':'▣ ロック';
     $('native-time').textContent=time(p.time);$('native-duration').textContent=time(p.duration);
     if(document.activeElement!==$('native-seek'))$('native-seek').value=p.duration?String(Math.round(p.time/p.duration*1000)):'0';
@@ -240,6 +281,8 @@
     }
     if(!selectionDirty){const savedScope=model.smart.settings.scope || 'library';if(savedScope.startsWith('folder:')){scope.value='folder';target.value=savedScope.slice(7);}else if(['library','favorites'].includes(savedScope))scope.value=savedScope;}
     if(document.activeElement!==theme)theme.value=p.settings.theme;
+    for(const input of audioControls){input.checked=model.audio?.[input.dataset.audio]===true;input.disabled=!connected||!model.audio?.supported&&model.audio?.reason!=='not-started';}
+    $('native-audio-reason').textContent=model.audio?.reason==='not-started'?'音声処理はOFFです。操作するとすぐにPCへ適用します。':model.audio?.reason||(model.audio?.supported?'PCの音声に適用します。スマホから音は出ません。':'この再生経路は音声処理に対応していません。');
     for(const input of settingsControls)if(input!==document.activeElement)input.checked=Boolean(p.settings[input.dataset.setting]);
     $('native-diagnostics').textContent='PC状態を受信済み · '+new Date().toLocaleTimeString('ja-JP')+' · 再生状態：'+p.mediaState+' · 操作の受付状況は上部に表示します。';
     if(model.truncated)transport.notify('ライブラリが大きいため、一部の曲を表示しています。全曲の操作はPCで行えます。');
@@ -254,6 +297,8 @@
     if(busy)root.querySelectorAll('.native-player button,.native-player input,#native-create button,#native-settings button,.native-saved-card button,.native-row button').forEach(node=>{node.disabled=true;});
     generate.disabled=!value || busy || generating;
     if(model)$('native-cloud-refresh').disabled=!value||busy||!model.cloud.connected;
+    for(const input of audioControls)input.disabled=!value||busy||!model?.audio?.supported&&model?.audio?.reason!=='not-started';
+    $('native-sort').disabled=!value||folder==='__smart_queue';
   }
   window.CmsRemoteMobile=Object.freeze({update,setConnected});window.dispatchEvent(new Event('cms-remote-mobile-ready'));
 })();

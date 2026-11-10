@@ -96,12 +96,12 @@ html body.cms-experience-v3 .cms-next-preview { display:none; }
  html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) #pc-appbar { display:flex!important; flex:none; min-height:60px; margin:0!important; padding:10px 16px!important; border-radius:0!important; }
  html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) #widget-container {
    display:grid!important; flex:1; min-height:0; width:100%!important; height:auto!important; padding:12px!important;
-   grid-template-columns:minmax(185px,min(var(--cms-folder-width,240px),23vw)) minmax(230px,min(var(--cms-player-width,360px),30vw)) minmax(0,1fr)!important;
-   grid-template-rows:minmax(205px,min(var(--cms-player-height,300px),40dvh)) minmax(160px,1fr)!important;
+   grid-template-columns:minmax(160px,min(var(--cms-folder-width,240px),26vw)) minmax(190px,min(var(--cms-player-width,360px),46vw)) minmax(230px,1fr)!important;
+   grid-template-rows:minmax(160px,min(var(--cms-player-height,300px),calc(100dvh - 280px))) minmax(160px,1fr)!important;
    grid-template-areas:'folders player controls' 'folders library library'!important; gap:12px!important; align-content:stretch!important;
  }
  html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv).show-clock #widget-container {
-   grid-template-rows:42px minmax(205px,min(var(--cms-player-height,300px),36dvh)) minmax(160px,1fr)!important;
+   grid-template-rows:42px minmax(160px,min(var(--cms-player-height,300px),calc(100dvh - 322px))) minmax(160px,1fr)!important;
    grid-template-areas:'clock clock clock' 'folders player controls' 'folders library library'!important;
  }
  html body.cms-redesign.cms-studio.cms-experience-v3.is-pc:not(.window-mode):is(.theme-sf,.theme-modern,.theme-nerv) :is(#left-pane,#right-pane) {display:contents!important;}
@@ -203,3 +203,18 @@ html body.cms-experience-v3.color-light #cms-rec-confirmation {--cms-rec-bg:#f0f
 /* SF: angular controls on every responsive surface. */
 html body.cms-redesign.cms-studio.cms-experience-v3.theme-sf *,html body.cms-redesign.cms-studio.cms-experience-v3.theme-sf *::before,html body.cms-redesign.cms-studio.cms-experience-v3.theme-sf *::after{border-radius:0!important}
 html body.cms-redesign.cms-studio.cms-experience-v3.theme-sf :is(#widget-btn-play,#pocket-btn-play,.m-play-btn-circle){border-radius:0!important}
+
+/* Dialogs share one palette, independently of custom colors on the player. */
+html body.cms-redesign.cms-studio.cms-experience-v3 :is(.settings-window,.cms-rec-dialog,.cms-rec-confirm,.stats-window,#cms-recommendations,#cms-rec-confirmation) {
+  --experience-surface:var(--cms-dialog-surface);--experience-text:var(--cms-dialog-text);--experience-muted:var(--cms-dialog-muted);--experience-edge:var(--cms-dialog-border);
+  --rd-panel:var(--cms-dialog-surface);--rd-text:var(--cms-dialog-text);--rd-muted:var(--cms-dialog-muted);--rd-border:var(--cms-dialog-border);
+  --studio-card:rgb(var(--cms-dialog-surface));--studio-text:var(--cms-dialog-text);--studio-muted:var(--cms-dialog-muted);--studio-edge:var(--cms-dialog-border);
+  --text-color:var(--cms-dialog-text);--sub-text-color:var(--cms-dialog-muted);--theme-text:var(--cms-dialog-text);--theme-text-muted:var(--cms-dialog-muted);--border-color:var(--cms-dialog-border);--theme-border:var(--cms-dialog-border);
+  --experience-accent:var(--cms-dialog-accent);--rd-accent:var(--cms-dialog-accent);--studio-accent:var(--cms-dialog-accent);--accent-color:var(--cms-dialog-accent);--theme-accent:var(--cms-dialog-accent);--theme-border-active:var(--cms-dialog-accent);
+  --cms-rec-bg:rgb(var(--cms-dialog-surface));--cms-rec-fg:var(--cms-dialog-text);
+  background:rgb(var(--cms-dialog-surface))!important;color:var(--cms-dialog-text)!important;border-color:var(--cms-dialog-border)!important;
+}
+html body.cms-experience-v3 :is(.stats-summary-card,.stats-highlight-card){border-top:0!important;border-bottom:0!important;border-left:0!important;box-shadow:none!important;}
+html body.cms-experience-v3 :is(.settings-window,.cms-rec-dialog,.stats-window) :is(input,select,textarea){color:var(--cms-dialog-text);background:color-mix(in srgb,rgb(var(--cms-dialog-surface)) 92%,var(--cms-dialog-text));border-color:var(--cms-dialog-border);}
+html body.cms-experience-v3 .stats-header-actions cms-icon{width:1.2em;height:1.2em;flex:none;}
+.cms-audio-settings{padding:12px 0;border-block:1px solid var(--cms-dialog-border);}.cms-audio-settings>label{display:flex;align-items:center;gap:9px;margin:12px 0}.cms-audio-settings>p{font-size:.85rem;line-height:1.6;color:var(--cms-dialog-muted);}

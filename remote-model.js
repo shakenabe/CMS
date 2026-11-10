@@ -31,7 +31,7 @@
         for (const name of names) if (!folders.some(folder => folder.id === name)) folders.push({id:name,name,count:songs.filter(song => song.folders.includes(name)).length});
         folders.forEach((folder,index)=>{folder.order=index;});
         return { version:2, player:{ ...state, item:state.item ? {...fields(state.item),queueItemId:state.currentQueueItemId || state.item.queueItemId || null} : null, playlist:state.playlist.slice(0,10000).map(item=>({...fields(item),queueItemId:item.queueItemId || item._cmsQueueItemId || null,favorite:preferences.get(keyOf(item))?.favorite===true})), folders:undefined },
-            records:songs, folders, truncated:records.length>songs.length, cloud:window.CmsWebFirebase?.getSyncStatus?.() || {connected:false,auto:false,message:'PCでGoogle接続してください'},
+            records:songs, folders, truncated:records.length>songs.length, audio:window.CmsWebAudio?.getState() || {supported:false,limiter:false,leveling:false,reason:'CMS拡張機能の音声処理が必要です。'}, cloud:window.CmsWebFirebase?.getSyncStatus?.() || {connected:false,auto:false,message:'PCでGoogle接続してください'},
             smart:{ settings:player().getRecommendationLaunchSettings(), folders:(data?.folders || []).map(folder => ({id:folder.folderId,name:short(folder.name),revision:folder.folderRevision,count:folder.items.length})),
                 preview:preview ? {id:previewId,conditions:previewConditions,items:preview.items.map(item => ({contentKey:item.contentKey,title:short(item.title),reasons:item.reasons})),count:preview.items.length} : null } };
     }
@@ -62,6 +62,13 @@
                 || action==='volume' && (!Number.isFinite(args.volume)||args.volume<0||args.volume>100)) throw new Error('操作値が範囲外です。');
             if (action==='track' && (typeof args.contentKey!=='string' || !snapshot().folders.some(folder=>folder.id===args.folderId) || !['custom','newest','oldest','title_asc','title_desc','playCount_desc','recommended'].includes(args.sort))) throw new Error('曲一覧が変更されました。');
             await player().remotePlayback(action,args); return;
+        }
+        if (action==='audio.settings') {
+            requireFields(args,['limiter','leveling']);
+            if(typeof args.limiter!=='boolean'||typeof args.leveling!=='boolean')throw new Error('音声処理の設定が不正です。');
+            const status=window.CmsWebAudio?.getState();
+            if(!status?.supported&&status?.reason!=='not-started')throw new Error('PCのCMS拡張機能で音声処理を有効にしてください。');
+            await window.CmsWebAudio.setSettings(args);return;
         }
         if (action==='settings') { player().remoteSettings(args); return; }
         if (action==='cloud.refresh') {
