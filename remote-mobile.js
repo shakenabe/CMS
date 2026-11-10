@@ -3,7 +3,7 @@
   'use strict';
   const root=document.getElementById('remote-mobile');
   const transport=window.CmsRemoteTransport;
-  let model=null,connected=false,view='library',smartTab='saved',folder='__all',showFolders=false,limit=80,listKey='',touchStart=null,touchBusy=false,selectionDirty=false,generating=false;
+  let model=null,connected=false,view='library',smartTab='saved',folder='__all',limit=80,listKey='',touchBusy=false,selectionDirty=false,generating=false;
   let renderedListContext='';
   const scrollPositions=new Map();
   const $=id=>document.getElementById(id);
@@ -11,7 +11,24 @@
   const button=(text,action,parent)=>{const node=el('button',text,parent);node.type='button';node.onclick=action;return node;};
   const send=(action,args={})=>Promise.resolve(transport.send(action,args));
   const time=value=>Math.floor(Math.max(0,Number(value)||0)/60)+':'+String(Math.floor(Math.max(0,Number(value)||0)%60)).padStart(2,'0');
-  root.innerHTML=`<section class="native-player"><div class="native-player-heading"><span>PC PLAYER</span><button type="button" id="native-lock">▣ ロック</button></div><div class="native-now"><img id="native-art" alt="再生中の曲のサムネイル"><div><small>いま聴いている曲</small><h1 id="native-title">曲を選んでください</h1><p id="native-artist"></p></div></div><p id="native-playback-notice" role="status" hidden></p><div class="native-time"><span id="native-time">0:00</span><input type="range" id="native-seek" min="0" max="1000" value="0" aria-label="PCの再生位置"><span id="native-duration">0:00</span></div><div class="native-controls"><button type="button" id="native-prev" aria-label="PCで前の曲">⏮</button><button type="button" id="native-play" aria-label="PCで再生">▶</button><button type="button" id="native-next" aria-label="PCで次の曲">⏭</button><button type="button" id="native-star" aria-label="再生中の曲をお気に入りに">☆</button></div><label class="native-volume">♫<input id="native-volume" type="range" min="0" max="100" aria-label="PCの音量"><output id="native-volume-value"></output></label></section><nav class="native-nav" aria-label="遠隔画面"><button type="button" data-view="library">ライブラリ</button><button type="button" data-view="smart">選曲・★</button><button type="button" data-view="settings">設定</button></nav><section class="native-pane"><div class="native-toolbar"><button type="button" id="native-back" hidden>‹ 戻る</button><button type="button" id="native-folders">▱ フォルダ</button><strong id="native-list-title">すべて</strong><button type="button" id="native-expand" aria-label="一覧を全画面表示">⤢</button></div><div id="native-library-tools" class="native-search"><input id="native-search" type="search" placeholder="曲名・投稿者・タグを検索" aria-label="曲を検索"><select id="native-sort" aria-label="曲の並び順"><option value="custom">CMSの順番</option><option value="newest">新しい順</option><option value="oldest">古い順</option><option value="playCount_desc">再生回数順</option><option value="title_asc">名前順</option></select></div><nav id="native-smart-tabs" class="native-nav" hidden><button type="button" data-smart="saved">保存した選曲</button><button type="button" data-smart="favorites">★ お気に入り</button><button type="button" data-smart="create">新しく選曲</button></nav><div id="native-list" class="native-list"></div><section id="native-create" class="native-form" hidden></section><section id="native-settings" class="native-form" hidden></section></section><dialog id="native-confirm"><form method="dialog"><h2 id="native-confirm-title"></h2><p id="native-confirm-text"></p><input id="native-confirm-name" maxlength="120" aria-label="フォルダ名" hidden><div class="native-confirm-actions"><button value="cancel">キャンセル</button><button id="native-confirm-ok" value="ok">実行</button></div></form></dialog>`;
+  root.innerHTML=`
+    <section class="native-player" aria-label="PCで再生中">
+      <div class="native-player-heading"><span>再生中の曲 · PC PLAYER</span><button type="button" id="native-lock">▣ ロック</button></div>
+      <div class="native-artwork"><img id="native-art" alt="再生中の曲のサムネイル"><span id="native-art-empty" aria-hidden="true">♫</span></div>
+      <div class="native-now"><div><h1 id="native-title">曲を選んでください</h1><p id="native-artist"></p><small id="native-source">音声はPCから出ます</small></div><button type="button" id="native-star" aria-label="再生中の曲をお気に入りに">☆</button></div>
+      <p id="native-playback-notice" role="status" hidden></p>
+      <div class="native-time"><span id="native-time">0:00</span><input type="range" id="native-seek" min="0" max="1000" value="0" aria-label="PCの再生位置"><span id="native-duration">0:00</span></div>
+      <div class="native-controls"><button type="button" id="native-prev" aria-label="PCで前の曲">⏮</button><button type="button" id="native-play" aria-label="PCで再生">▶</button><button type="button" id="native-next" aria-label="PCで次の曲">⏭</button><button type="button" id="native-volume-toggle" aria-label="PCの音量調整" aria-expanded="false">♫</button></div>
+      <label class="native-volume" hidden id="native-volume-panel">PCの音量<input id="native-volume" type="range" min="0" max="100" aria-label="PCの音量"><output id="native-volume-value"></output></label>
+    </section>
+    <nav class="native-nav" aria-label="遠隔画面"><button type="button" data-view="library">ライブラリ</button><button type="button" data-view="smart">選曲・★</button><button type="button" data-view="settings">設定</button></nav>
+    <section class="native-pane"><div class="native-toolbar"><button type="button" id="native-back" hidden>⌄ 再生画面へ</button><button type="button" id="native-folders" aria-haspopup="dialog" aria-expanded="false">▱ フォルダ</button><strong id="native-list-title">すべて</strong><button type="button" id="native-expand" aria-label="一覧を全画面表示">⤢</button></div>
+      <div id="native-library-tools" class="native-search"><input id="native-search" type="search" placeholder="曲名・投稿者・タグを検索" aria-label="曲を検索"><select id="native-sort" aria-label="曲の並び順"><option value="pc">PCと同じ並び順</option><option value="custom">登録順</option><option value="newest">新しい順</option><option value="oldest">古い順</option><option value="playCount_desc">再生回数順</option><option value="title_asc">名前順（昇順）</option><option value="title_desc">名前順（降順）</option></select></div>
+      <nav id="native-smart-tabs" class="native-nav" hidden><button type="button" data-smart="saved">保存した選曲</button><button type="button" data-smart="favorites">★ お気に入り</button><button type="button" data-smart="create">新しく選曲</button></nav>
+      <p class="native-gesture-hint" id="native-gesture-hint">曲一覧を上にスクロールして拡大</p><div id="native-list" class="native-list"></div><section id="native-create" class="native-form" hidden></section><section id="native-settings" class="native-form" hidden></section>
+    </section>
+    <dialog id="native-folder-dialog" aria-labelledby="native-folder-heading"><header><h2 id="native-folder-heading">フォルダを選択</h2><button type="button" id="native-folder-close" aria-label="フォルダ選択を閉じる">×</button></header><p>PCのライブラリと同じ並び順</p><div id="native-folder-list"></div></dialog>
+    <dialog id="native-confirm"><form method="dialog"><h2 id="native-confirm-title"></h2><p id="native-confirm-text"></p><input id="native-confirm-name" maxlength="120" aria-label="フォルダ名" hidden><div class="native-confirm-actions"><button value="cancel">キャンセル</button><button id="native-confirm-ok" value="ok">実行</button></div></form></dialog>`;
   const safeArt=(node,url)=>{const safe=transport.safeImageUrl(url);if(safe){if(node.dataset.failedUrl===safe){node.hidden=true;return;}node.onerror=()=>{node.dataset.failedUrl=safe;node.hidden=true;};if(node.getAttribute('src')!==safe)node.src=safe;node.hidden=false;}else{node.removeAttribute('src');node.hidden=true;}};
   async function confirm(title,text,initialName) {
     $('native-confirm-title').textContent=title;$('native-confirm-text').textContent=text;
@@ -23,7 +40,7 @@
     root.querySelectorAll('[data-view]').forEach(node=>node.setAttribute('aria-current',node.dataset.view===view?'page':'false'));
     root.querySelectorAll('[data-smart]').forEach(node=>node.setAttribute('aria-current',node.dataset.smart===smartTab?'page':'false'));
   }
-  function navigate(next) {view=next;limit=80;listKey='';showFolders=false;render();}
+  function navigate(next) {view=next;limit=80;listKey='';fullscreen(false);render();}
   root.querySelectorAll('[data-view]').forEach(node=>node.onclick=()=>navigate(node.dataset.view));
   root.querySelectorAll('[data-smart]').forEach(node=>node.onclick=()=>{smartTab=node.dataset.smart;limit=80;listKey='';render();});
   $('native-play').onclick=()=>void send('play',{playing:model?.player.intent!=='playing'});
@@ -33,17 +50,53 @@
   $('native-volume').onchange=()=>void send('volume',{volume:Number($('native-volume').value)});
   $('native-volume').oninput=()=>{$('native-volume-value').textContent=$('native-volume').value+'%';};
   $('native-star').onclick=()=>{const item=model?.player.item;if(item)void send('favorite',{contentKey:item.contentKey,favorite:!model.records.find(row=>row.contentKey===item.contentKey)?.favorite});};
-  $('native-folders').onclick=()=>{showFolders=!showFolders;listKey='';render();};
-  const fullscreen=value=>{root.classList.toggle('native-fullscreen',value);$('native-back').hidden=!value;$('native-expand').hidden=value;};
+  $('native-volume-toggle').onclick=()=>{const panel=$('native-volume-panel');panel.hidden=!panel.hidden;$('native-volume-toggle').setAttribute('aria-expanded',String(!panel.hidden));};
+  const folderDialog=$('native-folder-dialog');
+  $('native-folders').onclick=()=>{renderFolders();folderDialog.showModal();$('native-folders').setAttribute('aria-expanded','true');};
+  $('native-folder-close').onclick=()=>folderDialog.close();
+  folderDialog.addEventListener('close',()=>{$('native-folders').setAttribute('aria-expanded','false');$('native-folders').focus({preventScroll:true});});
+  const fullscreen=value=>{
+    root.classList.toggle('native-fullscreen',value);$('native-back').hidden=!value;$('native-expand').hidden=value;
+    $('native-gesture-hint').textContent=value?'一覧の先頭から下にスワイプして再生画面へ':'曲一覧を上にスクロールして拡大';
+  };
   $('native-expand').onclick=()=>fullscreen(true);$('native-back').onclick=()=>fullscreen(false);
   $('native-search').oninput=()=>{limit=80;listKey='';renderList();};$('native-sort').onchange=()=>{limit=80;listKey='';renderList();};
   const list=$('native-list');
-  list.addEventListener('pointerdown',event=>{touchStart={x:event.clientX,y:event.clientY};touchBusy=true;});
-  list.addEventListener('pointermove',event=>{if(touchStart && Math.abs(event.clientY-touchStart.y)>35){if(event.clientY<touchStart.y)fullscreen(true);touchStart.moved=true;}});
-  list.addEventListener('click',event=>{if(touchStart?.moved){event.preventDefault();event.stopImmediatePropagation();}},{capture:true});
-  window.addEventListener('pointerup',()=>{touchBusy=false;setTimeout(()=>{touchStart=null;renderList();},80);});
-  window.addEventListener('pointercancel',()=>{touchBusy=false;touchStart=null;});
-  list.addEventListener('scroll',()=>{if(list.scrollTop>90)fullscreen(true);},{passive:true});
+  // These gestures change the phone view only. They never forward scroll/DOM
+  // events to the PC. Keep touch fallback for Safari's native pointercancel.
+  let pointerStart=null,touchStart=null,suppressClickUntil=0,collapseUntil=0,releaseTimer;
+  const atStart=()=>list.scrollTop<=8;
+  const begin=(x,y,id)=>({x,y,id,expanded:root.classList.contains('native-fullscreen'),atStart:atStart()});
+  const move=(start,x,y,event)=>{
+    if(!start)return;
+    const dx=x-start.x,dy=y-start.y;
+    if(Math.abs(dy)<16 || Math.abs(dy)<=Math.abs(dx)*1.1)return;
+    suppressClickUntil=Date.now()+500;
+    if(start.expanded && start.atStart && atStart() && dy>0){
+      collapseUntil=Date.now()+450;fullscreen(false);if(event.cancelable)event.preventDefault();
+    }else if(dy<0 && Date.now()>collapseUntil)fullscreen(true);
+  };
+  const finish=()=>{clearTimeout(releaseTimer);releaseTimer=setTimeout(()=>{touchBusy=false;pointerStart=null;touchStart=null;renderList();},100);};
+  list.addEventListener('pointerdown',event=>{if(event.isPrimary===false)return;clearTimeout(releaseTimer);pointerStart=begin(event.clientX,event.clientY,event.pointerId);touchBusy=true;},{passive:true});
+  list.addEventListener('pointermove',event=>{if(pointerStart?.id===event.pointerId)move(pointerStart,event.clientX,event.clientY,event);},{passive:false});
+  list.addEventListener('touchstart',event=>{if(event.touches.length!==1)return;clearTimeout(releaseTimer);const point=event.touches[0];touchStart=begin(point.clientX,point.clientY);touchBusy=true;},{passive:true});
+  list.addEventListener('touchmove',event=>{if(event.touches.length===1){const point=event.touches[0];move(touchStart,point.clientX,point.clientY,event);}},{passive:false});
+  list.addEventListener('click',event=>{if(Date.now()<suppressClickUntil){event.preventDefault();event.stopImmediatePropagation();}},{capture:true});
+  for(const name of ['pointerup','pointercancel','touchend','touchcancel'])window.addEventListener(name,finish,{passive:true});
+  list.addEventListener('wheel',event=>{
+    if(event.deltaY< -8 && atStart() && root.classList.contains('native-fullscreen')){collapseUntil=Date.now()+450;fullscreen(false);if(event.cancelable)event.preventDefault();}
+    else if(event.deltaY>8 && Date.now()>collapseUntil)fullscreen(true);
+  },{passive:false});
+  // Snapshot renders and current-song following also scroll this element.
+  // Only explicit wheel/swipe gestures may expand it, never a scroll event.
+  window.addEventListener('keydown',event=>{if(event.key==='Escape')fullscreen(false);});
+  let folderKey='';
+  function renderFolders(){
+    if(!model)return;const key=JSON.stringify([model.folders,folder]);if(key===folderKey)return;folderKey=key;
+    const target=$('native-folder-list');target.replaceChildren();
+    // PC snapshot order is authoritative; never alphabetize on the phone.
+    for(const item of model.folders){const pick=button('',()=>{folder=item.id;limit=80;listKey='';folderDialog.close();render();},target);pick.className='native-folder';pick.dataset.folderId=item.id;pick.setAttribute('aria-current',String(item.id===folder));el('span',(item.id===folder?'✓ ':'▱ ')+item.name,pick);el('strong',String(item.count),pick);}
+  }
   function row(item,parent,playAction) {
     const article=el('article',null,parent);article.className='native-row';
     const art=el('img',null,article);art.alt='';art.loading='lazy';safeArt(art,item.thumbnail);
@@ -54,19 +107,27 @@
   function filteredSongs() {
     const query=$('native-search').value.trim().toLocaleLowerCase();
     const source=folder==='__smart_queue'?model.player.playlist:model.records;
-    let songs=source.filter(item=>(folder==='__all'||folder==='__smart_queue'||item.folders.includes(folder))&&(!query||(item.title+' '+item.artist+' '+(item.tags || []).join(' ')).toLocaleLowerCase().includes(query)));
+    const virtualKeys=model.folders.find(item=>item.id===folder)?.contentKeys;
+    const membership=Array.isArray(virtualKeys)?new Set(virtualKeys):null;
+    let songs=source.filter(item=>(folder==='__all'||folder==='__smart_queue'||(membership?membership.has(item.contentKey):item.folders.includes(folder)))&&(!query||(item.title+' '+item.artist+' '+(item.tags || []).join(' ')).toLocaleLowerCase().includes(query)));
     const sort=$('native-sort').value;
-    if(sort!=='custom')songs=songs.slice().sort((a,b)=>sort==='newest'?b.savedAt-a.savedAt:sort==='oldest'?a.savedAt-b.savedAt:sort==='playCount_desc'?b.playCount-a.playCount:a.title.localeCompare(b.title));
+    if(sort==='pc' && folder!=='__smart_queue' && Array.isArray(model.player.sortKeys)){
+      const ranks=new Map(model.player.sortKeys.map((key,index)=>[key,index]));songs=songs.slice().sort((a,b)=>(ranks.get(a.contentKey)??Infinity)-(ranks.get(b.contentKey)??Infinity));
+    }else if(!['pc','custom'].includes(sort))songs=songs.slice().sort((a,b)=>sort==='newest'?b.savedAt-a.savedAt:sort==='oldest'?a.savedAt-b.savedAt:sort==='playCount_desc'?b.playCount-a.playCount:sort==='title_desc'?b.title.localeCompare(a.title):a.title.localeCompare(b.title));
     return songs;
   }
+  const activeSort=()=>{
+    const selected=$('native-sort').value;
+    return selected!=='pc'?selected:['custom','newest','oldest','title_asc','title_desc','playCount_desc','recommended'].includes(model.player.sort)?model.player.sort:'custom';
+  };
   function renderList() {
     if(!model || touchBusy)return;
     if(view==='settings'||view==='smart'&&smartTab==='create')return;
     const songs=view==='library'?filteredSongs():model.records.filter(item=>item.favorite);
-    if(view==='library' && !showFolders && folder==='__smart_queue')limit=Math.max(limit,Math.ceil(((Number(model.player.index)||0)+1)/80)*80);
-    const rows=view==='smart'&&smartTab==='saved'?model.smart.folders:showFolders?model.folders:songs;
-    const key=JSON.stringify([view,smartTab,showFolders,folder,limit,rows,model.player.item?.contentKey,model.player.queueId,model.player.queueRevision,model.player.currentQueueItemId]);if(key===listKey)return;listKey=key;
-    const context=JSON.stringify([view,smartTab,showFolders,folder,$('native-sort').value,$('native-search').value,folder==='__smart_queue'?model.player.queueId:'']);
+    if(view==='library' && folder==='__smart_queue')limit=Math.max(limit,Math.ceil(((Number(model.player.index)||0)+1)/80)*80);
+    const rows=view==='smart'&&smartTab==='saved'?model.smart.folders:songs;
+    const key=JSON.stringify([view,smartTab,folder,limit,rows,model.player.item?.contentKey,model.player.queueId,model.player.queueRevision,model.player.currentQueueItemId]);if(key===listKey)return;listKey=key;
+    const context=JSON.stringify([view,smartTab,folder,$('native-sort').value,$('native-search').value,folder==='__smart_queue'?model.player.queueId:'']);
     if(renderedListContext)scrollPositions.set(renderedListContext,list.scrollTop);
     const oldTop=context===renderedListContext?list.scrollTop:scrollPositions.get(context)||0;
     renderedListContext=context;list.replaceChildren();
@@ -77,10 +138,8 @@
         button('名前を変更',async()=>{const answer=await confirm('フォルダ名を変更','曲順は変えません。',saved.name);if(answer?.name)await send('smart.renameFolder',{id:saved.id,revision:saved.revision,name:answer.name});},card);
         const note=el('small','削除・以前の曲順への復元はPCで確認できます。',card);note.className='native-muted';
       }
-    } else if(view==='library'&&showFolders) {
-      for(const item of rows){const pick=button('',()=>{folder=item.id;showFolders=false;limit=80;listKey='';render();},list);pick.className='native-folder';el('span','▱ '+item.name,pick);el('strong',String(item.count),pick);}
     } else {
-      for(const item of songs.slice(0,limit))row(item,list,()=>void send('track',{contentKey:item.contentKey,folderId:view==='smart'?'__all':folder,sort:$('native-sort').value,...(folder==='__smart_queue' && item.queueItemId?{queueItemId:item.queueItemId,queueId:model.player.queueId,queueRevision:model.player.queueRevision}:{})}));
+      for(const item of songs.slice(0,limit))row(item,list,()=>void send('track',{contentKey:item.contentKey,folderId:view==='smart'?'__all':folder,sort:activeSort(),...(folder==='__smart_queue' && item.queueItemId?{queueItemId:item.queueItemId,queueId:model.player.queueId,queueRevision:model.player.queueRevision}:{})}));
       if(songs.length>limit)button('さらに表示（残り'+(songs.length-limit)+'曲）',()=>{limit+=80;listKey='';renderList();},list);
     }
     if(!rows.length)el('p',view==='smart'&&smartTab==='saved'?'保存した選曲はまだありません。「新しく選曲」から作成できます。':'該当する曲・フォルダはありません。',list);
@@ -136,14 +195,21 @@
     if(!model)return;markTabs();
     $('native-smart-tabs').hidden=view!=='smart';$('native-library-tools').hidden=view!=='library';$('native-folders').hidden=view!=='library';
     list.hidden=view==='settings'||view==='smart'&&smartTab==='create';create.hidden=view!=='smart'||smartTab!=='create';settings.hidden=view!=='settings';
-    $('native-list-title').textContent=view==='settings'?'設定':view==='smart'?smartTab==='saved'?'保存した選曲':smartTab==='favorites'?'すべてのお気に入り':'新しく選曲':showFolders?'フォルダを選択':model.folders.find(item=>item.id===folder)?.name || 'すべて';
-    renderList();renderPreview();
+    $('native-list-title').textContent=view==='settings'?'設定':view==='smart'?smartTab==='saved'?'保存した選曲':smartTab==='favorites'?'すべてのお気に入り':'新しく選曲':model.folders.find(item=>item.id===folder)?.name || 'すべて';
+    $('native-gesture-hint').hidden=view!=='library' && !(view==='smart'&&smartTab==='favorites');
+    renderList();renderPreview();renderFolders();
   }
   let foldersKey='',initialized=false,lastKey='';
   function update(next) {
     model=next;
     const p=model.player;
+    if(!initialized && model.folders.some(item=>item.id===p.folderId))folder=p.folderId;
+    const sortName={custom:'登録順',newest:'新しい順',oldest:'古い順',title_asc:'名前順 ↑',title_desc:'名前順 ↓',playCount_desc:'再生回数順',recommended:'おすすめ順'}[p.sort] || '登録順';
+    $('native-sort').querySelector('[value="pc"]').textContent='PC：'+sortName;
     $('native-title').textContent=p.item?.title || '曲を選んでください';$('native-artist').textContent=p.item?.artist || '音声はPCから出ます';safeArt($('native-art'),p.item?.thumbnail);
+    const artwork=transport.safeImageUrl(p.item?.thumbnail);root.style.setProperty('--native-artwork',artwork?'url('+JSON.stringify(artwork)+')':'none');
+    root.dataset.theme=['sf','modern','nerv'].includes(p.settings.theme)?p.settings.theme:'sf';
+    $('native-art-empty').hidden=Boolean(artwork);$('native-source').textContent='再生元：'+(model.folders.find(item=>item.id===(p.playbackFolderId||p.folderId))?.name || p.item?.folders?.[0] || 'PCの再生キュー');
     $('native-play').textContent=p.playing?'Ⅱ':'▶';$('native-play').setAttribute('aria-label',p.intent==='playing'?'PCで一時停止':'PCで再生');
     $('native-lock').textContent=p.locked?'▢ ロック解除':'▣ ロック';
     $('native-time').textContent=time(p.time);$('native-duration').textContent=time(p.duration);

@@ -38,6 +38,7 @@
 
   function safeImageUrl(value, origin) {
     const text = String(value || '').trim();
+    if (!text) return '';
     if (/^data:image\/(png|jpeg|jpg|gif|webp|avif);base64,[a-z0-9+/=\s]+$/i.test(text)) return text;
     try {
       const url = new URL(text, origin);

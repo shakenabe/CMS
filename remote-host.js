@@ -280,6 +280,18 @@
         if (event === 'closed') void stop(false);
     }
     function status(message) { const target=document.getElementById('cms-remote-status');if(target && target.textContent!==message)target.textContent=message; }
+    function chooseAddress(info,saved){
+        const networks=info.networks||[],normal=networks.filter(item=>!item.virtual),known=networks.find(item=>item.address===saved);
+        if(info.addresses?.includes(saved)&&(!known?.virtual||!normal.length)&&saved!=='127.0.0.1')return saved;
+        return (normal.find(item=>item.gateway)||normal[0]||networks[0])?.address||info.addresses?.find(address=>address!=='127.0.0.1')||'';
+    }
+    async function diagnoseConnection(){
+        const button=document.getElementById('cms-remote-diagnose'),output=document.getElementById('cms-remote-diagnostics');button.disabled=true;output.hidden=false;output.textContent='PCの待受とLANアドレスを確認しています…';
+        try{
+            const data=publicHost?await extensionRequest('diagnostics'):await fetch('/remote-api/diagnostics',{cache:'no-store'}).then(async response=>{if(!response.ok)throw Error('PCの接続診断を開けません。');return response.json();});
+            const lines=['PCの待受：'+data.bindAddress+':'+data.port,'推奨するPCのIP：'+(data.recommendedAddress||'同じLANの接続が見つかりません'),...data.checks.map(check=>(check.reachable?'✓ ':'× ')+check.address+'：PC内から'+(check.reachable?'応答あり':'応答なし')),'使用プログラム：'+data.runtimePath,'',data.message];output.textContent=lines.join('\n');
+        }catch(error){output.textContent=error.message;}finally{button.disabled=false;}
+    }
     function showInvite(data) {
         session = {...session,...data};
         const addressSelect=document.getElementById('cms-remote-address');
@@ -299,13 +311,14 @@
         document.getElementById('cms-remote-expiry').textContent='QRの有効期限: '+new Date(data.expiresAt).toLocaleTimeString('ja-JP');
         document.getElementById('cms-remote-start').hidden=true;
         document.getElementById('cms-remote-active').hidden=false;
-        status(data.lan && data.addresses?.length ? 'QRをスマホで読み取り、このPCで接続を承認してください。' : 'PC内テストです。スマホ接続にはStart-LAN-Remote.cmdで起動してください。');
+        const selectedNetwork=data.networks?.find(item=>item.address===data.advertiseAddress);
+        status(selectedNetwork?.virtual?'仮想ネットワークのIPが選択されています。スマホと同じLANのPCアドレスを選んでください。':data.lan && data.addresses?.length ? 'QRをスマホで読み取り、このPCで接続を承認してください。開けない場合は「接続診断」でPCのIPと受信許可を確認できます。' : 'PC内テストです。スマホ接続にはStart-LAN-Remote.cmdで起動してください。');
     }
     async function start() {
         if (hostToken) return;
         const button=document.getElementById('cms-remote-start');button.disabled=true;
         try {
-            let preferred=''; try { const info=publicHost?await extensionRequest('info'):await fetch('/remote-api/info',{cache:'no-store'}).then(response=>response.json());const saved=localStorage.getItem('cms_remote_address_v1');if(info.addresses?.includes(saved))preferred=saved; }catch(error) {if(publicHost)throw error;}
+            let preferred=''; try { const info=publicHost?await extensionRequest('info'):await fetch('/remote-api/info',{cache:'no-store'}).then(response=>response.json());let saved='';try{saved=localStorage.getItem('cms_remote_address_v1')||'';}catch(_){}preferred=chooseAddress(info,saved); }catch(error) {if(publicHost)throw error;}
             const data=await post('host/open',{...(preferred?{advertiseAddress:preferred}:{}),...(publicHost?{transport:'poll'}:{})}); hostToken=data.hostToken;session=data;handled.clear();nodeKeys=new WeakMap();controls.clear();revision=0;previousSnapshot='';showInvite(data);
             await window.CmsRemoteModel?.refresh();
             observer=new MutationObserver(changes=>{if(changes.some(change=>!change.target.closest?.('[data-cms-remote-private]')))schedule();});
@@ -366,6 +379,9 @@
         const panel=document.createElement('section');panel.id='cms-remote-host-panel';panel.dataset.cmsRemotePrivate='true';panel.hidden=true;panel.setAttribute('role','dialog');panel.setAttribute('aria-labelledby','cms-remote-heading');
         panel.innerHTML='<header><h2 id="cms-remote-heading">スマホをCMSリモコンに</h2><button type="button" id="cms-remote-close" aria-label="接続パネルを閉じる">×</button></header><p>音声はPCで再生し、スマホは同じCMS画面から操作します。信頼できる同じWi-Fiだけで使用してください。</p><p id="cms-remote-status" role="status">PC起動スクリプトで開いたCMSから開始できます。</p><button type="button" id="cms-remote-start">遠隔操作を開始・QRを表示</button><div id="cms-remote-active" hidden><div id="cms-remote-qr" aria-label="接続QRコード"></div><p id="cms-remote-expiry"></p><label>接続URL（QRが使えない場合）<input readonly id="cms-remote-link" aria-label="スマホの接続URL"></label><div class="cms-remote-actions"><button type="button" id="cms-remote-renew">QRを更新</button><button type="button" id="cms-remote-stop">すべて解除して終了</button></div><div id="cms-remote-peers" aria-live="polite"></div></div><small>PCのCMSタブは開いたままにしてください。初回再生はPCで一度押してください。Googleログイン・ファイル・削除・配置ドラッグはPCで操作します。HTTP通信のため、共有Wi-Fi・外部公開では使用しないでください。</small>';
         document.body.append(panel);
+        const diagnoseButton=document.createElement('button');diagnoseButton.type='button';diagnoseButton.id='cms-remote-diagnose';diagnoseButton.textContent='接続診断';diagnoseButton.onclick=()=>void diagnoseConnection();
+        const diagnoseOutput=document.createElement('pre');diagnoseOutput.id='cms-remote-diagnostics';diagnoseOutput.hidden=true;diagnoseOutput.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:12px;padding:10px;border:1px solid currentColor;border-radius:4px;';
+        document.getElementById('cms-remote-start').after(diagnoseButton,diagnoseOutput);
         const addressWrap=document.createElement('label');addressWrap.id='cms-remote-address-wrap';addressWrap.hidden=true;addressWrap.textContent='スマホと同じネットワークのPCアドレス';
         const addressSelect=document.createElement('select');addressSelect.id='cms-remote-address';addressSelect.setAttribute('aria-label','接続QRに使うPCのネットワーク');addressWrap.append(addressSelect);
         document.getElementById('cms-remote-active').prepend(addressWrap);
@@ -379,6 +395,6 @@
         window.addEventListener('pagehide',()=>{abort?.abort();});
     }
     // A narrow adapter test surface: no session tokens, credentials, or executable strings.
-    window.CmsRemoteHostTools=Object.freeze({captureMirror,safeImageUrl,safeStyle});
+    window.CmsRemoteHostTools=Object.freeze({captureMirror,safeImageUrl,safeStyle,chooseAddress});
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();

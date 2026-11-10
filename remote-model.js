@@ -23,9 +23,13 @@
         const preferences = new Map((data?.preferences || []).map(pref => [pref.contentKey, pref]));
         const songs = records.slice(0, 10000).map(item => ({ ...fields(item), favorite:preferences.get(keyOf(item))?.favorite === true }));
         const names = new Set(songs.flatMap(item => item.folders));
-        const folders = [{ id:'__all', name:'すべて', count:songs.length }, ...state.folders.filter(folder => names.has(folder.id)).map(folder => ({...folder,count:songs.filter(song => song.folders.includes(folder.id)).length}))];
+        // musicLibrary already applies the PC's persisted folderSettings.order.
+        // Preserve it verbatim, including virtual collections, on every client.
+        const folders = state.folders.filter(folder => folder.id==='__all' || folder.id==='__smart_queue' && state.playlist.length || Array.isArray(folder.contentKeys) || names.has(folder.id))
+            .map(folder => ({...folder,count:Number.isFinite(folder.count)?folder.count:folder.id==='__all'?songs.length:folder.id==='__smart_queue'?state.playlist.length:songs.filter(song => song.folders.includes(folder.id)).length}));
+        if (!folders.some(folder=>folder.id==='__all')) folders.unshift({id:'__all',name:'すべて',count:songs.length});
         for (const name of names) if (!folders.some(folder => folder.id === name)) folders.push({id:name,name,count:songs.filter(song => song.folders.includes(name)).length});
-        if (state.playlist.length) folders.splice(1,0,{id:'__smart_queue',name:'再生中のキュー',count:state.playlist.length});
+        folders.forEach((folder,index)=>{folder.order=index;});
         return { version:2, player:{ ...state, item:state.item ? {...fields(state.item),queueItemId:state.currentQueueItemId || state.item.queueItemId || null} : null, playlist:state.playlist.slice(0,10000).map(item=>({...fields(item),queueItemId:item.queueItemId || item._cmsQueueItemId || null,favorite:preferences.get(keyOf(item))?.favorite===true})), folders:undefined },
             records:songs, folders, truncated:records.length>songs.length, cloud:window.CmsWebFirebase?.getSyncStatus?.() || {connected:false,auto:false,message:'PCでGoogle接続してください'},
             smart:{ settings:player().getRecommendationLaunchSettings(), folders:(data?.folders || []).map(folder => ({id:folder.folderId,name:short(folder.name),revision:folder.folderRevision,count:folder.items.length})),
@@ -56,7 +60,7 @@
             if (action==='play' && typeof args.playing!=='boolean' || action==='lock' && typeof args.locked!=='boolean'
                 || action==='seek' && (!Number.isFinite(args.ratio)||args.ratio<0||args.ratio>1)
                 || action==='volume' && (!Number.isFinite(args.volume)||args.volume<0||args.volume>100)) throw new Error('操作値が範囲外です。');
-            if (action==='track' && (typeof args.contentKey!=='string' || !snapshot().folders.some(folder=>folder.id===args.folderId) || !['custom','newest','oldest','title_asc','playCount_desc'].includes(args.sort))) throw new Error('曲一覧が変更されました。');
+            if (action==='track' && (typeof args.contentKey!=='string' || !snapshot().folders.some(folder=>folder.id===args.folderId) || !['custom','newest','oldest','title_asc','title_desc','playCount_desc','recommended'].includes(args.sort))) throw new Error('曲一覧が変更されました。');
             await player().remotePlayback(action,args); return;
         }
         if (action==='settings') { player().remoteSettings(args); return; }

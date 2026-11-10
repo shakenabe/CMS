@@ -1781,7 +1781,10 @@ window.CmsWebPlayer = {
             currentQueueItemId: currentPlayingItem?._cmsQueueItemId || '',
             playing: playbackMediaState === 'playing', intent: playbackIntent, mediaState: playbackMediaState,
             time: Number(clock.currentTime) || 0, duration: Number(clock.duration) || 0, volume: appSettings.pocketVolume,
-            folderId: currentFolderId, folders: musicLibrary.map(folder => ({ id: folder.id, name: folder.name })),
+            folderId: currentFolderId, playbackFolderId: currentPlaybackContext?.folderId || currentFolderId, sort: currentSortOrder,
+            sortKeys: sortSongs(allItems.filter(item => !item.deleted)).slice(0,10000).map(item => window.CMSRecommendationEngine.normalizeContentKey(item)),
+            folders: musicLibrary.map(folder => ({ id: folder.id, name: folder.name, count: folder.songs.length,
+                ...(folder.id.startsWith('__') && !['__all','__smart_queue'].includes(folder.id) ? { contentKeys: folder.songs.slice(0,10000).map(item => window.CMSRecommendationEngine.normalizeContentKey(item)) } : {}) })),
             locked: !document.getElementById('pocket-overlay').classList.contains('hidden'), notice: nicoPlaybackNotice,
             settings: Object.fromEntries(['theme','performanceMode','dataSaverMode','musicMode','showThumbnails','showClock','resumeLastPlayback','recommendationEnabled','showRecommendationLauncher','recommendationLaunchBehavior','recommendationProfile','recommendationLength','recommendationLaunchScope'].map(key => [key, appSettings[key]])) };
     },
@@ -1802,9 +1805,9 @@ window.CmsWebPlayer = {
                 return operation;
             }
             const keyOf = item => window.CMSRecommendationEngine.normalizeContentKey(item);
-            let songs = args.folderId === '__smart_queue' ? currentPlaylist.slice() : allItems.filter(item => !item.deleted && (args.folderId === '__all' || getStatsItemFolders(item).includes(args.folderId)));
+            let songs = args.folderId === '__smart_queue' ? currentPlaylist.slice() : (musicLibrary.find(folder => folder.id === args.folderId)?.songs || []).filter(item => !item.deleted);
             const field = args.sort || 'custom';
-            songs.sort((a,b) => field === 'newest' ? b.safeDate-a.safeDate : field === 'oldest' ? a.safeDate-b.safeDate : field === 'title_asc' ? String(a.title).localeCompare(String(b.title)) : field === 'playCount_desc' ? b.safePlayCount-a.safePlayCount : a.originalIndex-b.originalIndex);
+            songs.sort((a,b) => field === 'recommended' && libraryRecommendationRanks ? (libraryRecommendationRanks.get(a)??Infinity)-(libraryRecommendationRanks.get(b)??Infinity) : field === 'newest' ? b.safeDate-a.safeDate : field === 'oldest' ? a.safeDate-b.safeDate : field === 'title_asc' ? String(a.title).localeCompare(String(b.title)) : field === 'title_desc' ? String(b.title).localeCompare(String(a.title)) : field === 'playCount_desc' ? b.safePlayCount-a.safePlayCount : a.originalIndex-b.originalIndex);
             const matches = songs.map((item, index) => keyOf(item) === args.contentKey ? index : -1).filter(index => index >= 0);
             const index = matches.length === 1 ? matches[0] : -1;
             if (index < 0) throw new Error('曲が変更されました。一覧を更新してください。');

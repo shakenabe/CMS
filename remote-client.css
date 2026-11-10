@@ -24,3 +24,47 @@
 .native-form{overflow:auto;padding:10px 18px 24px;font-size:13px;line-height:1.65;min-height:0}.native-form h2{font-size:18px}.native-form p{color:var(--remote-muted)}.native-form label{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:12px 0}.native-form select,.native-form input:not([type=checkbox]),.native-form textarea{width:100%}.native-form>button{width:100%;margin-top:10px}.native-form details{padding:12px 0;border-block:1px solid var(--remote-border)}.native-form summary{cursor:pointer;padding:8px 0}.native-excluded-folders{max-height:230px;overflow:auto}.native-form .native-excluded-folders label{display:flex;flex-wrap:nowrap;min-height:44px;gap:10px;margin:3px 0}.native-excluded-folders input{flex:none}.native-cloud{border:1px solid var(--remote-border);border-radius:12px;padding:12px}.native-cloud small{display:block;color:var(--remote-accent);margin:7px 0}#native-preview{margin-top:20px}#native-preview>button{display:block;width:100%;margin:8px 0}
 .native-fullscreen .native-player{display:none}#remote-mobile dialog{color:var(--remote-text);background:#112332;border:1px solid #375363;border-radius:15px;padding:20px;width:min(92vw,430px)}#remote-mobile dialog::backdrop{background:#000a}#remote-mobile dialog h2{font-size:18px}#remote-mobile dialog p{font-size:13px;line-height:1.8}#remote-mobile dialog input{width:100%}.native-confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}#remote-mobile #native-confirm-ok{color:#062621;background:var(--remote-accent)}
 @media(max-height:700px){.native-now img{height:50px;width:75px}.native-now{margin:3px 0}.native-volume{display:none}.native-player{padding-top:4px;padding-bottom:4px}.native-now h1{font-size:14px;-webkit-line-clamp:1}}
+
+/* A1 mobile layout: artwork, playback controls, then a locally browsed list. */
+#remote-mobile{--native-radius:12px;font-family:"Bahnschrift","Yu Gothic UI",sans-serif;background:#08131e}
+#remote-mobile[data-theme=modern]{--remote-accent:#70baff;--native-radius:15px;font-family:"Segoe UI","Yu Gothic UI",sans-serif}
+#remote-mobile[data-theme=nerv]{--remote-accent:#ff9c25;--native-radius:4px;font-family:"Bahnschrift Condensed","Yu Gothic",sans-serif}
+#remote-mobile .native-player{position:relative;isolation:isolate;padding:9px 16px 7px;overflow:hidden;background:#10263877}
+.native-player:before{content:"";position:absolute;inset:-30px;z-index:-2;background-image:var(--native-artwork);background-size:cover;background-position:center;filter:blur(18px);opacity:.22;pointer-events:none}
+.native-artwork{position:relative;display:flex;align-items:center;justify-content:center;height:clamp(125px,23dvh,240px);margin:7px 0 9px;overflow:hidden;border:1px solid var(--remote-border);border-radius:var(--native-radius);background:#061019aa}
+.native-artwork:before{content:"";position:absolute;inset:-12px;background-image:var(--native-artwork);background-size:cover;background-position:center;filter:blur(10px);opacity:.4}
+.native-artwork img{position:relative;width:100%;height:100%;object-fit:contain}
+#native-art-empty{position:relative;font-size:48px;color:var(--remote-accent)}
+#remote-mobile .native-now{display:flex;gap:8px;align-items:center;margin:0 0 4px}
+.native-now>div{flex:1;min-width:0}
+#remote-mobile .native-now h1{font-size:clamp(15px,4.2vw,20px);line-height:1.35;margin:0 0 3px;-webkit-line-clamp:2}
+#remote-mobile .native-now p{font-size:12px;line-height:1.25;margin:0 0 4px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+#remote-mobile #native-source{display:block;color:var(--remote-accent);font-size:10px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+#remote-mobile #native-star{background:transparent;border:0;color:var(--remote-accent);font-size:28px;padding:7px;min-width:44px}
+.native-time{gap:8px;margin:3px 0}
+.native-time input{height:30px;min-height:30px!important}
+.native-controls{position:relative;gap:24px;padding:0 44px}
+#remote-mobile .native-controls>button{border:0;background:transparent;font-size:25px;min-width:44px;padding:4px;color:var(--remote-text)}
+#remote-mobile #native-play{width:56px;height:56px;border-radius:50%;background:var(--remote-accent);color:#071722;box-shadow:0 0 0 5px #ffffff08}
+#remote-mobile #native-volume-toggle{position:absolute;right:0;font-size:20px}
+#remote-mobile .native-volume{display:flex;margin:6px auto 0;font-size:11px;max-width:100%}
+#remote-mobile [hidden]{display:none!important}
+.native-pane{background:#091620bf}
+.native-gesture-hint{flex:none;text-align:center;color:var(--remote-muted);font-size:10px;line-height:1.3;margin:0 12px 5px}
+.native-list{touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+.native-row-title strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.native-toolbar{min-height:49px}
+#remote-mobile .native-nav{background:#0a1924ad}
+#remote-mobile .native-nav button[aria-current=page]{background:color-mix(in srgb,var(--remote-accent) 14%,transparent);border-color:var(--remote-accent)}
+#remote-mobile #native-folder-dialog{position:fixed;inset:auto 0 0;margin:0 auto;width:min(100%,660px);max-width:100%;max-height:85dvh;border-radius:18px 18px 0 0;padding:15px 16px calc(16px + env(safe-area-inset-bottom));background:#102330;color:var(--remote-text)}
+#native-folder-dialog header{display:flex;align-items:center;justify-content:space-between;gap:10px;position:sticky;top:-15px;background:#102330;z-index:1}
+#native-folder-dialog header h2{font-size:17px;margin:8px 0}
+#native-folder-dialog>p{font-size:11px;color:var(--remote-muted);margin:4px 0 12px}
+#remote-mobile .native-folder{gap:10px;border-radius:var(--native-radius);background:transparent;min-height:53px}
+#remote-mobile .native-folder[aria-current=true]{border-color:var(--remote-accent);background:color-mix(in srgb,var(--remote-accent) 12%,transparent)}
+.native-fullscreen .native-toolbar{padding-top:12px}
+.native-fullscreen .native-row{min-height:76px}
+@media(max-height:740px){.native-artwork{height:clamp(90px,19dvh,160px)}#remote-mobile .native-player{padding-top:5px;padding-bottom:5px}#remote-mobile .native-now h1{font-size:15px;-webkit-line-clamp:1}.native-controls{gap:20px}#remote-mobile #native-play{height:48px;width:48px}.native-gesture-hint{display:none}}
+@media(max-width:350px){.native-artwork{height:17dvh}.native-nav{padding-block:4px}.native-search{gap:4px}.native-search select{width:100px!important}#remote-mobile #native-back{font-size:11px;padding-inline:4px}}
+@media(max-height:640px){.native-artwork{height:64px;margin-block:4px}.native-nav{padding-block:4px}#remote-mobile .native-player{padding-block:4px}#remote-mobile .native-player-heading button{min-height:28px}.native-controls{gap:18px}#remote-mobile #native-play{height:44px;width:44px}#remote-mobile .native-now h1{font-size:14px}}
+@media(max-height:640px){.native-player-heading{height:0}.native-player-heading>span{display:none}#remote-mobile .native-player-heading button{position:absolute;right:16px;top:8px;z-index:2;background:#0b1a25e8}}
