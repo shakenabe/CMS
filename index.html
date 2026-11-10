@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="desktop-workspace.css?v=2026103101">
     <link rel="stylesheet" href="remote-host.css?v=2026103101">
     <link rel="stylesheet" href="player-studio.css?v=2026103101">
-    <link rel="stylesheet" href="experience-v3.css?v=2026110901">
+    <link rel="stylesheet" href="experience-v3.css?v=2026111003">
 </head>
 <body class="theme-modern is-pc">
 
@@ -286,6 +286,8 @@
             <div class="setting-scroll-area">
                 <!-- 基本設定タブ -->
                 <div id="tab-basic" class="tab-content active">
+                    <div class="setting-row"><span>この端末の名前</span><input id="set-device-name" class="widget-search" type="text" maxlength="60" autocomplete="off"></div>
+                    <p class="device-settings-note">端末専用：テーマ・配色・背景・音量・配置 ／ アカウントで共有：曲・フォルダ・★・履歴。Firebaseの更新でも、この端末の表示設定を保持します。</p>
                     <div class="setting-group" id="settings-data-management">
                         <h3>データ管理・更新</h3>
                         <p class="setting-help">AI分析用：動画タイトル・URL・再生回数・所属フォルダ（複数対応）と再生履歴を書き出します。内部管理IDや接続設定は含みません。復元用バックアップとは別のファイルです。</p>
@@ -521,10 +523,11 @@
     <script src="ui-runtime.js?v=2026100801"></script>
     <script src="shared/recommendation-engine.js?v=2026101201"></script>
     <script src="recommendation-order.js?v=2026110101"></script>
-    <script src="shared/recommendation-cloud.js?v=2026110101"></script>
-    <script src="recommendation-store-web.js?v=2026110101"></script>
+    <script src="shared/recommendation-cloud.js?v=2026111003"></script>
+    <script src="recommendation-store-web.js?v=2026111003"></script>
     <script src="shared/nico-playback.js?v=2026101205"></script>
-    <script src="script.js?v=2026111002"></script>
+    <script src="shared/listening-history.js?v=2026111003"></script>
+    <script src="script.js?v=2026111003"></script>
     <script src="recommendation-web.js?v=2026110101"></script>
     <script src="shared/recommendation-ui.js?v=2026110101"></script>
     <script src="desktop-large-ui-v2.js?v=2026100802"></script>
@@ -533,6 +536,6 @@
     <script src="remote-host.js?v=2026111001"></script>
     <script src="player-studio.js?v=2026110901"></script>
     <script src="experience-v3.js?v=2026110101"></script>
-    <script src="settings-refinement.js?v=2026110103"></script>
+    <script src="settings-refinement.js?v=2026111003"></script>
 </body>
 </html>

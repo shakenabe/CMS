@@ -68,3 +68,6 @@
 @media(max-width:350px){.native-artwork{height:17dvh}.native-nav{padding-block:4px}.native-search{gap:4px}.native-search select{width:100px!important}#remote-mobile #native-back{font-size:11px;padding-inline:4px}}
 @media(max-height:640px){.native-artwork{height:64px;margin-block:4px}.native-nav{padding-block:4px}#remote-mobile .native-player{padding-block:4px}#remote-mobile .native-player-heading button{min-height:28px}.native-controls{gap:18px}#remote-mobile #native-play{height:44px;width:44px}#remote-mobile .native-now h1{font-size:14px}}
 @media(max-height:640px){.native-player-heading{height:0}.native-player-heading>span{display:none}#remote-mobile .native-player-heading button{position:absolute;right:16px;top:8px;z-index:2;background:#0b1a25e8}}
+
+#remote-mobile[data-theme="sf"] *,#remote-mobile[data-theme="sf"] *::before,#remote-mobile[data-theme="sf"] *::after{border-radius:0!important}
+.native-fullscreen #native-settings,.native-fullscreen #native-create{height:100%;max-height:none;overflow-y:auto;overscroll-behavior:contain}

@@ -22,9 +22,13 @@ function setupSettingsRefinement(){
  }
  const referenceWidths={'widget-controls':450,'widget-player':450,'widget-folder-list-wrapper':250,'widget-track-list-wrapper':410,'cms-next-preview':250,'library-nav-wrapper':676,'widget-clock':230};
  const referenceHeights={'widget-controls':300,'widget-player':300,'widget-folder-list-wrapper':526,'widget-track-list-wrapper':526,'cms-next-preview':190,'library-nav-wrapper':150,'widget-clock':120};
- const resize=new ResizeObserver(entries=>{for(const {target,contentRect} of entries){
+ const setScale=(target,contentRect)=>{
+   if(!appSettings.windowMode)return;
    const scale=Math.min(1.8,Math.max(.8,Math.sqrt(contentRect.width/(referenceWidths[target.id]||400)*contentRect.height/(referenceHeights[target.id]||300))));
-   target.style.setProperty('--cms-window-scale',String(scale));
- }});
+   if(Math.abs(Number(target.style.getPropertyValue('--cms-window-scale'))-scale)>.002)target.style.setProperty('--cms-window-scale',String(scale));
+ };
+ const resize=new ResizeObserver(entries=>{for(const {target,contentRect} of entries)setScale(target,contentRect);});
  for(const id of Object.keys(referenceWidths)){const panel=document.getElementById(id);if(panel)resize.observe(panel);}
+ window.CmsWindowTypography={refresh(){for(const id of Object.keys(referenceWidths)){const panel=document.getElementById(id);if(!panel)continue;const style=getComputedStyle(panel);setScale(panel,{width:panel.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight),height:panel.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom)});}}};
+ window.CmsWindowTypography.refresh();
 }

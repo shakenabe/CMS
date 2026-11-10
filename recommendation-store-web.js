@@ -74,7 +74,7 @@
     function preferences(data = peek()) {
         const result = clone(data.preferences);
         for (const event of Object.values(data.events)) {
-            if (event.acknowledged || event.playContext?.source !== 'manual' || !result[event.contentKey]?.legacyEvidence) continue;
+            if (event.countedAsPlay === false || event.acknowledged || event.playContext?.source !== 'manual' || !result[event.contentKey]?.legacyEvidence) continue;
             result[event.contentKey].manualPlayCountAfterBaseline = (result[event.contentKey].manualPlayCountAfterBaseline || 0) + 1;
         }
         for (const mutation of Object.values(data.mutations)) if (!mutation.acknowledged) {
@@ -83,21 +83,23 @@
         }
         return Object.values(result);
     }
-    async function recordCountedPlay(item, attempt, playContext) {
+    async function recordCountedPlay(item, attempt, playContext, partial = false) {
         if (!item?.id || !attempt?.eventId) throw new Error('再生試行のIDがありません。');
         const records=global.CmsWebPlayer?.getRecords?.();
         if (records && !records.some(record=>!record.deleted && record.id===item.id && keyOf(record)===keyOf(item))) return {status:'missing'};
         const ns = attempt.owner || namespace(), contentKey = keyOf(item);
         const event = { schemaVersion: 1, outcome: 'counted', playbackAttemptId: attempt.playbackAttemptId, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Tokyo', eventId: attempt.eventId, recordId: item.id, mediaId: item.id, contentKey, title: item.title || '', url: item.url || '', site: item.site || '', folder: item.folder || item.folders?.[0] || 'Manual', playedAt: new Date().toISOString(), countedAsPlay: true, source: 'web', playContext: clone(playContext), legacyCountApplied: true, evidencePending: ns !== 'local' };
+        Object.assign(event, { playbackPolicyVersion:2, completion:partial?'interrupted':'ended', countedAsPlay:!partial, outcome:partial?'partial':'counted', listenedSeconds:Number(attempt.listening?.seconds)||0 });
+        if(partial && event.listenedSeconds<30) return {status:'short-skip'};
         const result = await mutate(async (data, store, media) => {
             const receiptKey = `${ns}:receipt:${event.eventId}`;
             if (await value(store.get(receiptKey))) return { status: 'alreadyApplied', event };
             const cached = await value(media.get(item.id));
-            const updated = { ...(cached || item), playCount: Math.max(Number(cached?.playCount) || 0, Number(item.playCount) || 0) + 1, lastPlayedAt: event.playedAt, _cmsRecommendationCountManaged: true };
+            const updated = { ...(cached || item), playCount: Math.max(Number(cached?.playCount) || 0, Number(item.playCount) || 0) + (partial?0:1), ...(partial?{}:{lastPlayedAt:event.playedAt,_cmsRecommendationCountManaged:true}) };
             delete updated.safeDate; delete updated.safePlayCount; delete updated.originalIndex;
             delete updated._cmsPlayContext;
             media.put(updated);
-            if (ns === 'local' && contentKey && data.preferences[contentKey]?.legacyEvidence) {
+            if (!partial && ns === 'local' && contentKey && data.preferences[contentKey]?.legacyEvidence) {
                 if (event.playContext.source === 'manual') data.preferences[contentKey].manualPlayCountAfterBaseline++;
                 data.preferences[contentKey].counterRevision++;
                 event.acknowledged = true; event.evidencePending = false;

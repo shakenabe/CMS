@@ -199,3 +199,7 @@ html body.cms-experience-v3 #cms-rec-confirmation {--cms-rec-bg:#121b28;--cms-re
 html body.cms-experience-v3.color-light #cms-recommendations,
 html body.cms-experience-v3.color-light.window-mode #cms-recommendations,
 html body.cms-experience-v3.color-light #cms-rec-confirmation {--cms-rec-bg:#f0f6fd;--cms-rec-fg:#172c41;background:#f0f6fd!important;color:#172c41!important;}
+
+/* SF: angular controls on every responsive surface. */
+html body.cms-redesign.cms-studio.cms-experience-v3.theme-sf *,html body.cms-redesign.cms-studio.cms-experience-v3.theme-sf *::before,html body.cms-redesign.cms-studio.cms-experience-v3.theme-sf *::after{border-radius:0!important}
+html body.cms-redesign.cms-studio.cms-experience-v3.theme-sf :is(#widget-btn-play,#pocket-btn-play,.m-play-btn-circle){border-radius:0!important}
