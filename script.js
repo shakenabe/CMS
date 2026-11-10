@@ -3,7 +3,7 @@ const defaultSettings = {
     theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, nicoBoost: 1.0, settingAssist: false, artworkBackgroundMode: null, artworkBlur: null,
     baseFontSize: 100, pcLeftWidth: 350, desktopLeftRatio: 36, desktopFolderWidth: 260, desktopPlayerWidth: 480, desktopPlayerHeight: 360, desktopControlsHeight: 200, desktopTrackHeight: 76, showClock: true, clockFeatureV1: true, clockType: 'digital1', pocketClockType: 'digital1', showThumbnails: true,
     performanceMode: false, dataSaverMode: false, colorMode: 'system',
-    customColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff', blurBaseColor: '#000000',
+    customColorEnabled: false, customColorScope: 'main', customPanelColorEnabled: false, customWindowColorEnabled: false, customAccentColor: '#00aaff', customBorderColor: '#ffffff', blurBaseColor: '#000000',
     pocketAlwaysOn: false, pocketSwipeUnlock: true, pocketUseBackground: false, pocketBgDim: 35, pocketFullscreenMode: 'browser', pocketVolume: 100, pocketPanelOpacity: 28, settingsSchemaVersion: 2,
     pocketBgManual: false, pocketBgX: 50, pocketBgY: 50, pocketBgScale: 100,
     pocketShowClock: true, pocketShowArt: true, pocketShowTitle: true, pocketShowProgress: true, pocketShowControls: true, pocketShowUnlock: true,
@@ -1213,8 +1213,12 @@ function applyThemeSettings() {
         ['--rd-text', '--rd-accent', '--rd-border', '--rd-muted'].forEach(name => document.body.style.removeProperty(name));
         ['--text-color', '--sub-text-color', '--accent-color', '--border-color', '--theme-text', '--theme-text-muted', '--theme-accent', '--theme-border', '--theme-border-active'].forEach(name => document.body.style.removeProperty(name));
     }
-    const baseColor = appSettings.blurBaseColor || '#000000';
-    if (hasCustomBackgroundImage) {
+    const lightPalette = getResolvedColorMode() === 'light';
+    document.body.classList.toggle('color-light', lightPalette);
+    document.body.classList.toggle('color-dark', !lightPalette);
+    const themeSurface = lightPalette ? '#f0f6fd' : ({ sf:'#051825', modern:'#141c2b', nerv:'#211813' })[appSettings.theme];
+    const baseColor = appSettings.customColorEnabled && appSettings.customPanelColorEnabled ? appSettings.blurBaseColor || themeSurface : themeSurface;
+    if (appSettings.customColorEnabled && appSettings.customPanelColorEnabled) {
         document.body.style.setProperty('--experience-surface', hexToRgbString(baseColor));
         document.body.style.setProperty('--rd-panel', hexToRgbString(baseColor));
         document.body.style.setProperty('--rd-bg', baseColor);
@@ -1231,13 +1235,20 @@ function applyThemeSettings() {
     }
     
     const op = Math.max(0, Math.min(100, Number(appSettings.bgOpacity) || 0)); const panelAlpha = (100 - op) / 100 * 0.8; document.documentElement.style.setProperty('--panel-alpha', panelAlpha); document.documentElement.style.setProperty('--panel-blur', '0px');
-    const windowPanelColor = appSettings.windowPanelColor || baseColor;
+    const windowPanelColor = appSettings.customColorEnabled && appSettings.customWindowColorEnabled ? appSettings.windowPanelColor || themeSurface : themeSurface;
     const rawWindowAlpha = Number(appSettings.windowPanelAlpha);
     const windowPanelAlpha = op === 100 ? 0 : Math.max(0, Math.min(1, Number.isFinite(rawWindowAlpha) ? rawWindowAlpha / 100 : panelAlpha));
     document.documentElement.style.setProperty('--window-panel-rgb', hexToRgbString(windowPanelColor));
     document.documentElement.style.setProperty('--window-panel-alpha', windowPanelAlpha);
     document.documentElement.style.setProperty('--window-title-rgb', hexToRgbString(windowPanelColor));
     document.documentElement.style.setProperty('--window-title-alpha', windowPanelAlpha);
+    const customDialogs = appSettings.customColorEnabled && appSettings.customColorScope === 'all';
+    document.body.dataset.customColorScope = customDialogs ? 'all' : 'main';
+    document.body.style.setProperty('--cms-dialog-surface', hexToRgbString(customDialogs && appSettings.customPanelColorEnabled ? baseColor : themeSurface));
+    document.body.style.setProperty('--cms-dialog-text', customDialogs ? appSettings.customAccentColor : lightPalette ? '#172c41' : '#edf3fa');
+    document.body.style.setProperty('--cms-dialog-muted', customDialogs ? `color-mix(in srgb, ${appSettings.customAccentColor} 75%, ${baseColor})` : lightPalette ? '#435d77' : '#b6c5d5');
+    document.body.style.setProperty('--cms-dialog-border', customDialogs ? appSettings.customBorderColor : lightPalette ? '#8298b0' : '#52667e');
+    document.body.style.setProperty('--cms-dialog-accent', customDialogs ? appSettings.customAccentColor : lightPalette ? ({sf:'#006f91',modern:'#215da5',nerv:'#9c4800'})[appSettings.theme] : ({sf:'#38dcf2',modern:'#64b5f6',nerv:'#ff9e29'})[appSettings.theme]);
     updateMobileBackgroundStart();
     const pOverlay = document.getElementById('pocket-overlay'); if (appSettings.pocketAlwaysOn) pOverlay.classList.add('always-on'); else pOverlay.classList.remove('always-on');
     applyPocketAppearance();
@@ -1447,7 +1458,7 @@ function setupSettingsModal() {
     let settingsManualDirty = false;
     let settingsOpenSnapshot = null;
     const getSettingsFingerprint = () => JSON.stringify([...modal.querySelectorAll('input[id], select[id], textarea[id]')]
-        .filter(element => element.type !== 'file')
+        .filter(element => element.type !== 'file' && !element.closest('.cms-audio-settings'))
         .map(element => [element.id, element.type === 'checkbox' ? element.checked : element.value]));
     const updateSettingsDirtyState = () => {
         if (modal.classList.contains('hidden')) return;
@@ -1542,6 +1553,9 @@ function setupSettingsModal() {
         document.getElementById('set-force-pc-layout').checked = appSettings.forcePcLayout; document.getElementById('set-window-mode').checked = appSettings.windowMode;
         document.getElementById('set-use-firebase').checked = Boolean(appSettings.useFirebase);
         document.getElementById('set-use-custom-color').checked = appSettings.customColorEnabled; document.getElementById('set-accent-color').value = appSettings.customAccentColor; document.getElementById('set-border-color').value = appSettings.customBorderColor; document.getElementById('set-blur-base-color').value = appSettings.blurBaseColor || '#000000';
+        document.getElementById('set-custom-color-scope').value = appSettings.customColorScope === 'all' ? 'all' : 'main';
+        document.getElementById('set-custom-panel-color').checked = Boolean(appSettings.customPanelColorEnabled);
+        document.getElementById('set-custom-window-color').checked = Boolean(appSettings.customWindowColorEnabled);
         const windowColorsLinkedEl = document.getElementById('set-window-colors-linked'); if (windowColorsLinkedEl) windowColorsLinkedEl.checked = true;
         document.getElementById('set-window-panel-color').value = appSettings.windowPanelColor || '#000000'; document.getElementById('set-window-panel-alpha').value = appSettings.windowPanelAlpha ?? 55; document.getElementById('window-panel-alpha-val').textContent = appSettings.windowPanelAlpha ?? 55;
         const windowTitleColorEl = document.getElementById('set-window-title-color'); if (windowTitleColorEl) windowTitleColorEl.value = appSettings.windowPanelColor || '#000000';
@@ -1625,6 +1639,9 @@ function setupSettingsModal() {
         appSettings.theme = document.getElementById('set-theme').value; appSettings.colorMode = document.getElementById('set-color-mode').value; appSettings.baseFontSize = document.getElementById('set-font-size').value; appSettings.bgPosition = document.getElementById('set-bg-position').value || appSettings.bgPosition; appSettings.bgSize = document.getElementById('set-bg-size').value || appSettings.bgSize; appSettings.bgOpacity = document.getElementById('set-opacity').value; appSettings.nicoBoost = document.getElementById('set-nico-boost').value; appSettings.defaultSortOrder = document.getElementById('set-default-sort').value;
         appSettings.performanceMode = document.getElementById('set-performance-mode').checked; appSettings.dataSaverMode = document.getElementById('set-data-saver').checked; appSettings.musicMode = document.getElementById('set-music-mode').checked; appSettings.vocaloidCollectionEnabled = document.getElementById('set-vocaloid-collection').checked; appSettings.resumeLastPlayback = document.getElementById('set-resume-last-playback').checked; appSettings.showThumbnails = document.getElementById('set-show-thumbnails').checked; appSettings.showClock = document.getElementById('set-show-clock').checked; appSettings.clockType = document.getElementById('set-clock-type').value; appSettings.pocketClockType = document.getElementById('set-pocket-clock-type').value; appSettings.pocketAlwaysOn = document.getElementById('set-pocket-always-on').checked; appSettings.pocketSwipeUnlock = document.getElementById('set-pocket-swipe-unlock').checked; appSettings.pocketFullscreenMode = document.getElementById('set-pocket-fullscreen-mode').value; appSettings.forcePcLayout = document.getElementById('set-force-pc-layout').checked; appSettings.windowMode = document.getElementById('set-window-mode').checked; appSettings.customColorEnabled = document.getElementById('set-use-custom-color').checked; appSettings.customAccentColor = document.getElementById('set-accent-color').value; appSettings.customBorderColor = document.getElementById('set-border-color').value; appSettings.blurBaseColor = document.getElementById('set-blur-base-color').value; appSettings.useFirebase = document.getElementById('set-use-firebase').checked;
         appSettings.windowColorsLinked = true; appSettings.windowPanelColor = document.getElementById('set-window-panel-color').value; appSettings.windowPanelAlpha = Number(document.getElementById('set-window-panel-alpha').value); appSettings.windowTitleColor = appSettings.windowPanelColor; appSettings.windowTitleAlpha = appSettings.windowPanelAlpha;
+        appSettings.customColorScope = document.getElementById('set-custom-color-scope').value === 'all' ? 'all' : 'main';
+        appSettings.customPanelColorEnabled = document.getElementById('set-custom-panel-color').checked;
+        appSettings.customWindowColorEnabled = document.getElementById('set-custom-window-color').checked;
         appSettings.pocketUseBackground = document.getElementById('set-pocket-use-background').checked; appSettings.pocketBgDim = Number(document.getElementById('set-pocket-bg-dim').value); appSettings.pocketBgManual = document.getElementById('set-pocket-bg-manual').checked; appSettings.pocketBgX = Number(document.getElementById('set-pocket-bg-x').value); appSettings.pocketBgY = Number(document.getElementById('set-pocket-bg-y').value); appSettings.pocketBgScale = Number(document.getElementById('set-pocket-bg-scale').value); appSettings.pocketShowClock = document.getElementById('set-pocket-show-clock').checked; appSettings.pocketShowArt = document.getElementById('set-pocket-show-art').checked; appSettings.pocketShowTitle = document.getElementById('set-pocket-show-title').checked; appSettings.pocketShowProgress = document.getElementById('set-pocket-show-progress').checked; appSettings.pocketShowControls = document.getElementById('set-pocket-show-controls').checked; appSettings.pocketShowUnlock = document.getElementById('set-pocket-show-unlock').checked;
         appSettings.pocketLayoutScale = appSettings.pocketLayoutScale || {};
         ['clock', 'art', 'title', 'progress', 'controls', 'unlock'].forEach(key => { appSettings.pocketLayoutScale[key] = Number(document.getElementById(`set-pocket-scale-${key}`).value); });
@@ -2429,7 +2446,6 @@ function renderStats(historyData = { events: [], source: 'library', days: 90 }) 
         longestSessionSeconds = Math.max(longestSessionSeconds, Math.round((sessionEnd - sessionStart) / 1000));
     });
     const summaries = [
-        ['途中再生', `${model.partialPlays.toLocaleString()}回`, '30秒以上。通常の再生回数とは別枠'],
         ['登録動画', `${model.totalItems.toLocaleString()}件`, '現在のライブラリ'],
         ['累計再生', `${model.totalPlays.toLocaleString()}回`, `${model.playedItems.toLocaleString()}動画を再生`],
         ['今日', `${todayPlays.toLocaleString()}回`, '再生履歴から集計'],

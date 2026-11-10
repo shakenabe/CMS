@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="desktop-workspace.css?v=2026103101">
     <link rel="stylesheet" href="remote-host.css?v=2026103101">
     <link rel="stylesheet" href="player-studio.css?v=2026103101">
-    <link rel="stylesheet" href="experience-v3.css?v=2026111003">
+    <link rel="stylesheet" href="experience-v3.css?v=2026111101">
 </head>
 <body class="theme-modern is-pc">
 
@@ -252,8 +252,8 @@
                     <p id="stats-source-status">現在のライブラリから集計しています</p>
                 </div>
                 <div class="stats-header-actions">
-                    <button id="btn-export-analysis-json" class="theme-btn" type="button" title="最新の分析用JSONをダウンロード"><i class="fas fa-rotate"></i> 分析用JSONを更新・保存</button>
-                    <button id="btn-refresh-stats" class="theme-btn" type="button"><i class="fas fa-rotate"></i> 更新</button>
+                    <button id="btn-export-analysis-json" class="theme-btn" type="button" title="最新の分析用JSONをダウンロード"><cms-icon name="data"></cms-icon> 分析JSONを保存</button>
+                    <button id="btn-refresh-stats" class="theme-btn" type="button" title="履歴を取得して統計を更新"><cms-icon name="refresh"></cms-icon> 統計を更新</button>
                     <button id="btn-close-stats" type="button" aria-label="統計画面を閉じる"><i class="fas fa-xmark"></i></button>
                 </div>
             </header>
@@ -382,9 +382,9 @@
                         <label for="set-desktop-folder-width">フォルダ一覧の幅: <output id="desktop-folder-width-value">260px</output></label>
                         <input type="range" id="set-desktop-folder-width" min="200" max="420" step="10" value="260">
                         <label for="set-desktop-player-width">プレーヤー列の幅: <output id="desktop-player-width-value">480px</output></label>
-                        <input type="range" id="set-desktop-player-width" min="240" max="600" step="10" value="480">
+                        <input type="range" id="set-desktop-player-width" min="200" max="900" step="10" value="480">
                         <label for="set-desktop-player-height">プレーヤーの高さ: <output id="desktop-player-height-value">360px</output></label>
-                        <input type="range" id="set-desktop-player-height" min="180" max="600" step="10" value="360">
+                        <input type="range" id="set-desktop-player-height" min="160" max="900" step="10" value="360">
                         <label for="set-desktop-controls-height">再生コントロールの高さ: <output id="desktop-controls-height-value">200px</output></label>
                         <input type="range" id="set-desktop-controls-height" min="120" max="320" step="10" value="200">
                         <label for="set-desktop-track-height">動画行の高さ: <output id="desktop-track-height-value">76px</output></label>
@@ -407,17 +407,22 @@
                     <div class="setting-row" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
                         <label><input type="checkbox" id="set-use-custom-color"> カスタムカラーを有効にする</label>
                     </div>
+                    <div class="setting-row">
+                        <label for="set-custom-color-scope">カスタムカラーの適用範囲</label>
+                        <select id="set-custom-color-scope"><option value="main">再生・ライブラリ画面のみ</option><option value="all">設定・選曲・履歴統計にも適用</option></select>
+                    </div>
                     <div class="setting-row" style="display: flex; flex-direction: row; gap: 15px;">
                         <div style="flex:1;"><label>文字色</label><input type="color" id="set-accent-color" value="#00aaff"></div>
                         <div style="flex:1;"><label>枠線の色</label><input type="color" id="set-border-color" value="#ffffff"></div>
                     </div>
                     <div class="setting-row">
-                        <label>ぼかしパネルの基調色</label>
+                        <label><input type="checkbox" id="set-custom-panel-color"> パネルの基調色を指定する</label>
                         <input type="color" id="set-blur-base-color" value="#000000">
-                        <span style="font-size:0.75rem; opacity:0.8;">ぼかしが弱い時やパネル背景の基準色になります。</span>
+                        <span class="setting-help">OFFではテーマの色を使用します。背景の種類と透明度は別に設定できます。</span>
                     </div>
                     <div class="setting-group window-style-settings">
                         <h3>ウィンドウモードの外観</h3>
+                        <label><input type="checkbox" id="set-custom-window-color"> ウィンドウ内の色を指定する</label>
                         <div class="setting-row window-color-grid">
                             <div><label>ウィンドウ内の色</label><input type="color" id="set-window-panel-color" value="#000000"></div>
                             <div><label>内側の透明度: <span id="window-panel-alpha-val">55</span>%</label><input type="range" id="set-window-panel-alpha" min="10" max="100" value="55"></div>
@@ -527,12 +532,13 @@
     <script src="recommendation-store-web.js?v=2026111003"></script>
     <script src="shared/nico-playback.js?v=2026101205"></script>
     <script src="shared/listening-history.js?v=2026111003"></script>
-    <script src="script.js?v=2026111003"></script>
+    <script src="script.js?v=2026111101"></script>
     <script src="recommendation-web.js?v=2026110101"></script>
     <script src="shared/recommendation-ui.js?v=2026110101"></script>
     <script src="desktop-large-ui-v2.js?v=2026100802"></script>
     <script src="redesign.js?v=2026110101"></script>
-    <script src="remote-model.js?v=2026111002"></script>
+    <script src="cms-audio-control.js?v=2026111101"></script>
+    <script src="remote-model.js?v=2026111101"></script>
     <script src="remote-host.js?v=2026111001"></script>
     <script src="player-studio.js?v=2026110901"></script>
     <script src="experience-v3.js?v=2026110101"></script>

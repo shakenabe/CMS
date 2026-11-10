@@ -71,3 +71,11 @@
 
 #remote-mobile[data-theme="sf"] *,#remote-mobile[data-theme="sf"] *::before,#remote-mobile[data-theme="sf"] *::after{border-radius:0!important}
 .native-fullscreen #native-settings,.native-fullscreen #native-create{height:100%;max-height:none;overflow-y:auto;overscroll-behavior:contain}
+.remote-actions svg,#remote-mobile .native-controls svg{display:block;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin:auto}
+#remote-mobile #native-play svg{width:28px;height:28px}
+#native-title[role=button]{cursor:pointer;touch-action:manipulation}
+#native-title:focus-visible{outline:2px solid var(--remote-accent);outline-offset:3px}
+body[data-theme=sf]{--remote-accent:#38dcf2;--remote-border:#276578;font-family:'Rajdhani','Consolas','Noto Sans JP',sans-serif}
+body[data-theme=nerv]{--remote-accent:#ff9e29;--remote-border:#75502c;font-family:'Oswald','Noto Serif JP','Yu Mincho',serif}
+body[data-theme=modern]{--remote-accent:#64b5f6;--remote-border:#40536b;font-family:system-ui,'Noto Sans JP',sans-serif}
+body[data-theme=sf] *,body[data-theme=sf] *::before,body[data-theme=sf] *::after{border-radius:0!important}
