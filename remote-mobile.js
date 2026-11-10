@@ -182,6 +182,17 @@
     for(const [index,item] of value.items.entries())el('p',(index+1)+'. '+item.title,details);
   }
   const settings=$('native-settings');el('h2','PCの設定',settings);
+  // Forms, as well as the track list, expand only for deliberate phone gestures.
+  for(const panel of [settings,create]) {
+    let start=null;
+    panel.addEventListener('touchstart',event=>{if(event.touches.length!==1 || event.target.closest('select,input[type=range]')){start=null;return;}start={y:event.touches[0].clientY,expanded:root.classList.contains('native-fullscreen'),atTop:panel.scrollTop<=8};},{passive:true});
+    panel.addEventListener('touchmove',event=>{if(!start || event.touches.length!==1)return;const dy=event.touches[0].clientY-start.y;if(Math.abs(dy)<48)return;
+      if(start.expanded && start.atTop && panel.scrollTop<=8 && dy>0){fullscreen(false);start=null;if(event.cancelable)event.preventDefault();}
+      else if(!start.expanded && dy<0){fullscreen(true);start=null;}
+    },{passive:false});
+    panel.addEventListener('touchend',()=>{start=null;},{passive:true});
+    panel.addEventListener('wheel',event=>{if(event.deltaY>8)fullscreen(true);else if(event.deltaY< -8 && panel.scrollTop<=8)fullscreen(false);},{passive:true});
+  }
   const cloud=el('section',null,settings);cloud.className='native-cloud';el('h3','Firebaseライブラリ',cloud);el('p','',cloud).id='native-cloud-status';el('small','',cloud).id='native-cloud-time';
   button('PCで更新を確認',()=>void send('cloud.refresh'),cloud).id='native-cloud-refresh';
   el('p','Google接続はPCで一度行います。JSON読み込みはPCの手動・復旧用として残っています。',cloud);

@@ -125,7 +125,8 @@ async function acceptRecommendationOperation(entry) {
       return result;
     });
   }
-  if (entry.kind !== 'playback' || !value.eventId || !value.mediaId || value.countedAsPlay !== true || value.outcome !== 'counted') throw new Error('Invalid counted recommendation event');
+  const partial=value.countedAsPlay===false && value.outcome==='partial' && Number.isFinite(value.listenedSeconds) && value.listenedSeconds>=30;
+  if (entry.kind !== 'playback' || !value.eventId || !value.mediaId || (!partial && (value.countedAsPlay !== true || value.outcome !== 'counted'))) throw new Error('Invalid recommendation playback event');
   const receiptRef = userDocument(user.uid, 'recommendationReceipts', value.eventId);
   const mediaRef = userDocument(user.uid, 'mediaItems', value.mediaId);
   const evidenceRef = value.contentKey ? userDocument(user.uid, 'recommendationEvidence', recommendationKey(value.contentKey)) : null;
@@ -139,8 +140,8 @@ async function acceptRecommendationOperation(entry) {
     const current = media.data();
     const syncRevision=(Number(state.data().dataRevision)||0)+1;
     const oldAt = Date.parse(current.lastPlayedAt || '') || 0;
-    tx.set(mediaRef, { id: value.mediaId, playCount: (Number(current.playCount) || 0) + 1, lastPlayedAt: oldAt > Date.parse(value.playedAt) ? current.lastPlayedAt : value.playedAt, deleted: current.deleted === true, _cmsRecommendationCountManaged: true, updatedAt: serverTimestamp() }, { merge: true });
-    if (evidenceRef) {
+    if(!partial) tx.set(mediaRef, { id: value.mediaId, playCount: (Number(current.playCount) || 0) + 1, lastPlayedAt: oldAt > Date.parse(value.playedAt) ? current.lastPlayedAt : value.playedAt, deleted: current.deleted === true, _cmsRecommendationCountManaged: true, updatedAt: serverTimestamp() }, { merge: true });
+    if (evidenceRef && !partial) {
       const previous = evidence?.exists() ? evidence.data() : { schemaVersion: 1, contentKey: value.contentKey, legacyEvidence: { playCountBaseline: 0, capturedAt: state.data().capturedAt, baselineVersion: 1, migrationEpoch: state.data().migrationEpoch, snapshotId: state.data().snapshotId }, manualPlayCountAfterBaseline: 0, counterRevision: 0 };
       const postBaselineManual = value.playContext?.source === 'manual' && Date.parse(value.playedAt) >= Date.parse(state.data().capturedAt);
       tx.set(evidenceRef, { ...previous, syncRevision, manualPlayCountAfterBaseline: (Number(previous.manualPlayCountAfterBaseline) || 0) + (postBaselineManual ? 1 : 0), counterRevision: (Number(previous.counterRevision) || 0) + 1 });

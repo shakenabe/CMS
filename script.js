@@ -1,4 +1,5 @@
 const defaultSettings = {
+    deviceName:'このPC・ブラウザ', displaySettingsScope:'device', librarySettingsScope:'account',
     theme: 'modern', bgPosition: 'center', bgSize: 'cover', bgOpacity: 50, nicoBoost: 1.0, settingAssist: false, artworkBackgroundMode: null, artworkBlur: null,
     baseFontSize: 100, pcLeftWidth: 350, desktopLeftRatio: 36, desktopFolderWidth: 260, desktopPlayerWidth: 480, desktopPlayerHeight: 360, desktopControlsHeight: 200, desktopTrackHeight: 76, showClock: true, clockFeatureV1: true, clockType: 'digital1', pocketClockType: 'digital1', showThumbnails: true,
     performanceMode: false, dataSaverMode: false, colorMode: 'system',
@@ -263,7 +264,9 @@ async function completeWebPlayback(reason, token = playbackWatchdogToken) {
     const attempt = recommendationAttempt;
     completionInFlight = true;
     try {
-    await markPlaybackCompleted(completed, attempt);
+    sampleWebListening();
+    const uncertain=/deadline|timeout|unreachable/i.test(reason);
+    if(uncertain) await markPlaybackPartial(completed,attempt); else await markPlaybackCompleted(completed, attempt);
     if (token !== playbackWatchdogToken) return;
     cancelPlaybackWatchdog();
     stopProgressTimer();
@@ -709,6 +712,18 @@ async function markPlaybackCompleted(item, attempt = recommendationAttempt) {
     return result;
 }
 
+function sampleWebListening() {
+    if (!recommendationAttempt || recommendationAttempt.counted) return;
+    const clock=getPlaybackClock();
+    recommendationAttempt.listening=window.CmsListeningHistory.sample(recommendationAttempt.listening,clock.currentTime,
+        playbackMediaState==='playing' && isPlaying);
+}
+async function markPlaybackPartial(item=currentPlayingItem,attempt=recommendationAttempt) {
+    if(!item || !attempt || attempt.counted || !(Number(attempt.listening?.seconds)>=30))return;
+    const result=await window.CmsRecommendationStore.recordCountedPlay(item,attempt,attempt.playContext||{source:'unknown'},true);
+    if(['applied','alreadyApplied'].includes(result.status))attempt.counted=true;
+}
+
 function updateLayoutMode() {
     const mobile = !appSettings.windowMode && window.innerWidth <= MOBILE_LAYOUT_MAX && !appSettings.forcePcLayout;
     document.body.classList.toggle('is-mobile', mobile);
@@ -911,6 +926,7 @@ function applyWindowMode() {
             }
         });
         updateWindowTaskbar();
+        window.CmsWindowTypography?.refresh();
     } else {
         document.body.classList.remove('window-mode');
         WINDOW_PANEL_IDS.forEach(id => {
@@ -1473,6 +1489,7 @@ function setupSettingsModal() {
 
     document.getElementById('btn-open-settings').onclick = () => {
         updateDeviceSettingsVisibility();
+        document.getElementById('set-device-name').value=appSettings.deviceName || 'このPC・ブラウザ';
         settingsOpenSnapshot = JSON.parse(JSON.stringify(appSettings));
         window.CmsArtworkSettings?.open(appSettings);
         const assist=document.getElementById('set-setting-assist');if(assist){assist.checked=Boolean(appSettings.settingAssist);assist.dispatchEvent(new Event('change'));}
@@ -1592,6 +1609,8 @@ function setupSettingsModal() {
     };
 
     document.getElementById('btn-save-settings').onclick = async () => {
+        appSettings.deviceName=(document.getElementById('set-device-name').value.trim() || 'このPC・ブラウザ').slice(0,60);
+        appSettings.displaySettingsScope='device';appSettings.librarySettingsScope='account';
         const previousVocaloidCollectionEnabled = Boolean(appSettings.vocaloidCollectionEnabled);
         appSettings.recommendationEnabled = document.getElementById('set-recommendation-enabled').checked;
         appSettings.showRecommendationLauncher = document.getElementById('set-show-recommendation-launcher').checked;
@@ -1754,6 +1773,7 @@ window.CmsWebPlayer = {
     applyLibrary(data, source = 'cloud', options = {}) {
         const wasMainVisible = !mainApp.classList.contains('hidden');
         processImportData(data);
+        // Keep device appearance and each floating window's scale while rebuilding metadata.
         if (options.silent || wasMainVisible) {
             importScreen.classList.add('hidden');
             readyScreen.classList.add('hidden');
@@ -2265,7 +2285,9 @@ function buildStatsModel(items, historyEvents = [], now = Date.now()) {
         addGroup(channels, getStatsChannel(item), item);
     }
     const sortGroups = map => [...map.values()].sort((a, b) => b.plays - a.plays || b.count - a.count || a.name.localeCompare(b.name, 'ja'));
-    const rawHistory = (Array.isArray(historyEvents) ? historyEvents : [])
+    const historyInput=[...new Map((Array.isArray(historyEvents)?historyEvents:[]).map((event,index)=>[event.eventId || `${event.mediaId}|${event.playedAt}|${event.source || index}`,event])).values()];
+    const partialPlays=historyInput.filter(event=>event.outcome==='partial' && event.countedAsPlay===false && Number(event.listenedSeconds)>=30).length;
+    const rawHistory = historyInput.filter(event=>event.countedAsPlay!==false && !['skipped','failed','error','technicalError','cancelled'].includes(event.outcome))
         .filter(event => Number.isFinite(new Date(event?.playedAt).getTime()))
         .sort((a, b) => new Date(b.playedAt) - new Date(a.playedAt));
     const itemById = new Map(mediaItems.map(item => [String(item.id || ''), item]));
@@ -2306,6 +2328,7 @@ function buildStatsModel(items, historyEvents = [], now = Date.now()) {
         .sort((a, b) => (Number(b.playCount) || 0) - (Number(a.playCount) || 0))
         .slice(0, 10);
     return {
+        partialPlays,
         totalItems: mediaItems.length,
         totalPlays,
         playedItems,
@@ -2380,15 +2403,14 @@ function renderStats(historyData = { events: [], source: 'library', days: 90 }) 
     const model = buildStatsModel(allItems, historyData.events || []);
     const coverage = model.totalItems ? Math.round(model.playedItems / model.totalItems * 100) : 0;
     const now = Date.now();
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const todayStart = new Date(CmsListeningHistory.periodStart(1,now));
     const historyTime = entry => {
         const value = new Date(entry?.playedAt).getTime();
         return Number.isFinite(value) ? value : 0;
     };
     const todayPlays = model.history.filter(entry => historyTime(entry) >= todayStart.getTime()).length;
-    const weekPlays = model.history.filter(entry => historyTime(entry) >= now - 7 * 86400000).length;
-    const monthPlays = model.history.filter(entry => historyTime(entry) >= now - 30 * 86400000).length;
+    const weekPlays = model.history.filter(entry => historyTime(entry) >= CmsListeningHistory.periodStart(7,now)).length;
+    const monthPlays = model.history.filter(entry => historyTime(entry) >= CmsListeningHistory.periodStart(30,now)).length;
     const todaySeconds = model.history.reduce((sum, entry) => historyTime(entry) >= todayStart.getTime()
         ? sum + Math.max(0, Number(entry.item?.duration) || 0) : sum, 0);
     const sessionEntries = [...model.history].filter(entry => historyTime(entry) > 0).sort((a, b) => historyTime(a) - historyTime(b));
@@ -2407,6 +2429,7 @@ function renderStats(historyData = { events: [], source: 'library', days: 90 }) 
         longestSessionSeconds = Math.max(longestSessionSeconds, Math.round((sessionEnd - sessionStart) / 1000));
     });
     const summaries = [
+        ['途中再生', `${model.partialPlays.toLocaleString()}回`, '30秒以上。通常の再生回数とは別枠'],
         ['登録動画', `${model.totalItems.toLocaleString()}件`, '現在のライブラリ'],
         ['累計再生', `${model.totalPlays.toLocaleString()}回`, `${model.playedItems.toLocaleString()}動画を再生`],
         ['今日', `${todayPlays.toLocaleString()}回`, '再生履歴から集計'],
@@ -3230,6 +3253,7 @@ function startProgressTimer() { clearInterval(progressInterval); progressInterva
 function stopProgressTimer() { clearInterval(progressInterval); }
 
 function updateProgress() {
+    sampleWebListening();
     if (!isPlaying) return; let cur = 0; let dur = 0;
     if (currentPlayingItem.site === 'youtube' && ytPlayer && typeof ytPlayer.getCurrentTime === 'function') { cur = ytPlayer.getCurrentTime(); dur = ytPlayer.getDuration(); } 
     else if (currentPlayingItem.site === 'niconico') {
@@ -3459,6 +3483,9 @@ function onPlayerStateChange(e) {
 async function loadVideo(idx) {
     if (idx < 0 || idx >= currentPlaylist.length) return;
     const serial = ++recommendationLoadSerial;
+    sampleWebListening();
+    await markPlaybackPartial();
+    if(serial !== recommendationLoadSerial)return;
     let selected = currentPlaylist[idx];
     const selectedContext = { ...(selected._cmsPlayContext || currentPlaybackContext || {source:'unknown'}) };
     delete selectedContext.restoredAttempt;
